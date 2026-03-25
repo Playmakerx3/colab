@@ -1050,7 +1050,37 @@ export default function CoLab() {
                   <textarea placeholder="share what you're working on..." value={newPostContent} onChange={e => setNewPostContent(e.target.value)} rows={3} style={{ ...inputStyle, resize: "none", fontSize: 13, padding: "10px 12px", background: bg3, borderColor: "transparent" }} />
                   {newPostContent.trim() && (
                     <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 10 }}>
-                      <input placeholder="photo or YouTube URL (optional)..." value={newPostMediaUrl} onChange={e => setNewPostMediaUrl(e.target.value)} style={{ ...inputStyle, fontSize: 11, padding: "6px 10px" }} />
+                      {/* Media preview */}
+                      {newPostMediaUrl && (
+                        <div style={{ position: "relative", display: "inline-block" }}>
+                          {newPostMediaUrl.match(/\.(jpg|jpeg|png|gif|webp)$/i) ? (
+                            <img src={newPostMediaUrl} alt="" style={{ maxWidth: "100%", maxHeight: 200, borderRadius: 8, border: `1px solid ${border}` }} />
+                          ) : (
+                            <div style={{ fontSize: 11, color: textMuted, padding: "6px 10px", background: bg3, borderRadius: 6 }}>📎 {newPostMediaUrl.split("/").pop()}</div>
+                          )}
+                          <button onClick={() => setNewPostMediaUrl("")} style={{ position: "absolute", top: 4, right: 4, background: bg, border: `1px solid ${border}`, borderRadius: "50%", width: 20, height: 20, cursor: "pointer", fontSize: 10, display: "flex", alignItems: "center", justifyContent: "center", color: text, fontFamily: "inherit" }}>✕</button>
+                        </div>
+                      )}
+                      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                        {/* File upload button */}
+                        <label style={{ cursor: "pointer", flexShrink: 0 }}>
+                          <div style={{ ...btnG, padding: "6px 12px", fontSize: 11, display: "inline-flex", alignItems: "center", gap: 5 }}>
+                            ↑ upload
+                          </div>
+                          <input type="file" accept="image/*,video/*,.pdf,.doc,.docx" style={{ display: "none" }} onChange={async (e) => {
+                            const file = e.target.files[0];
+                            if (!file) return;
+                            showToast("Uploading...");
+                            const path = `posts/${authUser.id}/${Date.now()}-${file.name}`;
+                            const { error } = await supabase.storage.from("user-uploads").upload(path, file);
+                            if (error) { showToast("Upload failed."); return; }
+                            const { data: { publicUrl } } = supabase.storage.from("user-uploads").getPublicUrl(path);
+                            setNewPostMediaUrl(publicUrl);
+                            showToast("File ready.");
+                          }} />
+                        </label>
+                        <input placeholder="or paste a YouTube / image URL..." value={newPostMediaUrl} onChange={e => setNewPostMediaUrl(e.target.value)} style={{ ...inputStyle, fontSize: 11, padding: "6px 10px", flex: 1 }} />
+                      </div>
                       <div style={{ display: "flex", gap: 8 }}>
                         <select value={newPostProject} onChange={e => setNewPostProject(e.target.value)} style={{ ...inputStyle, fontSize: 11, padding: "6px 10px", flex: 1 }}>
                           <option value="">tag a project (optional)</option>
@@ -1949,7 +1979,11 @@ export default function CoLab() {
                           <div style={{ minWidth: 0, flex: 1 }}>
                             <div style={{ fontSize: 14, color: text, marginBottom: 5, letterSpacing: "-0.3px" }}>{item.title}</div>
                             {item.description && <div style={{ fontSize: 12, color: textMuted, lineHeight: 1.65, marginBottom: 6 }}>{item.description}</div>}
-                            {item.url && <a href={item.url} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: text, textDecoration: "underline", wordBreak: "break-all" }}>{item.url}</a>}
+                            {item.url && (
+                                item.url.match(/\.(jpg|jpeg|png|gif|webp)$/i)
+                                  ? <img src={item.url} alt={item.title} style={{ maxWidth: "100%", maxHeight: 200, borderRadius: 8, border: `1px solid ${border}`, marginTop: 4 }} />
+                                  : <a href={item.url} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: text, textDecoration: "underline", wordBreak: "break-all" }}>{item.url.includes("user-uploads") ? "📎 view file" : item.url}</a>
+                            )}
                           </div>
                           <button className="hb" onClick={() => handleDeletePortfolioItem(item.id)} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontSize: 12, fontFamily: "inherit", flexShrink: 0 }}>✕</button>
                         </div>
@@ -2013,7 +2047,35 @@ export default function CoLab() {
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
               <div><label style={labelStyle}>TITLE</label><input style={inputStyle} placeholder="Project or work title" value={newPortfolioItem.title} onChange={e => setNewPortfolioItem({ ...newPortfolioItem, title: e.target.value })} /></div>
               <div><label style={labelStyle}>DESCRIPTION</label><textarea style={{ ...inputStyle, resize: "none" }} rows={3} placeholder="What did you build or create?" value={newPortfolioItem.description} onChange={e => setNewPortfolioItem({ ...newPortfolioItem, description: e.target.value })} /></div>
-              <div><label style={labelStyle}>LINK (optional)</label><input style={inputStyle} placeholder="https://..." value={newPortfolioItem.url} onChange={e => setNewPortfolioItem({ ...newPortfolioItem, url: e.target.value })} /></div>
+              <div>
+                <label style={labelStyle}>MEDIA / FILE</label>
+                {newPortfolioItem.url && (
+                  <div style={{ marginBottom: 8, position: "relative", display: "inline-block" }}>
+                    {newPortfolioItem.url.match(/\.(jpg|jpeg|png|gif|webp)$/i)
+                      ? <img src={newPortfolioItem.url} alt="" style={{ maxWidth: "100%", maxHeight: 160, borderRadius: 8, border: `1px solid ${border}` }} />
+                      : <div style={{ fontSize: 11, color: textMuted, padding: "6px 10px", background: bg2, borderRadius: 6 }}>📎 {newPortfolioItem.url.split("/").pop()}</div>
+                    }
+                    <button onClick={() => setNewPortfolioItem({ ...newPortfolioItem, url: "" })} style={{ position: "absolute", top: 4, right: 4, background: bg, border: `1px solid ${border}`, borderRadius: "50%", width: 20, height: 20, cursor: "pointer", fontSize: 10, display: "flex", alignItems: "center", justifyContent: "center", color: text, fontFamily: "inherit" }}>✕</button>
+                  </div>
+                )}
+                <div style={{ display: "flex", gap: 8 }}>
+                  <label style={{ cursor: "pointer", flexShrink: 0 }}>
+                    <div style={{ ...btnG, padding: "8px 14px", fontSize: 11, display: "inline-flex", alignItems: "center", gap: 5 }}>↑ upload file</div>
+                    <input type="file" accept="image/*,.pdf,.doc,.docx,.mp4,.mov" style={{ display: "none" }} onChange={async (e) => {
+                      const file = e.target.files[0];
+                      if (!file) return;
+                      showToast("Uploading...");
+                      const path = `portfolio/${authUser.id}/${Date.now()}-${file.name}`;
+                      const { error } = await supabase.storage.from("user-uploads").upload(path, file);
+                      if (error) { showToast("Upload failed."); return; }
+                      const { data: { publicUrl } } = supabase.storage.from("user-uploads").getPublicUrl(path);
+                      setNewPortfolioItem({ ...newPortfolioItem, url: publicUrl });
+                      showToast("File ready.");
+                    }} />
+                  </label>
+                  <input style={{ ...inputStyle, fontSize: 11, padding: "8px 12px" }} placeholder="or paste a URL..." value={newPortfolioItem.url} onChange={e => setNewPortfolioItem({ ...newPortfolioItem, url: e.target.value })} />
+                </div>
+              </div>
             </div>
             <div style={{ display: "flex", gap: 10, marginTop: 18 }}>
               <button className="hb" onClick={() => setShowAddPortfolio(false)} style={btnG}>cancel</button>
