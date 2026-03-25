@@ -199,9 +199,13 @@ export default function CoLab() {
   // ── AUTH ACTIONS ──
   const handleSignUp = async () => {
     setAuthError("");
-    const { error } = await supabase.auth.signUp({ email: authEmail, password: authPassword });
-    if (error) setAuthError(error.message);
-    else { setScreen("onboard"); showToast("Account created! Set up your profile."); }
+    const { data, error } = await supabase.auth.signUp({ email: authEmail, password: authPassword });
+    if (error) { setAuthError(error.message); return; }
+    if (data.user) {
+      setAuthUser(data.user);
+      setScreen("onboard");
+      showToast("Account created! Set up your profile.");
+    }
   };
 
   const handleLogin = async () => {
@@ -218,17 +222,28 @@ export default function CoLab() {
 
   const handleFinishOnboard = async () => {
     if (!onboardData.name) return;
-    const { data: { user } } = await supabase.auth.getUser();
-    const initials = onboardData.name.split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase();
-    const { data, error } = await supabase.from("profiles").upsert({
-      id: user.id, name: onboardData.name, role: onboardData.role,
-      bio: onboardData.bio, skills: onboardData.skills,
-    }).select().single();
-    if (!error && data) {
-      setProfile(data);
-      setScreen("app");
-      loadAllData(user.id);
-      showToast(`Welcome, ${data.name.split(" ")[0]}!`);
+    try {
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      if (userError || !user) { setAuthError("Session expired. Please log in again."); setScreen("auth"); return; }
+      const initials = onboardData.name.split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase();
+      const { data, error } = await supabase.from("profiles").upsert({
+        id: user.id,
+        name: onboardData.name,
+        role: onboardData.role || "",
+        bio: onboardData.bio || "",
+        skills: onboardData.skills || [],
+      }, { onConflict: "id" }).select().single();
+      if (error) { console.error("Profile save error:", error); showToast("Error saving profile. Try again."); return; }
+      if (data) {
+        setProfile(data);
+        setScreen("app");
+        setAppScreen("explore");
+        loadAllData(user.id);
+        showToast(`Welcome, ${data.name.split(" ")[0]}!`);
+      }
+    } catch (e) {
+      console.error(e);
+      showToast("Something went wrong. Try again.");
     }
   };
 
