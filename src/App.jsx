@@ -766,7 +766,7 @@ export default function CoLab() {
                   {item.url && (
                     item.url.match(/\.(jpg|jpeg|png|gif|webp)$/i)
                       ? <img src={item.url} alt={item.title} style={{ width: "100%", maxHeight: 180, objectFit: "cover", borderRadius: 6, border: `1px solid ${border}`, marginTop: 4 }} />
-                      : <a href={item.url} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: text, textDecoration: "underline" }}>{item.url.includes("user-uploads") ? "📎 view file" : item.url}</a>
+                      : <a href={item.url} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: text, textDecoration: "underline" }}>{item.url.includes("user-uploads") ? "view file" : item.url}</a>
                   )}
                 </div>
               ))}
@@ -1144,7 +1144,7 @@ export default function CoLab() {
                           {newPostMediaUrl.match(/\.(jpg|jpeg|png|gif|webp)$/i) ? (
                             <img src={newPostMediaUrl} alt="" style={{ maxWidth: "100%", maxHeight: 200, borderRadius: 8, border: `1px solid ${border}` }} />
                           ) : (
-                            <div style={{ fontSize: 11, color: textMuted, padding: "6px 10px", background: bg3, borderRadius: 6 }}>📎 {newPostMediaUrl.split("/").pop()}</div>
+                            <div style={{ fontSize: 11, color: textMuted, padding: "6px 10px", background: bg3, borderRadius: 6 }}>file: {newPostMediaUrl.split("/").pop()}</div>
                           )}
                           <button onClick={() => setNewPostMediaUrl("")} style={{ position: "absolute", top: 4, right: 4, background: bg, border: `1px solid ${border}`, borderRadius: "50%", width: 20, height: 20, cursor: "pointer", fontSize: 10, display: "flex", alignItems: "center", justifyContent: "center", color: text, fontFamily: "inherit" }}>✕</button>
                         </div>
@@ -1514,7 +1514,7 @@ export default function CoLab() {
           </div>
           {trendingProjects.length > 0 && (
             <div style={{ marginBottom: 28, padding: "16px 20px", background: bg2, border: `1px solid ${border}`, borderRadius: 10 }}>
-              <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px", marginBottom: 12 }}>🔥 TRENDING</div>
+              <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px", marginBottom: 12 }}>TRENDING</div>
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                 {trendingProjects.map(p => (
                   <div key={p.id} onClick={() => { setActiveProject(p); loadProjectData(p.id); }} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer", padding: "6px 0", borderBottom: `1px solid ${border}` }}
@@ -1854,7 +1854,7 @@ export default function CoLab() {
                           <div key={task.id} style={{ background: bg, border: `1px solid ${border}`, borderRadius: 8, padding: "10px 12px" }}>
                             <div style={{ fontSize: 12, color: text, marginBottom: 6, lineHeight: 1.4 }}>{task.text}</div>
                             {task.assigned_name && <div style={{ fontSize: 10, color: textMuted, marginBottom: 4 }}>→ {task.assigned_name}</div>}
-                            {task.due_date && <div style={{ fontSize: 10, color: new Date(task.due_date) < new Date() && !task.done ? "#ef4444" : textMuted, marginBottom: 8 }}>📅 {new Date(task.due_date).toLocaleDateString()}</div>}
+                            {task.due_date && <div style={{ fontSize: 10, color: new Date(task.due_date) < new Date() && !task.done ? "#ef4444" : textMuted, marginBottom: 8 }}>due {new Date(task.due_date).toLocaleDateString()}</div>}
                             <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                               {col.id !== "todo" && <button className="hb" onClick={async () => { await supabase.from("tasks").update({ in_progress: false, done: false }).eq("id", task.id); setTasks(tasks.map(t => t.id === task.id ? { ...t, in_progress: false, done: false } : t)); }} style={{ fontSize: 9, padding: "2px 7px", border: `1px solid ${border}`, borderRadius: 3, background: "none", color: textMuted, cursor: "pointer", fontFamily: "inherit" }}>← to do</button>}
                               {col.id === "todo" && <button className="hb" onClick={async () => { await supabase.from("tasks").update({ in_progress: true, done: false }).eq("id", task.id); setTasks(tasks.map(t => t.id === task.id ? { ...t, in_progress: true, done: false } : t)); }} style={{ fontSize: 9, padding: "2px 7px", border: `1px solid ${border}`, borderRadius: 3, background: "none", color: textMuted, cursor: "pointer", fontFamily: "inherit" }}>in progress →</button>}
@@ -1948,7 +1948,7 @@ export default function CoLab() {
                         <div key={file.id} style={{ background: bg2, borderRadius: i === 0 && projectFiles.length === 1 ? 8 : i === 0 ? "8px 8px 0 0" : i === projectFiles.length - 1 ? "0 0 8px 8px" : 0, border: `1px solid ${border}`, borderBottom: i < projectFiles.length - 1 ? "none" : `1px solid ${border}`, padding: "14px 18px" }}>
                           <div style={{ display: "flex", gap: 14, alignItems: "center", marginBottom: file.type?.startsWith("image") ? 10 : 0 }}>
                             <div style={{ fontSize: 20, flexShrink: 0 }}>
-                              {file.type?.startsWith("image") ? "🖼" : file.type?.includes("pdf") ? "📄" : file.type?.includes("video") ? "🎬" : "📎"}
+                            {file.type?.startsWith("image") ? "img" : file.type?.includes("pdf") ? "pdf" : file.type?.includes("video") ? "vid" : "file"}
                             </div>
                             <div style={{ flex: 1, minWidth: 0 }}>
                               <div style={{ fontSize: 13, color: text, marginBottom: 2 }}>{file.name}</div>
@@ -2132,7 +2132,7 @@ export default function CoLab() {
                             {item.url && (
                                 item.url.match(/\.(jpg|jpeg|png|gif|webp)$/i)
                                   ? <img src={item.url} alt={item.title} style={{ maxWidth: "100%", maxHeight: 200, borderRadius: 8, border: `1px solid ${border}`, marginTop: 4 }} />
-                                  : <a href={item.url} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: text, textDecoration: "underline", wordBreak: "break-all" }}>{item.url.includes("user-uploads") ? "📎 view file" : item.url}</a>
+                                  : <a href={item.url} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: text, textDecoration: "underline", wordBreak: "break-all" }}>{item.url.includes("user-uploads") ? "view file" : item.url}</a>
                             )}
                           </div>
                           <button className="hb" onClick={() => handleDeletePortfolioItem(item.id)} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontSize: 12, fontFamily: "inherit", flexShrink: 0 }}>✕</button>
@@ -2203,7 +2203,7 @@ export default function CoLab() {
                   <div style={{ marginBottom: 8, position: "relative", display: "inline-block" }}>
                     {newPortfolioItem.url.match(/\.(jpg|jpeg|png|gif|webp)$/i)
                       ? <img src={newPortfolioItem.url} alt="" style={{ maxWidth: "100%", maxHeight: 160, borderRadius: 8, border: `1px solid ${border}` }} />
-                      : <div style={{ fontSize: 11, color: textMuted, padding: "6px 10px", background: bg2, borderRadius: 6 }}>📎 {newPortfolioItem.url.split("/").pop()}</div>
+                      : <div style={{ fontSize: 11, color: textMuted, padding: "6px 10px", background: bg2, borderRadius: 6 }}>file: {newPortfolioItem.url.split("/").pop()}</div>
                     }
                     <button onClick={() => setNewPortfolioItem({ ...newPortfolioItem, url: "" })} style={{ position: "absolute", top: 4, right: 4, background: bg, border: `1px solid ${border}`, borderRadius: "50%", width: 20, height: 20, cursor: "pointer", fontSize: 10, display: "flex", alignItems: "center", justifyContent: "center", color: text, fontFamily: "inherit" }}>✕</button>
                   </div>
