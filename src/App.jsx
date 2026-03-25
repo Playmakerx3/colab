@@ -223,26 +223,35 @@ export default function CoLab() {
   const handleFinishOnboard = async () => {
     if (!onboardData.name) return;
     try {
-      const { data: { user }, error: userError } = await supabase.auth.getUser();
-      if (userError || !user) { setAuthError("Session expired. Please log in again."); setScreen("auth"); return; }
-      const initials = onboardData.name.split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase();
+      // Get current session directly
+      const { data: sessionData } = await supabase.auth.getSession();
+      const userId = sessionData?.session?.user?.id || authUser?.id;
+      if (!userId) {
+        showToast("Session expired. Please log in again.");
+        setScreen("auth");
+        return;
+      }
       const { data, error } = await supabase.from("profiles").upsert({
-        id: user.id,
+        id: userId,
         name: onboardData.name,
         role: onboardData.role || "",
         bio: onboardData.bio || "",
         skills: onboardData.skills || [],
       }, { onConflict: "id" }).select().single();
-      if (error) { console.error("Profile save error:", error); showToast("Error saving profile. Try again."); return; }
+      if (error) {
+        console.error("Profile save error:", error.message);
+        showToast("Error saving profile: " + error.message);
+        return;
+      }
       if (data) {
         setProfile(data);
         setScreen("app");
         setAppScreen("explore");
-        loadAllData(user.id);
+        loadAllData(userId);
         showToast(`Welcome, ${data.name.split(" ")[0]}!`);
       }
     } catch (e) {
-      console.error(e);
+      console.error("Onboard error:", e);
       showToast("Something went wrong. Try again.");
     }
   };
