@@ -136,6 +136,9 @@ export default function CoLab() {
   const [expandedComments, setExpandedComments] = useState({});
   const [newCommentText, setNewCommentText] = useState({});
   const [projectMembers, setProjectMembers] = useState([]);
+  const [projectFiles, setProjectFiles] = useState([]);
+  const [projectDocs, setProjectDocs] = useState([]);
+  const [activeDoc, setActiveDoc] = useState(null);
 
   // UI
   const [showNotifications, setShowNotifications] = useState(false);
@@ -362,14 +365,19 @@ export default function CoLab() {
   }, [authUser, activeProject, activeDmThread, projects]);
 
   const loadProjectData = async (projectId) => {
-    const [{ data: t }, { data: m }, { data: u }] = await Promise.all([
+    const [{ data: t }, { data: m }, { data: u }, { data: f }, { data: d }] = await Promise.all([
       supabase.from("tasks").select("*").eq("project_id", projectId).order("created_at"),
       supabase.from("messages").select("*").eq("project_id", projectId).order("created_at"),
       supabase.from("updates").select("*").eq("project_id", projectId).order("created_at", { ascending: false }),
+      supabase.from("project_files").select("*").eq("project_id", projectId).order("created_at", { ascending: false }),
+      supabase.from("project_docs").select("*").eq("project_id", projectId).order("created_at"),
     ]);
     setTasks(t || []);
     setMessages(m || []);
     setProjectUpdates(u || []);
+    setProjectFiles(f || []);
+    setProjectDocs(d || []);
+    setActiveDoc(null);
   };
 
   const loadDmMessages = async (threadId) => {
@@ -1619,162 +1627,261 @@ export default function CoLab() {
         </div>
       )}
 
-      {/* PROJECT SPACE (from workspace) */}
+      {/* PROJECT SPACE */}
       {appScreen === "workspace" && activeProject && (
-        <div className="pad fu" style={{ width: "100%", maxWidth: 800, margin: "0 auto", padding: "36px 24px" }}>
-          <button className="hb" onClick={() => setActiveProject(null)} style={{ ...btnG, marginBottom: 22, padding: "6px 14px", fontSize: 11 }}>← workspace</button>
-          <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px", marginBottom: 6 }}>PROJECT SPACE</div>
-          <h2 style={{ fontSize: "clamp(15px, 3vw, 18px)", fontWeight: 400, letterSpacing: "-0.5px", color: text, marginBottom: 3 }}>{activeProject.title}</h2>
-          <div style={{ fontSize: 11, color: textMuted, marginBottom: 16 }}>{activeProject.category}</div>
-
-          {/* Progress with edit */}
-          <div style={{ marginBottom: 22 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8, alignItems: "center" }}>
-              <span style={{ fontSize: 10, color: textMuted }}>progress</span>
-              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                <span style={{ fontSize: 10, color: text }}>{activeProject.progress || 0}%</span>
-                {activeProject.owner_id === authUser?.id && (
-                  <button onClick={() => setEditingProgress(editingProgress === activeProject.id ? null : activeProject.id)} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontFamily: "inherit", fontSize: 10, textDecoration: "underline" }}>
-                    {editingProgress === activeProject.id ? "done" : "edit"}
-                  </button>
-                )}
-              </div>
+        <div style={{ width: "100%", display: "flex", flexDirection: "column", height: "calc(100vh - 50px)" }}>
+          {/* Project header */}
+          <div className="pad" style={{ padding: "16px 28px", borderBottom: `1px solid ${border}`, display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap", flexShrink: 0 }}>
+            <button className="hb" onClick={() => setActiveProject(null)} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontFamily: "inherit", fontSize: 12 }}>← workspace</button>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 16, fontWeight: 400, color: text, letterSpacing: "-0.5px" }}>{activeProject.title}</div>
+              <div style={{ fontSize: 11, color: textMuted }}>{activeProject.category}</div>
             </div>
-            {editingProgress === activeProject.id ? (
-              <input type="range" min="0" max="100" defaultValue={activeProject.progress || 0} style={{ width: "100%", accentColor: text }} onMouseUp={e => handleUpdateProgress(activeProject.id, e.target.value)} onTouchEnd={e => handleUpdateProgress(activeProject.id, e.target.value)} />
-            ) : (
-              <ProgressBar value={activeProject.progress || 0} dark={dark} />
-            )}
-          </div>
-
-          <div className="proj-tabs" style={{ borderBottom: `1px solid ${border}`, marginBottom: 22, display: "flex" }}>
-            <TabBtn id="tasks" label="tasks" count={tasks.filter(t => !t.done).length} setter={setProjectTab} current={projectTab} />
-            <TabBtn id="messages" label="messages" count={messages.length} setter={setProjectTab} current={projectTab} />
-            <TabBtn id="updates" label="updates" count={projectUpdates.length} setter={setProjectTab} current={projectTab} />
-            <TabBtn id="team" label="team" count={0} setter={setProjectTab} current={projectTab} />
-            <TabBtn id="plugins" label="plugins" count={(activeProject.plugins || []).length} setter={setProjectTab} current={projectTab} />
-          </div>
-
-          {projectTab === "tasks" && (
-            <div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 18 }}>
-                <div style={{ display: "flex", gap: 8 }}>
-                  <input placeholder="add a task..." value={newTaskText} onChange={e => setNewTaskText(e.target.value)} onKeyDown={e => e.key === "Enter" && handleAddTask(activeProject.id)} style={{ ...inputStyle, fontSize: 12 }} />
-                  <button className="hb" onClick={() => handleAddTask(activeProject.id)} style={{ ...btnP, padding: "10px 16px", flexShrink: 0, fontSize: 12 }}>add</button>
-                </div>
-                <select value={taskAssignee} onChange={e => setTaskAssignee(e.target.value)} style={{ ...inputStyle, fontSize: 12 }}>
-                  <option value="">assign to... (optional)</option>
-                  {users.filter(u => [authUser?.id, ...(applications.filter(a => a.project_id === activeProject.id && a.status === "accepted").map(a => a.applicant_id))].includes(u.id)).map(u => <option key={u.id} value={u.name}>{u.name}</option>)}
-                </select>
-              </div>
-              {tasks.length === 0 ? <div style={{ fontSize: 12, color: textMuted, padding: "18px 0" }}>no tasks yet.</div> : (
-                <div>
-                  {tasks.filter(t => !t.done).length > 0 && (
-                    <div style={{ marginBottom: 18 }}>
-                      <div style={{ fontSize: 10, color: textMuted, letterSpacing: "1px", marginBottom: 8 }}>TO DO · {tasks.filter(t => !t.done).length}</div>
-                      {tasks.filter(t => !t.done).map(task => (
-                        <div key={task.id} className="task-row" style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 0", borderBottom: `1px solid ${border}` }}>
-                          <button onClick={() => handleToggleTask(task)} style={{ width: 16, height: 16, borderRadius: 4, border: `1px solid ${textMuted}`, background: "none", cursor: "pointer", flexShrink: 0 }} />
-                          <span style={{ fontSize: 13, color: text, flex: 1 }}>{task.text}</span>
-                          {task.assigned_name && <span style={{ fontSize: 10, color: textMuted, border: `1px solid ${border}`, borderRadius: 3, padding: "1px 6px", flexShrink: 0 }}>{task.assigned_name}</span>}
-                          <button className="tdel hb" onClick={() => handleDeleteTask(task.id)} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontSize: 12, opacity: 0, transition: "opacity 0.15s", fontFamily: "inherit" }}>✕</button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  {tasks.filter(t => t.done).length > 0 && (
-                    <div>
-                      <div style={{ fontSize: 10, color: textMuted, letterSpacing: "1px", marginBottom: 8 }}>DONE · {tasks.filter(t => t.done).length}</div>
-                      {tasks.filter(t => t.done).map(task => (
-                        <div key={task.id} className="task-row" style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 0", borderBottom: `1px solid ${border}` }}>
-                          <button onClick={() => handleToggleTask(task)} style={{ width: 16, height: 16, borderRadius: 4, border: `1px solid ${text}`, background: text, cursor: "pointer", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}><span style={{ color: bg, fontSize: 9 }}>✓</span></button>
-                          <span style={{ fontSize: 13, color: textMuted, textDecoration: "line-through", flex: 1 }}>{task.text}</span>
-                          {task.assigned_name && <span style={{ fontSize: 10, color: textMuted, border: `1px solid ${border}`, borderRadius: 3, padding: "1px 6px", flexShrink: 0 }}>{task.assigned_name}</span>}
-                          <button className="tdel hb" onClick={() => handleDeleteTask(task.id)} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontSize: 12, opacity: 0, transition: "opacity 0.15s", fontFamily: "inherit" }}>✕</button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
+            <div style={{ display: "flex", gap: 8, alignItems: "center", flexShrink: 0 }}>
+              <span style={{ fontSize: 10, color: textMuted }}>{activeProject.progress || 0}%</span>
+              {activeProject.owner_id === authUser?.id && (
+                <button onClick={() => setEditingProgress(editingProgress === activeProject.id ? null : activeProject.id)} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontFamily: "inherit", fontSize: 10, textDecoration: "underline" }}>
+                  {editingProgress === activeProject.id ? "done" : "edit progress"}
+                </button>
               )}
             </div>
+          </div>
+          {editingProgress === activeProject.id && (
+            <div className="pad" style={{ padding: "8px 28px", borderBottom: `1px solid ${border}`, flexShrink: 0 }}>
+              <input type="range" min="0" max="100" defaultValue={activeProject.progress || 0} style={{ width: "100%", accentColor: text }} onMouseUp={e => handleUpdateProgress(activeProject.id, e.target.value)} onTouchEnd={e => handleUpdateProgress(activeProject.id, e.target.value)} />
+            </div>
           )}
 
-          {projectTab === "messages" && (
-            <div>
-              <div style={{ maxHeight: 320, overflowY: "auto", display: "flex", flexDirection: "column", gap: 12, marginBottom: 14 }}>
-                {messages.length === 0 ? <div style={{ fontSize: 12, color: textMuted, padding: "18px 0" }}>no messages yet.</div>
-                  : messages.map((msg, i) => {
-                      const isMe = msg.from_user === authUser?.id;
-                      return (
-                        <div key={i} style={{ display: "flex", gap: 10, alignItems: "flex-start", flexDirection: isMe ? "row-reverse" : "row" }}>
-                          <Avatar initials={msg.from_initials} size={28} dark={dark} />
-                          <div style={{ maxWidth: "72%" }}>
-                            <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 4, flexDirection: isMe ? "row-reverse" : "row" }}>
-                              <span style={{ fontSize: 11, fontWeight: 500, color: text }}>{isMe ? "you" : msg.from_name}</span>
-                              <span style={{ fontSize: 10, color: textMuted }}>{new Date(msg.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
-                            </div>
-                            <div style={{ background: isMe ? text : bg2, color: isMe ? bg : text, padding: "8px 12px", borderRadius: isMe ? "12px 12px 2px 12px" : "12px 12px 12px 2px", fontSize: 12, lineHeight: 1.6, border: isMe ? "none" : `1px solid ${border}` }}>
-                              {renderWithMentions(msg.text)}
+          {/* Tab bar */}
+          <div className="pad proj-tabs" style={{ padding: "0 28px", borderBottom: `1px solid ${border}`, display: "flex", flexShrink: 0, overflowX: "auto" }}>
+            <TabBtn id="kanban" label="board" count={0} setter={setProjectTab} current={projectTab} />
+            <TabBtn id="messages" label="chat" count={messages.length} setter={setProjectTab} current={projectTab} />
+            <TabBtn id="files" label="files" count={0} setter={setProjectTab} current={projectTab} />
+            <TabBtn id="docs" label="docs" count={0} setter={setProjectTab} current={projectTab} />
+            <TabBtn id="updates" label="updates" count={projectUpdates.length} setter={setProjectTab} current={projectTab} />
+            <TabBtn id="team" label="team" count={0} setter={setProjectTab} current={projectTab} />
+          </div>
+
+          {/* Tab content */}
+          <div style={{ flex: 1, overflowY: "auto", padding: "24px 28px" }}>
+
+            {/* KANBAN BOARD */}
+            {projectTab === "kanban" && (
+              <div>
+                <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
+                  <input placeholder="add a task..." value={newTaskText} onChange={e => setNewTaskText(e.target.value)} onKeyDown={e => e.key === "Enter" && handleAddTask(activeProject.id)} style={{ ...inputStyle, fontSize: 12 }} />
+                  <select value={taskAssignee} onChange={e => setTaskAssignee(e.target.value)} style={{ ...inputStyle, fontSize: 12, maxWidth: 160 }}>
+                    <option value="">assign to...</option>
+                    {users.filter(u => [authUser?.id, ...(applications.filter(a => a.project_id === activeProject.id && a.status === "accepted").map(a => a.applicant_id))].includes(u.id)).map(u => <option key={u.id} value={u.name}>{u.name}</option>)}
+                  </select>
+                  <button className="hb" onClick={() => handleAddTask(activeProject.id)} style={{ ...btnP, padding: "10px 16px", flexShrink: 0, fontSize: 12 }}>add</button>
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
+                  {[
+                    { id: "todo", label: "TO DO", tasks: tasks.filter(t => !t.done && !t.in_progress) },
+                    { id: "inprogress", label: "IN PROGRESS", tasks: tasks.filter(t => t.in_progress && !t.done) },
+                    { id: "done", label: "DONE", tasks: tasks.filter(t => t.done) },
+                  ].map(col => (
+                    <div key={col.id} style={{ background: bg2, borderRadius: 10, border: `1px solid ${border}`, padding: "14px", minHeight: 200 }}>
+                      <div style={{ fontSize: 10, color: textMuted, letterSpacing: "1.5px", marginBottom: 12, display: "flex", justifyContent: "space-between" }}>
+                        {col.label} <span style={{ background: bg3, borderRadius: 10, padding: "1px 7px" }}>{col.tasks.length}</span>
+                      </div>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                        {col.tasks.map(task => (
+                          <div key={task.id} style={{ background: bg, border: `1px solid ${border}`, borderRadius: 8, padding: "10px 12px" }}>
+                            <div style={{ fontSize: 12, color: text, marginBottom: 6, lineHeight: 1.4 }}>{task.text}</div>
+                            {task.assigned_name && <div style={{ fontSize: 10, color: textMuted, marginBottom: 8 }}>→ {task.assigned_name}</div>}
+                            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                              {col.id !== "todo" && <button className="hb" onClick={async () => { await supabase.from("tasks").update({ in_progress: false, done: false }).eq("id", task.id); setTasks(tasks.map(t => t.id === task.id ? { ...t, in_progress: false, done: false } : t)); }} style={{ fontSize: 9, padding: "2px 7px", border: `1px solid ${border}`, borderRadius: 3, background: "none", color: textMuted, cursor: "pointer", fontFamily: "inherit" }}>← to do</button>}
+                              {col.id === "todo" && <button className="hb" onClick={async () => { await supabase.from("tasks").update({ in_progress: true, done: false }).eq("id", task.id); setTasks(tasks.map(t => t.id === task.id ? { ...t, in_progress: true, done: false } : t)); }} style={{ fontSize: 9, padding: "2px 7px", border: `1px solid ${border}`, borderRadius: 3, background: "none", color: textMuted, cursor: "pointer", fontFamily: "inherit" }}>in progress →</button>}
+                              {col.id === "inprogress" && <button className="hb" onClick={() => handleToggleTask(task)} style={{ fontSize: 9, padding: "2px 7px", border: `1px solid ${border}`, borderRadius: 3, background: "none", color: textMuted, cursor: "pointer", fontFamily: "inherit" }}>done →</button>}
+                              <button className="hb" onClick={() => handleDeleteTask(task.id)} style={{ fontSize: 9, padding: "2px 7px", border: `1px solid ${border}`, borderRadius: 3, background: "none", color: textMuted, cursor: "pointer", fontFamily: "inherit" }}>✕</button>
                             </div>
                           </div>
-                        </div>
-                      );
-                    })
-                }
-                <div ref={messagesEndRef} />
-              </div>
-              <div style={{ display: "flex", gap: 8, borderTop: `1px solid ${border}`, paddingTop: 12 }}>
-                <MentionInput dark={dark} value={newMessage} onChange={setNewMessage} onKeyDown={e => e.key === "Enter" && !e.shiftKey && handleSendMessage(activeProject.id)} placeholder="send a message... (@mention someone)" users={users} style={{ ...inputStyle, fontSize: 12 }} />
-                <button className="hb" onClick={() => handleSendMessage(activeProject.id)} style={{ ...btnP, padding: "10px 16px", flexShrink: 0, fontSize: 12 }}>send</button>
-              </div>
-            </div>
-          )}
-
-          {projectTab === "updates" && (
-            <div>
-              <div style={{ display: "flex", gap: 10, marginBottom: 22, alignItems: "flex-start" }}>
-                <Avatar initials={myInitials} size={28} dark={dark} />
-                <div style={{ flex: 1 }}>
-                  <MentionInput dark={dark} value={newUpdate} onChange={setNewUpdate} placeholder="post an update... (@mention someone)" users={users} style={{ ...inputStyle, resize: "none", fontSize: 12, padding: "8px 12px" }} rows={2} />
-                  {newUpdate.trim() && <button className="hb" onClick={() => handlePostUpdate(activeProject.id)} style={{ ...btnP, marginTop: 8, padding: "7px 14px", fontSize: 11 }}>post</button>}
-                </div>
-              </div>
-              {projectUpdates.length === 0 ? <div style={{ fontSize: 12, color: textMuted }}>no updates yet.</div>
-                : projectUpdates.map((u,i) => (
-                  <div key={i} style={{ display: "flex", gap: 10, marginBottom: 18 }}>
-                    <Avatar initials={u.initials} size={28} dark={dark} />
-                    <div>
-                      <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 4 }}>
-                        <span style={{ fontSize: 12, fontWeight: 500, color: text }}>{u.author}</span>
-                        <span style={{ fontSize: 10, color: textMuted }}>{new Date(u.created_at).toLocaleDateString()}</span>
+                        ))}
+                        {col.tasks.length === 0 && <div style={{ fontSize: 11, color: textMuted, textAlign: "center", padding: "20px 0" }}>empty</div>}
                       </div>
-                      <div style={{ fontSize: 12, color: textMuted, lineHeight: 1.65 }}>{renderWithMentions(u.text)}</div>
                     </div>
-                  </div>
-                ))
-              }
-            </div>
-          )}
-
-          {projectTab === "team" && (
-            <div>
-              <div style={{ fontSize: 10, color: textMuted, letterSpacing: "1px", marginBottom: 14 }}>TEAM MEMBERS</div>
-              {/* Owner */}
-              <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 0", borderBottom: `1px solid ${border}` }}>
-                <Avatar initials={activeProject.owner_initials} size={32} dark={dark} />
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 13, color: text }}>{activeProject.owner_name}</div>
-                  <div style={{ fontSize: 11, color: textMuted }}>owner</div>
+                  ))}
                 </div>
-                <span style={{ fontSize: 10, padding: "2px 8px", border: `1px solid ${border}`, borderRadius: 3, color: text }}>owner</span>
               </div>
-              {/* Accepted applicants */}
-              {applications.filter(a => a.project_id === activeProject.id && a.status === "accepted").map(a => {
-                const memberUser = users.find(u => u.id === a.applicant_id);
-                return (
+            )}
+
+            {/* CHAT */}
+            {projectTab === "messages" && (
+              <div style={{ display: "flex", flexDirection: "column", height: "100%", maxHeight: "calc(100vh - 220px)" }}>
+                <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: 12, marginBottom: 14 }}>
+                  {messages.length === 0 ? <div style={{ fontSize: 12, color: textMuted }}>no messages yet.</div>
+                    : messages.map((msg, i) => {
+                        const isMe = msg.from_user === authUser?.id;
+                        return (
+                          <div key={i} style={{ display: "flex", gap: 10, alignItems: "flex-start", flexDirection: isMe ? "row-reverse" : "row" }}>
+                            <Avatar initials={msg.from_initials} size={28} dark={dark} />
+                            <div style={{ maxWidth: "72%" }}>
+                              <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 4, flexDirection: isMe ? "row-reverse" : "row" }}>
+                                <span style={{ fontSize: 11, fontWeight: 500, color: text }}>{isMe ? "you" : msg.from_name}</span>
+                                <span style={{ fontSize: 10, color: textMuted }}>{new Date(msg.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
+                              </div>
+                              <div style={{ background: isMe ? text : bg2, color: isMe ? bg : text, padding: "8px 12px", borderRadius: isMe ? "12px 12px 2px 12px" : "12px 12px 12px 2px", fontSize: 12, lineHeight: 1.6, border: isMe ? "none" : `1px solid ${border}` }}>
+                                {renderWithMentions(msg.text)}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })
+                  }
+                  <div ref={messagesEndRef} />
+                </div>
+                <div style={{ display: "flex", gap: 8, borderTop: `1px solid ${border}`, paddingTop: 12 }}>
+                  <MentionInput dark={dark} value={newMessage} onChange={setNewMessage} onKeyDown={e => e.key === "Enter" && !e.shiftKey && handleSendMessage(activeProject.id)} placeholder="message the team... (@mention)" users={users} style={{ ...inputStyle, fontSize: 12 }} />
+                  <button className="hb" onClick={() => handleSendMessage(activeProject.id)} style={{ ...btnP, padding: "10px 16px", flexShrink: 0, fontSize: 12 }}>send</button>
+                </div>
+              </div>
+            )}
+
+            {/* FILES */}
+            {projectTab === "files" && (
+              <div>
+                <div style={{ marginBottom: 20 }}>
+                  <label style={{ display: "inline-block", cursor: "pointer" }}>
+                    <div style={{ ...btnP, display: "inline-flex", alignItems: "center", gap: 8, fontSize: 12 }}>
+                      ↑ upload file
+                    </div>
+                    <input type="file" style={{ display: "none" }} onChange={async (e) => {
+                      const file = e.target.files[0];
+                      if (!file) return;
+                      showToast("Uploading...");
+                      const path = `${activeProject.id}/${Date.now()}-${file.name}`;
+                      const { data: uploadData, error } = await supabase.storage.from("project-files").upload(path, file);
+                      if (error) { showToast("Upload failed."); return; }
+                      const { data: { publicUrl } } = supabase.storage.from("project-files").getPublicUrl(path);
+                      const { data: fileRecord } = await supabase.from("project_files").insert({
+                        project_id: activeProject.id, user_id: authUser.id,
+                        user_name: profile.name, user_initials: myInitials,
+                        name: file.name, size: file.size, type: file.type, url: publicUrl,
+                      }).select().single();
+                      if (fileRecord) {
+                        setProjectFiles(prev => [...prev, fileRecord]);
+                        showToast("File uploaded.");
+                      }
+                    }} />
+                  </label>
+                </div>
+                {projectFiles.length === 0
+                  ? <div style={{ fontSize: 13, color: textMuted }}>no files yet. upload something to share with the team.</div>
+                  : <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
+                      {projectFiles.map((file, i) => (
+                        <div key={file.id} style={{ background: bg2, borderRadius: i === 0 && projectFiles.length === 1 ? 8 : i === 0 ? "8px 8px 0 0" : i === projectFiles.length - 1 ? "0 0 8px 8px" : 0, border: `1px solid ${border}`, borderBottom: i < projectFiles.length - 1 ? "none" : `1px solid ${border}`, padding: "14px 18px", display: "flex", gap: 14, alignItems: "center" }}>
+                          <div style={{ fontSize: 20, flexShrink: 0 }}>
+                            {file.type?.startsWith("image") ? "🖼" : file.type?.includes("pdf") ? "📄" : file.type?.includes("video") ? "🎬" : "📎"}
+                          </div>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontSize: 13, color: text, marginBottom: 2 }}>{file.name}</div>
+                            <div style={{ fontSize: 10, color: textMuted }}>{file.user_name} · {new Date(file.created_at).toLocaleDateString()} · {file.size ? `${(file.size / 1024).toFixed(0)}kb` : ""}</div>
+                          </div>
+                          <a href={file.url} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: text, textDecoration: "underline", flexShrink: 0 }}>open</a>
+                        </div>
+                      ))}
+                    </div>
+                }
+              </div>
+            )}
+
+            {/* DOCS */}
+            {projectTab === "docs" && (
+              <div>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+                  <div style={{ fontSize: 10, color: textMuted, letterSpacing: "1.5px" }}>SHARED DOCUMENTS</div>
+                  <button className="hb" onClick={async () => {
+                    const title = prompt("Document title:");
+                    if (!title) return;
+                    const { data } = await supabase.from("project_docs").insert({
+                      project_id: activeProject.id, title, content: "",
+                      last_edited_by: profile.name, last_edited_initials: myInitials,
+                    }).select().single();
+                    if (data) { setProjectDocs(prev => [...prev, data]); setActiveDoc(data); }
+                  }} style={{ background: "none", border: "none", color: text, cursor: "pointer", fontFamily: "inherit", fontSize: 11, textDecoration: "underline" }}>+ new doc</button>
+                </div>
+                {activeDoc ? (
+                  <div>
+                    <button onClick={() => setActiveDoc(null)} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontFamily: "inherit", fontSize: 12, marginBottom: 16 }}>← all docs</button>
+                    <div style={{ fontSize: 16, color: text, fontWeight: 400, marginBottom: 4 }}>{activeDoc.title}</div>
+                    <div style={{ fontSize: 10, color: textMuted, marginBottom: 16 }}>last edited by {activeDoc.last_edited_by}</div>
+                    <textarea
+                      value={activeDoc.content || ""}
+                      onChange={e => setActiveDoc({ ...activeDoc, content: e.target.value })}
+                      onBlur={async () => {
+                        await supabase.from("project_docs").update({
+                          content: activeDoc.content,
+                          last_edited_by: profile.name,
+                          last_edited_initials: myInitials,
+                          updated_at: new Date().toISOString(),
+                        }).eq("id", activeDoc.id);
+                        setProjectDocs(prev => prev.map(d => d.id === activeDoc.id ? { ...activeDoc } : d));
+                        showToast("Saved.");
+                      }}
+                      placeholder="Start writing..."
+                      style={{ ...inputStyle, resize: "none", minHeight: 400, fontSize: 13, lineHeight: 1.8, fontFamily: "inherit" }}
+                    />
+                  </div>
+                ) : (
+                  projectDocs.length === 0
+                    ? <div style={{ fontSize: 13, color: textMuted }}>no documents yet. create one to start writing together.</div>
+                    : <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
+                        {projectDocs.map((doc, i) => (
+                          <div key={doc.id} onClick={() => setActiveDoc(doc)} style={{ background: bg2, borderRadius: i === 0 && projectDocs.length === 1 ? 8 : i === 0 ? "8px 8px 0 0" : i === projectDocs.length - 1 ? "0 0 8px 8px" : 0, border: `1px solid ${border}`, borderBottom: i < projectDocs.length - 1 ? "none" : `1px solid ${border}`, padding: "14px 18px", cursor: "pointer", transition: "opacity 0.15s" }}
+                            onMouseEnter={e => e.currentTarget.style.opacity = "0.7"} onMouseLeave={e => e.currentTarget.style.opacity = "1"}>
+                            <div style={{ fontSize: 14, color: text, marginBottom: 4 }}>{doc.title}</div>
+                            <div style={{ fontSize: 10, color: textMuted }}>edited by {doc.last_edited_by} · {new Date(doc.updated_at).toLocaleDateString()}</div>
+                          </div>
+                        ))}
+                      </div>
+                )}
+              </div>
+            )}
+
+            {/* UPDATES */}
+            {projectTab === "updates" && (
+              <div>
+                <div style={{ display: "flex", gap: 10, marginBottom: 22, alignItems: "flex-start" }}>
+                  <Avatar initials={myInitials} size={28} dark={dark} />
+                  <div style={{ flex: 1 }}>
+                    <MentionInput dark={dark} value={newUpdate} onChange={setNewUpdate} placeholder="post an update... (@mention someone)" users={users} style={{ ...inputStyle, resize: "none", fontSize: 12, padding: "8px 12px" }} rows={2} />
+                    {newUpdate.trim() && <button className="hb" onClick={() => handlePostUpdate(activeProject.id)} style={{ ...btnP, marginTop: 8, padding: "7px 14px", fontSize: 11 }}>post</button>}
+                  </div>
+                </div>
+                {projectUpdates.length === 0 ? <div style={{ fontSize: 12, color: textMuted }}>no updates yet.</div>
+                  : projectUpdates.map((u, i) => (
+                    <div key={i} style={{ display: "flex", gap: 10, marginBottom: 18 }}>
+                      <Avatar initials={u.initials} size={28} dark={dark} />
+                      <div>
+                        <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 4 }}>
+                          <span style={{ fontSize: 12, fontWeight: 500, color: text }}>{u.author}</span>
+                          <span style={{ fontSize: 10, color: textMuted }}>{new Date(u.created_at).toLocaleDateString()}</span>
+                        </div>
+                        <div style={{ fontSize: 12, color: textMuted, lineHeight: 1.65 }}>{renderWithMentions(u.text)}</div>
+                      </div>
+                    </div>
+                  ))
+                }
+              </div>
+            )}
+
+            {/* TEAM */}
+            {projectTab === "team" && (
+              <div>
+                <div style={{ fontSize: 10, color: textMuted, letterSpacing: "1px", marginBottom: 14 }}>TEAM</div>
+                <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 0", borderBottom: `1px solid ${border}` }}>
+                  <Avatar initials={activeProject.owner_initials} size={36} dark={dark} />
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 13, color: text }}>{activeProject.owner_name}</div>
+                    <div style={{ fontSize: 11, color: textMuted }}>project owner</div>
+                  </div>
+                  <span style={{ fontSize: 10, padding: "2px 8px", border: `1px solid ${border}`, borderRadius: 3, color: text }}>owner</span>
+                </div>
+                {applications.filter(a => a.project_id === activeProject.id && a.status === "accepted").map(a => (
                   <div key={a.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 0", borderBottom: `1px solid ${border}` }}>
-                    <Avatar initials={a.applicant_initials} size={32} dark={dark} />
+                    <Avatar initials={a.applicant_initials} size={36} dark={dark} />
                     <div style={{ flex: 1 }}>
                       <div style={{ fontSize: 13, color: text }}>{a.applicant_name}</div>
                       <div style={{ fontSize: 11, color: textMuted }}>{a.applicant_role}</div>
@@ -1789,40 +1896,13 @@ export default function CoLab() {
                       <span style={{ fontSize: 10, padding: "2px 8px", border: `1px solid ${border}`, borderRadius: 3, color: textMuted }}>{a.role || "contributor"}</span>
                     )}
                   </div>
-                );
-              })}
-              {applications.filter(a => a.project_id === activeProject.id && a.status === "accepted").length === 0 && (
-                <div style={{ fontSize: 12, color: textMuted, padding: "16px 0" }}>no collaborators yet. accept applications to add team members.</div>
-              )}
-            </div>
-          )}
-
-          {projectTab === "plugins" && (
-            <div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 14 }}>
-                {PLUGINS.filter(p => (activeProject.plugins || []).includes(p.id)).map(plug => (
-                  <div key={plug.id} style={{ display: "flex", gap: 12, alignItems: "center", padding: "12px 16px", background: bg2, borderRadius: 8, border: `1px solid ${border}` }}>
-                    <span style={{ fontSize: 18, color: text, width: 24, textAlign: "center" }}>{plug.icon}</span>
-                    <div style={{ flex: 1 }}><div style={{ fontSize: 13, color: text }}>{plug.name}</div><div style={{ fontSize: 11, color: textMuted }}>{plug.desc}</div></div>
-                    <button className="hb" onClick={() => handleAddPlugin(plug.id, activeProject)} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontSize: 11, fontFamily: "inherit" }}>remove</button>
-                  </div>
                 ))}
+                {applications.filter(a => a.project_id === activeProject.id && a.status === "accepted").length === 0 && (
+                  <div style={{ fontSize: 12, color: textMuted, padding: "16px 0" }}>no collaborators yet.</div>
+                )}
               </div>
-              {PLUGINS.filter(p => !(activeProject.plugins || []).includes(p.id)).length > 0 && (
-                <div>
-                  <div style={{ fontSize: 10, color: textMuted, letterSpacing: "1px", marginBottom: 8 }}>ADD PLUGIN</div>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                    {PLUGINS.filter(p => !(activeProject.plugins || []).includes(p.id)).map(plug => (
-                      <button key={plug.id} className="hb" onClick={() => handleAddPlugin(plug.id, activeProject)} style={{ background: "none", border: `1px solid ${border}`, borderRadius: 8, padding: "10px 16px", fontSize: 12, cursor: "pointer", fontFamily: "inherit", color: textMuted, display: "flex", gap: 10, alignItems: "center", textAlign: "left" }}>
-                        <span style={{ fontSize: 16, width: 20, textAlign: "center" }}>{plug.icon}</span>
-                        <div><div style={{ color: text, marginBottom: 1 }}>{plug.name}</div><div style={{ fontSize: 10 }}>{plug.desc}</div></div>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
+            )}
+          </div>
         </div>
       )}
 
