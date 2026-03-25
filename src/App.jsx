@@ -223,8 +223,17 @@ export default function CoLab() {
 
   // Force body background on mode switch — fixes mobile Safari bleed
   useEffect(() => {
-    document.body.style.backgroundColor = dark ? "#0a0a0a" : "#ffffff";
-    document.documentElement.style.backgroundColor = dark ? "#0a0a0a" : "#ffffff";
+    const color = dark ? "#0a0a0a" : "#ffffff";
+    document.body.style.backgroundColor = color;
+    document.documentElement.style.backgroundColor = color;
+    // Update theme-color meta for mobile browser chrome
+    let meta = document.querySelector('meta[name="theme-color"]');
+    if (!meta) {
+      meta = document.createElement("meta");
+      meta.name = "theme-color";
+      document.head.appendChild(meta);
+    }
+    meta.content = color;
   }, [dark]);
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
