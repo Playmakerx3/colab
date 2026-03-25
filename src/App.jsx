@@ -221,7 +221,11 @@ export default function CoLab() {
     }
   `;
 
-  // ── AUTH INIT ──
+  // Force body background on mode switch — fixes mobile Safari bleed
+  useEffect(() => {
+    document.body.style.backgroundColor = dark ? "#0a0a0a" : "#ffffff";
+    document.documentElement.style.backgroundColor = dark ? "#0a0a0a" : "#ffffff";
+  }, [dark]);
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setAuthUser(session?.user || null);
