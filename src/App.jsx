@@ -1488,8 +1488,9 @@ export default function CoLab() {
         <div className="pad fu" style={{ width: "100%", padding: "48px 32px" }}>
           {!editProfile ? (
             <div>
-              <div className="profile-layout" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 32, marginBottom: 40, alignItems: "start" }}>
-                {/* LEFT */}
+              <div className="profile-layout" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 48, marginBottom: 40, alignItems: "start" }}>
+
+                {/* LEFT — identity */}
                 <div>
                   <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px", marginBottom: 20 }}>PROFILE</div>
                   <div style={{ display: "flex", gap: 16, alignItems: "center", marginBottom: 20 }}>
@@ -1501,7 +1502,7 @@ export default function CoLab() {
                     </div>
                   </div>
                   {profile?.bio && <p style={{ fontSize: 13, color: textMuted, lineHeight: 1.75, marginBottom: 20 }}>{profile.bio}</p>}
-                  <div style={{ marginBottom: 20 }}>
+                  <div style={{ marginBottom: 24 }}>
                     <div style={{ ...labelStyle, marginBottom: 8 }}>SKILLS</div>
                     {(profile?.skills || []).length === 0
                       ? <div style={{ fontSize: 12, color: textMuted }}>no skills. <button onClick={() => setEditProfile(true)} style={{ background: "none", border: "none", color: text, cursor: "pointer", fontFamily: "inherit", fontSize: 12, textDecoration: "underline" }}>add →</button></div>
@@ -1511,59 +1512,34 @@ export default function CoLab() {
                         </div>
                     }
                   </div>
-
-                  {/* Portfolio */}
-                  <div style={{ marginBottom: 20 }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-                      <div style={{ ...labelStyle, marginBottom: 0 }}>PORTFOLIO</div>
-                      <button className="hb" onClick={() => setShowAddPortfolio(true)} style={{ background: "none", border: "none", color: text, cursor: "pointer", fontFamily: "inherit", fontSize: 11, textDecoration: "underline" }}>+ add</button>
-                    </div>
-                    {portfolioItems.length === 0
-                      ? <div style={{ fontSize: 12, color: textMuted }}>no portfolio items yet.</div>
-                      : portfolioItems.map(item => (
-                          <div key={item.id} style={{ padding: "10px 0", borderBottom: `1px solid ${border}`, display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
-                            <div style={{ minWidth: 0 }}>
-                              <div style={{ fontSize: 13, color: text, marginBottom: 3 }}>{item.title}</div>
-                              {item.description && <div style={{ fontSize: 12, color: textMuted, marginBottom: 4 }}>{item.description}</div>}
-                              {item.url && <a href={item.url} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: text, textDecoration: "underline" }}>{item.url}</a>}
-                            </div>
-                            <button className="hb" onClick={() => handleDeletePortfolioItem(item.id)} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontSize: 12, fontFamily: "inherit", flexShrink: 0 }}>✕</button>
-                          </div>
-                        ))
-                    }
-                  </div>
-
                   <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                     <button className="hb" onClick={() => setEditProfile(true)} style={btnG}>edit profile</button>
                     <button className="hb" onClick={handleSignOut} style={{ ...btnG, color: textMuted }}>sign out</button>
                   </div>
                 </div>
 
-                {/* RIGHT — workspace summary */}
+                {/* RIGHT — portfolio */}
                 <div>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-                    <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px" }}>WORKSPACE</div>
-                    <button className="hb" onClick={() => setAppScreen("workspace")} style={{ background: "none", border: "none", color: text, cursor: "pointer", fontFamily: "inherit", fontSize: 11, textDecoration: "underline" }}>open →</button>
+                    <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px" }}>PORTFOLIO</div>
+                    <button className="hb" onClick={() => setShowAddPortfolio(true)} style={{ background: "none", border: "none", color: text, cursor: "pointer", fontFamily: "inherit", fontSize: 11, textDecoration: "underline" }}>+ add work</button>
                   </div>
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 1, marginBottom: 20, border: `1px solid ${border}`, borderRadius: 10, overflow: "hidden" }}>
-                    {[["projects", myProjects.length],["applied", appliedProjectIds.length],["following", following.length]].map(([label,val],i) => (
-                      <div key={i} style={{ padding: "14px 16px", background: bg2, borderRight: i < 2 ? `1px solid ${border}` : "none" }}>
-                        <div style={{ fontSize: 20, color: text, letterSpacing: "-1px" }}>{val}</div>
-                        <div style={{ fontSize: 10, color: textMuted, marginTop: 3 }}>{label}</div>
+                  {portfolioItems.length === 0
+                    ? <div style={{ fontSize: 13, color: textMuted, lineHeight: 1.75 }}>
+                        your portfolio lives here.<br />add projects, work samples, and links you're proud of.
                       </div>
-                    ))}
-                  </div>
-                  <div style={{ fontSize: 10, color: textMuted, letterSpacing: "1.5px", marginBottom: 12 }}>RECENT PROJECTS</div>
-                  {myProjects.slice(0, 3).length === 0
-                    ? <div style={{ fontSize: 12, color: textMuted }}>no projects yet.</div>
-                    : myProjects.slice(0, 3).map(p => (
-                        <div key={p.id} style={{ padding: "10px 0", borderBottom: `1px solid ${border}`, cursor: "pointer" }}
-                          onClick={() => { setActiveProject(p); loadProjectData(p.id); setAppScreen("workspace"); setProjectTab("tasks"); }}>
-                          <div style={{ fontSize: 13, color: text, marginBottom: 4 }}>{p.title}</div>
-                          <ProgressBar value={p.progress || 0} dark={dark} />
-                          <div style={{ fontSize: 10, color: textMuted, marginTop: 4 }}>{p.progress || 0}%</div>
-                        </div>
-                      ))
+                    : <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
+                        {portfolioItems.map((item, i) => (
+                          <div key={item.id} style={{ background: bg2, borderRadius: i === 0 && portfolioItems.length === 1 ? 8 : i === 0 ? "8px 8px 0 0" : i === portfolioItems.length - 1 ? "0 0 8px 8px" : 0, border: `1px solid ${border}`, borderBottom: i < portfolioItems.length - 1 ? "none" : `1px solid ${border}`, padding: "16px 18px", display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
+                            <div style={{ minWidth: 0, flex: 1 }}>
+                              <div style={{ fontSize: 14, color: text, marginBottom: 5, letterSpacing: "-0.3px" }}>{item.title}</div>
+                              {item.description && <div style={{ fontSize: 12, color: textMuted, lineHeight: 1.65, marginBottom: 6 }}>{item.description}</div>}
+                              {item.url && <a href={item.url} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: text, textDecoration: "underline", wordBreak: "break-all" }}>{item.url}</a>}
+                            </div>
+                            <button className="hb" onClick={() => handleDeletePortfolioItem(item.id)} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontSize: 12, fontFamily: "inherit", flexShrink: 0 }}>✕</button>
+                          </div>
+                        ))}
+                      </div>
                   }
                 </div>
               </div>
