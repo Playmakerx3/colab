@@ -139,6 +139,11 @@ export default function CoLab() {
   const [projectFiles, setProjectFiles] = useState([]);
   const [projectDocs, setProjectDocs] = useState([]);
   const [activeDoc, setActiveDoc] = useState(null);
+  const [editingMessage, setEditingMessage] = useState(null); // { id, text, type }
+  const [editMessageText, setEditMessageText] = useState("");
+  const [mentionNotifications, setMentionNotifications] = useState([]);
+  const [trendingProjects, setTrendingProjects] = useState([]);
+  const [skillCategoryCount, setSkillCategoryCount] = useState(48);
 
   // UI
   const [showNotifications, setShowNotifications] = useState(false);
@@ -150,6 +155,7 @@ export default function CoLab() {
   const [newProject, setNewProject] = useState({ title: "", description: "", category: CATEGORIES[0], skills: [], maxCollaborators: 2 });
   const [newTaskText, setNewTaskText] = useState("");
   const [taskAssignee, setTaskAssignee] = useState("");
+  const [taskDueDate, setTaskDueDate] = useState("");
   const [newMessage, setNewMessage] = useState("");
   const [newUpdate, setNewUpdate] = useState("");
   const [dmInput, setDmInput] = useState("");
@@ -180,7 +186,7 @@ export default function CoLab() {
   const myInitials = profile?.name ? profile.name.split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase() : "ME";
   const getMatchScore = (p) => (profile?.skills || []).filter(s => (p.skills || []).includes(s)).length;
   const unreadDms = dmThreads.filter(t => t.unread && t.id !== activeDmThread?.id).length;
-  const unreadNotifs = notifications.filter(n => !n.read).length;
+  const unreadNotifs = notifications.filter(n => !n.read).length + mentionNotifications.length;
 
   // Render mentions with highlights
   const renderWithMentions = (text) => {
@@ -208,6 +214,10 @@ export default function CoLab() {
     .hb:hover { opacity: 0.7; cursor: pointer; }
     .card-h:hover { border-color: ${text} !important; }
     .task-row:hover .tdel { opacity: 1 !important; }
+    @media (max-width: 390px) {
+      .nav-label { display: none !important; }
+      .nav-icon { display: inline !important; }
+    }
     @media (max-width: 640px) {
       .hero-h1 { font-size: 44px !important; letter-spacing: -2px !important; }
       .stat-grid { flex-direction: column !important; }
@@ -260,7 +270,7 @@ export default function CoLab() {
   const loadAllData = async (userId) => {
     setLoading(true);
     try {
-      const [{ data: projs }, { data: usrs }, { data: apps }, { data: fols }, { data: threads }, { data: port }, { data: postsData }, { data: likesData }] = await Promise.all([
+      const [{ data: projs }, { data: usrs }, { data: apps }, { data: fols }, { data: threads }, { data: port }, { data: postsData }, { data: likesData }, { data: mentionNotifs }] = await Promise.all([
         supabase.from("projects").select("*").order("created_at", { ascending: false }),
         supabase.from("profiles").select("*"),
         supabase.from("applications").select("*"),
@@ -269,6 +279,7 @@ export default function CoLab() {
         supabase.from("portfolio_items").select("*").eq("user_id", userId),
         supabase.from("posts").select("*").order("created_at", { ascending: false }),
         supabase.from("likes").select("*").eq("user_id", userId),
+        supabase.from("mention_notifications").select("*").eq("user_id", userId).eq("read", false).order("created_at", { ascending: false }),
       ]);
       setProjects(projs || []);
       setUsers(usrs || []);
@@ -278,6 +289,17 @@ export default function CoLab() {
       setPortfolioItems(port || []);
       setPosts(postsData || []);
       setPostLikes({ myLikes: (likesData || []).map(l => l.post_id) });
+      setMentionNotifications(mentionNotifs || []);
+      // Trending — top 3 projects by applicant count
+      const trending = [...(projs || [])].sort((a, b) => {
+        const aCount = (apps || []).filter(ap => ap.project_id === a.id).length;
+        const bCount = (apps || []).filter(ap => ap.project_id === b.id).length;
+        return bCount - aCount;
+      }).slice(0, 3);
+      setTrendingProjects(trending);
+      // Live skill category count from unique skills across all projects
+      const allSkills = new Set((projs || []).flatMap(p => p.skills || []));
+      setSkillCategoryCount(allSkills.size || 48);
       // Live stats for landing page
       setLiveStats({ builders: (usrs || []).length, projects: (projs || []).length });
       const myProjectIds = (projs || []).filter(p => p.owner_id === userId).map(p => p.id);
@@ -358,6 +380,11 @@ export default function CoLab() {
             if (prev.find(p => p.id === payload.new.id)) return prev;
             return [payload.new, ...prev];
           });
+        }
+      })
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "mention_notifications" }, (payload) => {
+        if (payload.new.user_id === authUser?.id) {
+          setMentionNotifications(prev => [payload.new, ...prev]);
         }
       })
       .subscribe();
@@ -489,8 +516,9 @@ export default function CoLab() {
     const { data } = await supabase.from("tasks").insert({
       project_id: projectId, text: newTaskText, done: false,
       assigned_to: assignedUser?.id || null, assigned_name: taskAssignee || null,
+      due_date: taskDueDate || null,
     }).select().single();
-    if (data) { setTasks([...tasks, data]); setNewTaskText(""); setTaskAssignee(""); }
+    if (data) { setTasks([...tasks, data]); setNewTaskText(""); setTaskAssignee(""); setTaskDueDate(""); }
   };
 
   const handleToggleTask = async (task) => {
@@ -510,6 +538,7 @@ export default function CoLab() {
       project_id: projectId, from_user: authUser.id,
       from_initials: myInitials, from_name: profile.name, text: newMessage,
     });
+    detectAndNotifyMentions(newMessage, projectId);
     setNewMessage("");
   };
 
@@ -519,7 +548,7 @@ export default function CoLab() {
       project_id: projectId, author_id: authUser.id,
       author: profile.name, initials: myInitials, text: newUpdate,
     }).select().single();
-    if (data) { setProjectUpdates([data, ...projectUpdates]); setNewUpdate(""); showToast("Update posted."); }
+    if (data) { setProjectUpdates([data, ...projectUpdates]); setNewUpdate(""); detectAndNotifyMentions(newUpdate, projectId); showToast("Update posted."); }
   };
 
   // ── DMs ──
@@ -537,8 +566,8 @@ export default function CoLab() {
       setActiveDmThread({ ...thread, otherUser: user });
       loadDmMessages(thread.id);
       setAppScreen("messages");
-      // Clear unread flag
       setDmThreads(prev => prev.map(t => t.id === thread.id ? { ...t, unread: false } : t));
+      setTimeout(() => markDmRead(thread.id), 500);
     }
   };
 
@@ -733,8 +762,12 @@ export default function CoLab() {
               {userPortfolio.map(item => (
                 <div key={item.id} style={{ padding: "10px 0", borderBottom: `1px solid ${border}` }}>
                   <div style={{ fontSize: 13, color: text, marginBottom: 3 }}>{item.title}</div>
-                  {item.description && <div style={{ fontSize: 12, color: textMuted, marginBottom: 4 }}>{item.description}</div>}
-                  {item.url && <a href={item.url} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: text, textDecoration: "underline" }}>{item.url}</a>}
+                  {item.description && <div style={{ fontSize: 12, color: textMuted, marginBottom: 6 }}>{item.description}</div>}
+                  {item.url && (
+                    item.url.match(/\.(jpg|jpeg|png|gif|webp)$/i)
+                      ? <img src={item.url} alt={item.title} style={{ width: "100%", maxHeight: 180, objectFit: "cover", borderRadius: 6, border: `1px solid ${border}`, marginTop: 4 }} />
+                      : <a href={item.url} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: text, textDecoration: "underline" }}>{item.url.includes("user-uploads") ? "📎 view file" : item.url}</a>
+                  )}
                 </div>
               ))}
             </div>
@@ -854,7 +887,62 @@ export default function CoLab() {
     );
   };
 
-  // ── POSTS ──
+  // ── MESSAGE DELETE + EDIT ──
+  const handleDeleteDm = async (msgId) => {
+    await supabase.from("dm_messages").delete().eq("id", msgId);
+    setDmMessages(prev => ({ ...prev, [activeDmThread.id]: (prev[activeDmThread.id] || []).filter(m => m.id !== msgId) }));
+  };
+
+  const handleEditDm = async (msgId, newText) => {
+    const { data } = await supabase.from("dm_messages").update({ text: newText, edited: true }).eq("id", msgId).select().single();
+    if (data) {
+      setDmMessages(prev => ({ ...prev, [activeDmThread.id]: (prev[activeDmThread.id] || []).map(m => m.id === msgId ? data : m) }));
+      setEditingMessage(null);
+    }
+  };
+
+  const handleDeleteProjectMessage = async (msgId) => {
+    await supabase.from("messages").delete().eq("id", msgId);
+    setMessages(prev => prev.filter(m => m.id !== msgId));
+  };
+
+  const handleEditProjectMessage = async (msgId, newText) => {
+    const { data } = await supabase.from("messages").update({ text: newText, edited: true }).eq("id", msgId).select().single();
+    if (data) { setMessages(prev => prev.map(m => m.id === msgId ? data : m)); setEditingMessage(null); }
+  };
+
+  // ── READ RECEIPTS ──
+  const markDmRead = async (threadId) => {
+    const msgs = dmMessages[threadId] || [];
+    const unread = msgs.filter(m => m.sender_id !== authUser?.id && !(m.read_by || []).includes(authUser?.id));
+    if (unread.length === 0) return;
+    await Promise.all(unread.map(m =>
+      supabase.from("dm_messages").update({ read_by: [...(m.read_by || []), authUser.id] }).eq("id", m.id)
+    ));
+    setDmMessages(prev => ({
+      ...prev,
+      [threadId]: (prev[threadId] || []).map(m =>
+        m.sender_id !== authUser?.id ? { ...m, read_by: [...(m.read_by || []), authUser.id] } : m
+      )
+    }));
+  };
+
+  // ── MENTION DETECTION ──
+  const detectAndNotifyMentions = async (text, projectId) => {
+    const mentioned = text.match(/@(\w[\w\s]*)/g);
+    if (!mentioned) return;
+    for (const mention of mentioned) {
+      const name = mention.slice(1).trim();
+      const mentionedUser = users.find(u => u.name.toLowerCase() === name.toLowerCase());
+      if (mentionedUser && mentionedUser.id !== authUser?.id) {
+        await supabase.from("mention_notifications").insert({
+          user_id: mentionedUser.id, from_name: profile.name,
+          from_initials: myInitials, context: text.slice(0, 80),
+          project_id: projectId, read: false,
+        });
+      }
+    }
+  };
   const handleCreatePost = async () => {
     if (!newPostContent.trim()) return;
     const proj = myProjects.find(p => p.id === newPostProject);
@@ -1161,7 +1249,7 @@ export default function CoLab() {
         </div>
       </div>
       <div className="stat-grid" style={{ display: "flex", width: "100%", borderBottom: `1px solid ${border}` }}>
-        {[[liveStats.builders,"builders"],[liveStats.projects,"active projects"],["48","skill categories"],["100%","free to start"]].map(([v,l],i) => (
+        {[[liveStats.builders,"builders"],[liveStats.projects,"active projects"],[skillCategoryCount,"skill categories"],["100%","free to start"]].map(([v,l],i) => (
           <div key={i} className="stat-item" style={{ flex: 1, borderRight: i < 3 ? `1px solid ${border}` : "none", padding: "24px 40px", textAlign: "center" }}>
             <div style={{ fontSize: 28, color: text, letterSpacing: "-1px" }}>{v}</div>
             <div style={{ fontSize: 10, color: textMuted, marginTop: 4 }}>{l}</div>
@@ -1362,8 +1450,18 @@ export default function CoLab() {
               NOTIFICATIONS
               {notifications.length > 0 && <button className="hb" onClick={() => setNotifications([])} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontFamily: "inherit", fontSize: 10 }}>clear all</button>}
             </div>
-            {notifications.length === 0 ? <div style={{ padding: "24px 16px", fontSize: 12, color: textMuted }}>no notifications.</div>
-              : notifications.map(n => (
+            {notifications.length === 0 && mentionNotifications.length === 0 ? <div style={{ padding: "24px 16px", fontSize: 12, color: textMuted }}>no notifications.</div>
+              : <>
+                {mentionNotifications.map(n => (
+                  <div key={n.id} style={{ padding: "14px 16px", borderBottom: `1px solid ${border}`, display: "flex", justifyContent: "space-between", gap: 8 }}>
+                    <div>
+                      <div style={{ fontSize: 12, color: text, marginBottom: 2 }}>{n.from_name} mentioned you</div>
+                      <div style={{ fontSize: 11, color: textMuted, fontStyle: "italic" }}>"{n.context}..."</div>
+                    </div>
+                    <button className="hb" onClick={async () => { await supabase.from("mention_notifications").update({ read: true }).eq("id", n.id); setMentionNotifications(prev => prev.filter(x => x.id !== n.id)); }} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontSize: 12, fontFamily: "inherit", flexShrink: 0 }}>✕</button>
+                  </div>
+                ))}
+                {notifications.map(n => (
                 <div key={n.id} style={{ padding: "14px 16px", borderBottom: `1px solid ${border}` }}>
                   <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 3 }}>
                     <div style={{ fontSize: 12, color: text }}>{n.text}</div>
@@ -1386,7 +1484,8 @@ export default function CoLab() {
                     </div>
                   )}
                 </div>
-              ))
+                ))}
+              </>
             }
           </div>
         </>
@@ -1413,6 +1512,23 @@ export default function CoLab() {
               <div key={l}><div style={{ fontSize: 24, color: text, letterSpacing: "-1px" }}>{v}</div><div style={{ fontSize: 10, color: textMuted, marginTop: 2 }}>{l}</div></div>
             ))}
           </div>
+          {trendingProjects.length > 0 && (
+            <div style={{ marginBottom: 28, padding: "16px 20px", background: bg2, border: `1px solid ${border}`, borderRadius: 10 }}>
+              <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px", marginBottom: 12 }}>🔥 TRENDING</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {trendingProjects.map(p => (
+                  <div key={p.id} onClick={() => { setActiveProject(p); loadProjectData(p.id); }} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer", padding: "6px 0", borderBottom: `1px solid ${border}` }}
+                    onMouseEnter={e => e.currentTarget.style.opacity = "0.6"} onMouseLeave={e => e.currentTarget.style.opacity = "1"}>
+                    <div>
+                      <div style={{ fontSize: 13, color: text }}>{p.title}</div>
+                      <div style={{ fontSize: 10, color: textMuted }}>{p.category}</div>
+                    </div>
+                    <div style={{ fontSize: 10, color: textMuted, flexShrink: 0 }}>{applications.filter(a => a.project_id === p.id).length} applicants</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
           <div id="feed" style={{ borderBottom: `1px solid ${border}`, display: "flex" }}>
             {["for-you","all"].map(id => (
               <button key={id} onClick={() => setExploreTab(id)} style={{ background: "none", border: "none", borderBottom: exploreTab === id ? `1px solid ${text}` : "1px solid transparent", color: exploreTab === id ? text : textMuted, padding: "8px 0", fontSize: 12, cursor: "pointer", fontFamily: "inherit", marginRight: 24, transition: "all 0.15s", display: "inline-flex", gap: 6, alignItems: "center" }}>
@@ -1498,7 +1614,7 @@ export default function CoLab() {
                     if (!other) return null;
                     const isActive = activeDmThread?.id === thread.id;
                     return (
-                      <div key={thread.id} onClick={() => { setActiveDmThread({ ...thread, otherUser: other }); loadDmMessages(thread.id); setDmThreads(prev => prev.map(t => t.id === thread.id ? { ...t, unread: false } : t)); }} style={{ padding: "14px 20px", borderBottom: `1px solid ${border}`, cursor: "pointer", background: isActive ? bg2 : "none", display: "flex", gap: 12, alignItems: "center" }}
+                      <div key={thread.id} onClick={() => { setActiveDmThread({ ...thread, otherUser: other }); loadDmMessages(thread.id); setDmThreads(prev => prev.map(t => t.id === thread.id ? { ...t, unread: false } : t)); setTimeout(() => markDmRead(thread.id), 500); }} style={{ padding: "14px 20px", borderBottom: `1px solid ${border}`, cursor: "pointer", background: isActive ? bg2 : "none", display: "flex", gap: 12, alignItems: "center" }}
                         onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = bg2; }} onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = "none"; }}>
                         <Avatar initials={other.name?.split(" ").map(n => n[0]).join("").slice(0, 2)} size={36} dark={dark} />
                         <div style={{ minWidth: 0 }}>
@@ -1525,12 +1641,26 @@ export default function CoLab() {
                     ? <div style={{ fontSize: 12, color: textMuted, textAlign: "center", marginTop: 40 }}>start the conversation.</div>
                     : (dmMessages[activeDmThread.id] || []).map((msg, i) => {
                         const isMe = msg.sender_id === authUser?.id;
+                        const isRead = (msg.read_by || []).length > 0;
+                        const isEditing = editingMessage?.id === msg.id;
                         return (
                           <div key={i} style={{ display: "flex", gap: 10, alignItems: "flex-end", flexDirection: isMe ? "row-reverse" : "row" }}>
                             <Avatar initials={msg.sender_initials} size={26} dark={dark} />
                             <div style={{ maxWidth: "70%" }}>
-                              <div style={{ background: isMe ? text : bg2, color: isMe ? bg : text, padding: "9px 13px", borderRadius: isMe ? "14px 14px 2px 14px" : "14px 14px 14px 2px", fontSize: 13, lineHeight: 1.55, border: isMe ? "none" : `1px solid ${border}` }}>{msg.text}</div>
-                              <div style={{ fontSize: 10, color: textMuted, marginTop: 4, textAlign: isMe ? "right" : "left" }}>{new Date(msg.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</div>
+                              {isEditing ? (
+                                <div style={{ display: "flex", gap: 6 }}>
+                                  <input value={editMessageText} onChange={e => setEditMessageText(e.target.value)} onKeyDown={e => { if (e.key === "Enter") handleEditDm(msg.id, editMessageText); if (e.key === "Escape") setEditingMessage(null); }} style={{ ...inputStyle, fontSize: 12, padding: "6px 10px" }} autoFocus />
+                                  <button onClick={() => handleEditDm(msg.id, editMessageText)} style={{ ...btnP, padding: "6px 10px", fontSize: 11, flexShrink: 0 }}>save</button>
+                                </div>
+                              ) : (
+                                <div style={{ background: isMe ? text : bg2, color: isMe ? bg : text, padding: "9px 13px", borderRadius: isMe ? "14px 14px 2px 14px" : "14px 14px 14px 2px", fontSize: 13, lineHeight: 1.55, border: isMe ? "none" : `1px solid ${border}` }}>{msg.text}{msg.edited && <span style={{ fontSize: 9, opacity: 0.5, marginLeft: 6 }}>edited</span>}</div>
+                              )}
+                              <div style={{ fontSize: 10, color: textMuted, marginTop: 3, textAlign: isMe ? "right" : "left", display: "flex", gap: 8, justifyContent: isMe ? "flex-end" : "flex-start", alignItems: "center" }}>
+                                <span>{new Date(msg.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
+                                {isMe && isRead && <span style={{ fontSize: 9 }}>✓✓</span>}
+                                {isMe && <button className="hb" onClick={() => { setEditingMessage({ id: msg.id }); setEditMessageText(msg.text); }} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontSize: 10, fontFamily: "inherit" }}>edit</button>}
+                                {isMe && <button className="hb" onClick={() => handleDeleteDm(msg.id)} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontSize: 10, fontFamily: "inherit" }}>delete</button>}
+                              </div>
                             </div>
                           </div>
                         );
@@ -1702,8 +1832,9 @@ export default function CoLab() {
               <div>
                 <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
                   <input placeholder="add a task..." value={newTaskText} onChange={e => setNewTaskText(e.target.value)} onKeyDown={e => e.key === "Enter" && handleAddTask(activeProject.id)} style={{ ...inputStyle, fontSize: 12 }} />
-                  <select value={taskAssignee} onChange={e => setTaskAssignee(e.target.value)} style={{ ...inputStyle, fontSize: 12, maxWidth: 160 }}>
-                    <option value="">assign to...</option>
+                  <input type="date" value={taskDueDate || ""} onChange={e => setTaskDueDate(e.target.value)} style={{ ...inputStyle, fontSize: 11, width: "auto", flexShrink: 0 }} title="due date" />
+                  <select value={taskAssignee} onChange={e => setTaskAssignee(e.target.value)} style={{ ...inputStyle, fontSize: 12, maxWidth: 140 }}>
+                    <option value="">assign...</option>
                     {users.filter(u => [authUser?.id, ...(applications.filter(a => a.project_id === activeProject.id && a.status === "accepted").map(a => a.applicant_id))].includes(u.id)).map(u => <option key={u.id} value={u.name}>{u.name}</option>)}
                   </select>
                   <button className="hb" onClick={() => handleAddTask(activeProject.id)} style={{ ...btnP, padding: "10px 16px", flexShrink: 0, fontSize: 12 }}>add</button>
@@ -1722,7 +1853,8 @@ export default function CoLab() {
                         {col.tasks.map(task => (
                           <div key={task.id} style={{ background: bg, border: `1px solid ${border}`, borderRadius: 8, padding: "10px 12px" }}>
                             <div style={{ fontSize: 12, color: text, marginBottom: 6, lineHeight: 1.4 }}>{task.text}</div>
-                            {task.assigned_name && <div style={{ fontSize: 10, color: textMuted, marginBottom: 8 }}>→ {task.assigned_name}</div>}
+                            {task.assigned_name && <div style={{ fontSize: 10, color: textMuted, marginBottom: 4 }}>→ {task.assigned_name}</div>}
+                            {task.due_date && <div style={{ fontSize: 10, color: new Date(task.due_date) < new Date() && !task.done ? "#ef4444" : textMuted, marginBottom: 8 }}>📅 {new Date(task.due_date).toLocaleDateString()}</div>}
                             <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                               {col.id !== "todo" && <button className="hb" onClick={async () => { await supabase.from("tasks").update({ in_progress: false, done: false }).eq("id", task.id); setTasks(tasks.map(t => t.id === task.id ? { ...t, in_progress: false, done: false } : t)); }} style={{ fontSize: 9, padding: "2px 7px", border: `1px solid ${border}`, borderRadius: 3, background: "none", color: textMuted, cursor: "pointer", fontFamily: "inherit" }}>← to do</button>}
                               {col.id === "todo" && <button className="hb" onClick={async () => { await supabase.from("tasks").update({ in_progress: true, done: false }).eq("id", task.id); setTasks(tasks.map(t => t.id === task.id ? { ...t, in_progress: true, done: false } : t)); }} style={{ fontSize: 9, padding: "2px 7px", border: `1px solid ${border}`, borderRadius: 3, background: "none", color: textMuted, cursor: "pointer", fontFamily: "inherit" }}>in progress →</button>}
@@ -1746,6 +1878,7 @@ export default function CoLab() {
                   {messages.length === 0 ? <div style={{ fontSize: 12, color: textMuted }}>no messages yet.</div>
                     : messages.map((msg, i) => {
                         const isMe = msg.from_user === authUser?.id;
+                        const isEditing = editingMessage?.id === msg.id && editingMessage?.type === "project";
                         return (
                           <div key={i} style={{ display: "flex", gap: 10, alignItems: "flex-start", flexDirection: isMe ? "row-reverse" : "row" }}>
                             <Avatar initials={msg.from_initials} size={28} dark={dark} />
@@ -1753,10 +1886,19 @@ export default function CoLab() {
                               <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 4, flexDirection: isMe ? "row-reverse" : "row" }}>
                                 <span style={{ fontSize: 11, fontWeight: 500, color: text }}>{isMe ? "you" : msg.from_name}</span>
                                 <span style={{ fontSize: 10, color: textMuted }}>{new Date(msg.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
+                                {isMe && <button className="hb" onClick={() => { setEditingMessage({ id: msg.id, type: "project" }); setEditMessageText(msg.text); }} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontSize: 10, fontFamily: "inherit" }}>edit</button>}
+                                {isMe && <button className="hb" onClick={() => handleDeleteProjectMessage(msg.id)} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontSize: 10, fontFamily: "inherit" }}>delete</button>}
                               </div>
-                              <div style={{ background: isMe ? text : bg2, color: isMe ? bg : text, padding: "8px 12px", borderRadius: isMe ? "12px 12px 2px 12px" : "12px 12px 12px 2px", fontSize: 12, lineHeight: 1.6, border: isMe ? "none" : `1px solid ${border}` }}>
-                                {renderWithMentions(msg.text)}
-                              </div>
+                              {isEditing ? (
+                                <div style={{ display: "flex", gap: 6 }}>
+                                  <input value={editMessageText} onChange={e => setEditMessageText(e.target.value)} onKeyDown={e => { if (e.key === "Enter") handleEditProjectMessage(msg.id, editMessageText); if (e.key === "Escape") setEditingMessage(null); }} style={{ ...inputStyle, fontSize: 12, padding: "6px 10px" }} autoFocus />
+                                  <button onClick={() => handleEditProjectMessage(msg.id, editMessageText)} style={{ ...btnP, padding: "6px 10px", fontSize: 11, flexShrink: 0 }}>save</button>
+                                </div>
+                              ) : (
+                                <div style={{ background: isMe ? text : bg2, color: isMe ? bg : text, padding: "8px 12px", borderRadius: isMe ? "12px 12px 2px 12px" : "12px 12px 12px 2px", fontSize: 12, lineHeight: 1.6, border: isMe ? "none" : `1px solid ${border}` }}>
+                                  {renderWithMentions(msg.text)}{msg.edited && <span style={{ fontSize: 9, opacity: 0.5, marginLeft: 6 }}>edited</span>}
+                                </div>
+                              )}
                             </div>
                           </div>
                         );
@@ -1803,15 +1945,23 @@ export default function CoLab() {
                   ? <div style={{ fontSize: 13, color: textMuted }}>no files yet. upload something to share with the team.</div>
                   : <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
                       {projectFiles.map((file, i) => (
-                        <div key={file.id} style={{ background: bg2, borderRadius: i === 0 && projectFiles.length === 1 ? 8 : i === 0 ? "8px 8px 0 0" : i === projectFiles.length - 1 ? "0 0 8px 8px" : 0, border: `1px solid ${border}`, borderBottom: i < projectFiles.length - 1 ? "none" : `1px solid ${border}`, padding: "14px 18px", display: "flex", gap: 14, alignItems: "center" }}>
-                          <div style={{ fontSize: 20, flexShrink: 0 }}>
-                            {file.type?.startsWith("image") ? "🖼" : file.type?.includes("pdf") ? "📄" : file.type?.includes("video") ? "🎬" : "📎"}
+                        <div key={file.id} style={{ background: bg2, borderRadius: i === 0 && projectFiles.length === 1 ? 8 : i === 0 ? "8px 8px 0 0" : i === projectFiles.length - 1 ? "0 0 8px 8px" : 0, border: `1px solid ${border}`, borderBottom: i < projectFiles.length - 1 ? "none" : `1px solid ${border}`, padding: "14px 18px" }}>
+                          <div style={{ display: "flex", gap: 14, alignItems: "center", marginBottom: file.type?.startsWith("image") ? 10 : 0 }}>
+                            <div style={{ fontSize: 20, flexShrink: 0 }}>
+                              {file.type?.startsWith("image") ? "🖼" : file.type?.includes("pdf") ? "📄" : file.type?.includes("video") ? "🎬" : "📎"}
+                            </div>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ fontSize: 13, color: text, marginBottom: 2 }}>{file.name}</div>
+                              <div style={{ fontSize: 10, color: textMuted }}>{file.user_name} · {new Date(file.created_at).toLocaleDateString()} · {file.size ? `${(file.size / 1024).toFixed(0)}kb` : ""}</div>
+                            </div>
+                            <a href={file.url} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: text, textDecoration: "underline", flexShrink: 0 }}>open</a>
                           </div>
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ fontSize: 13, color: text, marginBottom: 2 }}>{file.name}</div>
-                            <div style={{ fontSize: 10, color: textMuted }}>{file.user_name} · {new Date(file.created_at).toLocaleDateString()} · {file.size ? `${(file.size / 1024).toFixed(0)}kb` : ""}</div>
-                          </div>
-                          <a href={file.url} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: text, textDecoration: "underline", flexShrink: 0 }}>open</a>
+                          {file.type?.startsWith("image") && (
+                            <img src={file.url} alt={file.name} style={{ width: "100%", maxHeight: 260, objectFit: "cover", borderRadius: 6, border: `1px solid ${border}` }} />
+                          )}
+                          {file.type?.includes("pdf") && (
+                            <iframe src={file.url} style={{ width: "100%", height: 300, borderRadius: 6, border: `1px solid ${border}` }} title={file.name} />
+                          )}
                         </div>
                       ))}
                     </div>
