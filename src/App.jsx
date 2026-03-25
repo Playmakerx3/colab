@@ -93,7 +93,7 @@ export default function CoLab() {
   const [screen, setScreen] = useState("landing");
   const [appScreen, setAppScreen] = useState("explore");
   const [exploreTab, setExploreTab] = useState("for-you");
-  const [networkTab, setNetworkTab] = useState("people");
+  const [networkTab, setNetworkTab] = useState("feed");
   const [activeProject, setActiveProject] = useState(null);
   const [viewingProfile, setViewingProfile] = useState(null);
   const [projectTab, setProjectTab] = useState("tasks");
@@ -124,6 +124,13 @@ export default function CoLab() {
   const [activeDmThread, setActiveDmThread] = useState(null);
   const [portfolioItems, setPortfolioItems] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [posts, setPosts] = useState([]);
+  const [postLikes, setPostLikes] = useState({});
+  const [postComments, setPostComments] = useState({});
+  const [newPostContent, setNewPostContent] = useState("");
+  const [newPostProject, setNewPostProject] = useState("");
+  const [expandedComments, setExpandedComments] = useState({});
+  const [newCommentText, setNewCommentText] = useState({});
 
   // UI
   const [showNotifications, setShowNotifications] = useState(false);
@@ -233,13 +240,15 @@ export default function CoLab() {
   const loadAllData = async (userId) => {
     setLoading(true);
     try {
-      const [{ data: projs }, { data: usrs }, { data: apps }, { data: fols }, { data: threads }, { data: port }] = await Promise.all([
+      const [{ data: projs }, { data: usrs }, { data: apps }, { data: fols }, { data: threads }, { data: port }, { data: postsData }, { data: likesData }] = await Promise.all([
         supabase.from("projects").select("*").order("created_at", { ascending: false }),
         supabase.from("profiles").select("*"),
         supabase.from("applications").select("*"),
         supabase.from("follows").select("*").eq("follower_id", userId),
         supabase.from("dm_threads").select("*").or(`user_a.eq.${userId},user_b.eq.${userId}`),
         supabase.from("portfolio_items").select("*").eq("user_id", userId),
+        supabase.from("posts").select("*").order("created_at", { ascending: false }),
+        supabase.from("likes").select("*").eq("user_id", userId),
       ]);
       setProjects(projs || []);
       setUsers(usrs || []);
@@ -247,6 +256,8 @@ export default function CoLab() {
       setFollowing((fols || []).map(f => f.following_id));
       setDmThreads(threads || []);
       setPortfolioItems(port || []);
+      setPosts(postsData || []);
+      setPostLikes({ myLikes: (likesData || []).map(l => l.post_id) });
       const myProjectIds = (projs || []).filter(p => p.owner_id === userId).map(p => p.id);
       const incoming = (apps || []).filter(a => myProjectIds.includes(a.project_id) && a.status === "pending");
       setNotifications(incoming.map(a => ({
@@ -780,6 +791,218 @@ export default function CoLab() {
     );
   };
 
+  // ── POSTS ──
+  const handleCreatePost = async () => {
+    if (!newPostContent.trim()) return;
+    const proj = myProjects.find(p => p.id === newPostProject);
+    const { data } = await supabase.from("posts").insert({
+      user_id: authUser.id, user_name: profile.name,
+      user_initials: myInitials, user_role: profile.role,
+      content: newPostContent,
+      project_id: proj?.id || null,
+      project_title: proj?.title || null,
+    }).select().single();
+    if (data) {
+      setPosts([data, ...posts]);
+      setNewPostContent("");
+      setNewPostProject("");
+      showToast("Posted.");
+    }
+  };
+
+  const handleLike = async (postId) => {
+    const myLikes = postLikes.myLikes || [];
+    if (myLikes.includes(postId)) {
+      await supabase.from("likes").delete().eq("user_id", authUser.id).eq("post_id", postId);
+      setPostLikes({ myLikes: myLikes.filter(id => id !== postId) });
+      setPosts(posts.map(p => p.id === postId ? { ...p, like_count: Math.max(0, (p.like_count || 0) - 1) } : p));
+    } else {
+      await supabase.from("likes").insert({ user_id: authUser.id, post_id: postId });
+      setPostLikes({ myLikes: [...myLikes, postId] });
+      setPosts(posts.map(p => p.id === postId ? { ...p, like_count: (p.like_count || 0) + 1 } : p));
+    }
+  };
+
+  const handleComment = async (postId) => {
+    const content = newCommentText[postId];
+    if (!content?.trim()) return;
+    const { data } = await supabase.from("comments").insert({
+      post_id: postId, user_id: authUser.id,
+      user_name: profile.name, user_initials: myInitials, content,
+    }).select().single();
+    if (data) {
+      setPostComments(prev => ({ ...prev, [postId]: [...(prev[postId] || []), data] }));
+      setNewCommentText(prev => ({ ...prev, [postId]: "" }));
+    }
+  };
+
+  const loadComments = async (postId) => {
+    if (postComments[postId]) return;
+    const { data } = await supabase.from("comments").select("*").eq("post_id", postId).order("created_at");
+    setPostComments(prev => ({ ...prev, [postId]: data || [] }));
+  };
+
+  const handleDeletePost = async (postId) => {
+    await supabase.from("posts").delete().eq("id", postId);
+    setPosts(posts.filter(p => p.id !== postId));
+    showToast("Post deleted.");
+  };
+
+  // ── NETWORK SCREEN ──
+  const NetworkScreen = () => {
+    const followingFeed = posts.filter(p => following.includes(p.user_id));
+    const allFeed = posts;
+    const feedToShow = networkTab === "feed-following" ? followingFeed : allFeed;
+
+    const PostCard = ({ post }) => {
+      const isLiked = (postLikes.myLikes || []).includes(post.id);
+      const isOpen = expandedComments[post.id];
+      const comments = postComments[post.id] || [];
+      const isOwner = post.user_id === authUser?.id;
+      const postUser = users.find(u => u.id === post.user_id);
+      return (
+        <div style={{ borderBottom: `1px solid ${border}`, padding: "20px 0" }}>
+          {/* Header */}
+          <div style={{ display: "flex", gap: 10, alignItems: "flex-start", marginBottom: 12 }}>
+            <button onClick={() => postUser && setViewingProfile(postUser)} style={{ background: "none", border: "none", cursor: "pointer", padding: 0, flexShrink: 0 }}>
+              <Avatar initials={post.user_initials} size={36} dark={dark} />
+            </button>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                <div>
+                  <button onClick={() => postUser && setViewingProfile(postUser)} style={{ background: "none", border: "none", cursor: "pointer", padding: 0 }}>
+                    <span style={{ fontSize: 13, fontWeight: 500, color: text }}>{post.user_name}</span>
+                  </button>
+                  <span style={{ fontSize: 11, color: textMuted, marginLeft: 8 }}>{post.user_role}</span>
+                  <div style={{ fontSize: 10, color: textMuted, marginTop: 2 }}>{new Date(post.created_at).toLocaleDateString()}</div>
+                </div>
+                {isOwner && <button className="hb" onClick={() => handleDeletePost(post.id)} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontSize: 11, fontFamily: "inherit" }}>✕</button>}
+              </div>
+            </div>
+          </div>
+          {/* Content */}
+          <div style={{ fontSize: 14, color: text, lineHeight: 1.7, marginBottom: 10, paddingLeft: 46 }}>{post.content}</div>
+          {/* Project tag */}
+          {post.project_title && (
+            <div style={{ paddingLeft: 46, marginBottom: 10 }}>
+              <span style={{ fontSize: 11, color: textMuted, border: `1px solid ${border}`, borderRadius: 4, padding: "2px 8px" }}>↗ {post.project_title}</span>
+            </div>
+          )}
+          {/* Actions */}
+          <div style={{ paddingLeft: 46, display: "flex", gap: 16, alignItems: "center" }}>
+            <button className="hb" onClick={() => handleLike(post.id)} style={{ background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: 12, color: isLiked ? text : textMuted, display: "flex", gap: 5, alignItems: "center" }}>
+              {isLiked ? "♥" : "♡"} {post.like_count || 0}
+            </button>
+            <button className="hb" onClick={() => {
+              setExpandedComments(prev => ({ ...prev, [post.id]: !prev[post.id] }));
+              if (!postComments[post.id]) loadComments(post.id);
+            }} style={{ background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: 12, color: textMuted, display: "flex", gap: 5, alignItems: "center" }}>
+              ◎ {isOpen ? "hide" : "comment"}
+            </button>
+          </div>
+          {/* Comments */}
+          {isOpen && (
+            <div style={{ paddingLeft: 46, marginTop: 14 }}>
+              {comments.length > 0 && (
+                <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 12 }}>
+                  {comments.map((c, i) => {
+                    const cUser = users.find(u => u.id === c.user_id);
+                    return (
+                      <div key={i} style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+                        <Avatar initials={c.user_initials} size={24} dark={dark} />
+                        <div style={{ background: bg2, border: `1px solid ${border}`, borderRadius: 8, padding: "7px 12px", flex: 1 }}>
+                          <button onClick={() => cUser && setViewingProfile(cUser)} style={{ background: "none", border: "none", cursor: "pointer", padding: 0, fontSize: 11, fontWeight: 500, color: text, fontFamily: "inherit" }}>{c.user_name}</button>
+                          <div style={{ fontSize: 12, color: textMuted, marginTop: 2, lineHeight: 1.55 }}>{c.content}</div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+              <div style={{ display: "flex", gap: 8 }}>
+                <Avatar initials={myInitials} size={24} dark={dark} />
+                <input placeholder="write a comment..." value={newCommentText[post.id] || ""} onChange={e => setNewCommentText(prev => ({ ...prev, [post.id]: e.target.value }))} onKeyDown={e => e.key === "Enter" && handleComment(post.id)} style={{ ...inputStyle, fontSize: 12, padding: "7px 12px", flex: 1 }} />
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    };
+
+    return (
+      <div className="pad fu" style={{ width: "100%", padding: "48px 32px" }}>
+        <div style={{ marginBottom: 28 }}>
+          <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px", marginBottom: 10 }}>NETWORK</div>
+          <h2 style={{ fontSize: "clamp(24px, 4vw, 36px)", fontWeight: 400, letterSpacing: "-1.5px", color: text, marginBottom: 8 }}>Your network.</h2>
+          <p style={{ fontSize: 13, color: textMuted }}>See what people are building. Share what you're working on.</p>
+        </div>
+
+        {/* Tabs */}
+        <div style={{ borderBottom: `1px solid ${border}`, marginBottom: 28, display: "flex" }}>
+          {[
+            { id: "feed", label: "feed" },
+            { id: "feed-following", label: "following", count: followingFeed.length },
+            { id: "people", label: "people" },
+          ].map(({ id, label, count }) => (
+            <button key={id} onClick={() => setNetworkTab(id)} style={{ background: "none", border: "none", borderBottom: networkTab === id ? `1px solid ${text}` : "1px solid transparent", color: networkTab === id ? text : textMuted, padding: "8px 0", fontSize: 12, cursor: "pointer", fontFamily: "inherit", marginRight: 24, transition: "all 0.15s", display: "inline-flex", gap: 6, alignItems: "center", whiteSpace: "nowrap" }}>
+              {label}
+              {count > 0 && <span style={{ fontSize: 10, background: bg3, borderRadius: 10, padding: "1px 6px", color: textMuted }}>{count}</span>}
+            </button>
+          ))}
+        </div>
+
+        {/* Feed tabs */}
+        {(networkTab === "feed" || networkTab === "feed-following") && (
+          <div style={{ maxWidth: 640 }}>
+            {/* Compose */}
+            <div style={{ background: bg2, border: `1px solid ${border}`, borderRadius: 12, padding: "16px", marginBottom: 28 }}>
+              <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
+                <Avatar initials={myInitials} size={36} dark={dark} />
+                <div style={{ flex: 1 }}>
+                  <textarea placeholder="share what you're working on..." value={newPostContent} onChange={e => setNewPostContent(e.target.value)} rows={3} style={{ ...inputStyle, resize: "none", fontSize: 13, padding: "10px 12px", background: bg3, borderColor: "transparent" }} />
+                  {newPostContent.trim() && (
+                    <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 10 }}>
+                      <select value={newPostProject} onChange={e => setNewPostProject(e.target.value)} style={{ ...inputStyle, fontSize: 11, padding: "6px 10px", flex: 1 }}>
+                        <option value="">tag a project (optional)</option>
+                        {myProjects.map(p => <option key={p.id} value={p.id}>{p.title}</option>)}
+                      </select>
+                      <button className="hb" onClick={handleCreatePost} style={{ ...btnP, padding: "7px 18px", fontSize: 12, flexShrink: 0 }}>post</button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Feed */}
+            {feedToShow.length === 0
+              ? <div style={{ fontSize: 13, color: textMuted, padding: "24px 0" }}>
+                  {networkTab === "feed-following"
+                    ? <>nothing yet from people you follow. <button className="hb" onClick={() => setNetworkTab("people")} style={{ background: "none", border: "none", color: text, cursor: "pointer", fontFamily: "inherit", fontSize: 13, textDecoration: "underline" }}>find people →</button></>
+                    : "no posts yet. be the first."}
+                </div>
+              : feedToShow.map(post => <PostCard key={post.id} post={post} />)
+            }
+          </div>
+        )}
+
+        {/* People tab */}
+        {networkTab === "people" && (
+          <div>
+            <div style={{ marginBottom: 16, display: "flex", gap: 5, flexWrap: "wrap" }}>
+              {["Design","Engineering","Marketing","Music","Finance","AI/ML","Writing","Video","Product"].map(s => { const sel = networkFilter === s; return <button key={s} className="hb" onClick={() => setNetworkFilter(sel ? null : s)} style={{ padding: "3px 10px", borderRadius: 3, fontSize: 10, cursor: "pointer", fontFamily: "inherit", background: sel ? text : "none", color: sel ? bg : textMuted, border: `1px solid ${sel ? text : border}`, transition: "all 0.15s" }}>{s}</button>; })}
+              {networkFilter && <button className="hb" onClick={() => setNetworkFilter(null)} style={{ padding: "3px 10px", borderRadius: 3, fontSize: 10, cursor: "pointer", fontFamily: "inherit", background: "none", color: textMuted, border: `1px solid ${border}` }}>clear</button>}
+            </div>
+            <div className="network-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 14 }}>
+              {users.filter(u => u.id !== authUser?.id && (!networkFilter || (u.skills || []).includes(networkFilter))).map(u => <UserCard key={u.id} u={u} />)}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  // ── MAIN RETURN ──
+
   // ── LOADING ──
   if (authLoading) return (
     <div style={{ minHeight: "100vh", width: "100%", background: "#0a0a0a", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'DM Mono', monospace" }}>
@@ -1106,38 +1329,7 @@ export default function CoLab() {
 
       {/* NETWORK */}
       {appScreen === "network" && (
-        <div className="pad fu" style={{ width: "100%", padding: "48px 32px" }}>
-          <div style={{ marginBottom: 28 }}>
-            <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px", marginBottom: 10 }}>NETWORK</div>
-            <h2 style={{ fontSize: "clamp(24px, 4vw, 36px)", fontWeight: 400, letterSpacing: "-1.5px", color: text, marginBottom: 8 }}>Find your people.</h2>
-            <p style={{ fontSize: 13, color: textMuted }}>Discover builders, creatives, and founders looking to collaborate.</p>
-          </div>
-          <div style={{ borderBottom: `1px solid ${border}`, marginBottom: 24, display: "flex" }}>
-            {[["people","people"],["following","following"]].map(([id,label]) => (
-              <button key={id} onClick={() => setNetworkTab(id)} style={{ background: "none", border: "none", borderBottom: networkTab === id ? `1px solid ${text}` : "1px solid transparent", color: networkTab === id ? text : textMuted, padding: "8px 0", fontSize: 12, cursor: "pointer", fontFamily: "inherit", marginRight: 24, transition: "all 0.15s", display: "inline-flex", gap: 6, alignItems: "center" }}>
-                {label}{id === "following" && following.length > 0 && <span style={{ fontSize: 10, background: bg3, borderRadius: 10, padding: "1px 6px", color: textMuted }}>{following.length}</span>}
-              </button>
-            ))}
-          </div>
-          {networkTab === "people" && (
-            <div>
-              <div style={{ marginBottom: 16, display: "flex", gap: 5, flexWrap: "wrap" }}>
-                {["Design","Engineering","Marketing","Music","Finance","AI/ML","Writing","Video","Product"].map(s => { const sel = networkFilter === s; return <button key={s} className="hb" onClick={() => setNetworkFilter(sel ? null : s)} style={{ padding: "3px 10px", borderRadius: 3, fontSize: 10, cursor: "pointer", fontFamily: "inherit", background: sel ? text : "none", color: sel ? bg : textMuted, border: `1px solid ${sel ? text : border}`, transition: "all 0.15s" }}>{s}</button>; })}
-                {networkFilter && <button className="hb" onClick={() => setNetworkFilter(null)} style={{ padding: "3px 10px", borderRadius: 3, fontSize: 10, cursor: "pointer", fontFamily: "inherit", background: "none", color: textMuted, border: `1px solid ${border}` }}>clear</button>}
-              </div>
-              <div className="network-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 14 }}>
-                {users.filter(u => u.id !== authUser?.id && (!networkFilter || (u.skills || []).includes(networkFilter))).map(u => <UserCard key={u.id} u={u} />)}
-              </div>
-            </div>
-          )}
-          {networkTab === "following" && (
-            following.length === 0
-              ? <div style={{ padding: "36px 0", color: textMuted, fontSize: 13 }}>not following anyone yet. <button className="hb" onClick={() => setNetworkTab("people")} style={{ background: "none", border: "none", color: text, cursor: "pointer", fontFamily: "inherit", fontSize: 13, textDecoration: "underline" }}>discover people →</button></div>
-              : <div className="network-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 14 }}>
-                  {users.filter(u => following.includes(u.id)).map(u => <UserCard key={u.id} u={u} />)}
-                </div>
-          )}
-        </div>
+        <NetworkScreen />
       )}
 
       {/* MESSAGES */}
@@ -1485,7 +1677,7 @@ export default function CoLab() {
 
       {/* PROFILE */}
       {appScreen === "profile" && (
-        <div className="pad fu" style={{ width: "100%", maxWidth: 600, margin: "0 auto", padding: "48px 24px" }}>
+        <div className="pad fu" style={{ width: "100%", padding: "48px 32px" }}>
           {!editProfile ? (
             <div>
               {/* Identity */}
