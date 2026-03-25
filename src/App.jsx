@@ -124,13 +124,18 @@ export default function CoLab() {
   const [activeDmThread, setActiveDmThread] = useState(null);
   const [portfolioItems, setPortfolioItems] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [liveStats, setLiveStats] = useState({ builders: "...", projects: "..." });
+  const [globalSearch, setGlobalSearch] = useState("");
+  const [showGlobalSearch, setShowGlobalSearch] = useState(false);
   const [posts, setPosts] = useState([]);
   const [postLikes, setPostLikes] = useState({});
   const [postComments, setPostComments] = useState({});
   const [newPostContent, setNewPostContent] = useState("");
   const [newPostProject, setNewPostProject] = useState("");
+  const [newPostMediaUrl, setNewPostMediaUrl] = useState("");
   const [expandedComments, setExpandedComments] = useState({});
   const [newCommentText, setNewCommentText] = useState({});
+  const [projectMembers, setProjectMembers] = useState([]);
 
   // UI
   const [showNotifications, setShowNotifications] = useState(false);
@@ -258,6 +263,8 @@ export default function CoLab() {
       setPortfolioItems(port || []);
       setPosts(postsData || []);
       setPostLikes({ myLikes: (likesData || []).map(l => l.post_id) });
+      // Live stats for landing page
+      setLiveStats({ builders: (usrs || []).length, projects: (projs || []).length });
       const myProjectIds = (projs || []).filter(p => p.owner_id === userId).map(p => p.id);
       const incoming = (apps || []).filter(a => myProjectIds.includes(a.project_id) && a.status === "pending");
       setNotifications(incoming.map(a => ({
@@ -801,25 +808,36 @@ export default function CoLab() {
       content: newPostContent,
       project_id: proj?.id || null,
       project_title: proj?.title || null,
+      media_url: newPostMediaUrl || null,
     }).select().single();
     if (data) {
       setPosts([data, ...posts]);
       setNewPostContent("");
       setNewPostProject("");
+      setNewPostMediaUrl("");
       showToast("Posted.");
     }
+  };
+
+  const handleAssignRole = async (projectId, userId, role) => {
+    await supabase.from("project_members").upsert({
+      project_id: projectId, user_id: userId, role,
+    }, { onConflict: "project_id,user_id" });
+    showToast(`Role updated to ${role}.`);
   };
 
   const handleLike = async (postId) => {
     const myLikes = postLikes.myLikes || [];
     if (myLikes.includes(postId)) {
       await supabase.from("likes").delete().eq("user_id", authUser.id).eq("post_id", postId);
+      await supabase.rpc("decrement_like", { post_id: postId });
       setPostLikes({ myLikes: myLikes.filter(id => id !== postId) });
-      setPosts(posts.map(p => p.id === postId ? { ...p, like_count: Math.max(0, (p.like_count || 0) - 1) } : p));
+      setPosts(prev => prev.map(p => p.id === postId ? { ...p, like_count: Math.max(0, (p.like_count || 0) - 1) } : p));
     } else {
       await supabase.from("likes").insert({ user_id: authUser.id, post_id: postId });
+      await supabase.rpc("increment_like", { post_id: postId });
       setPostLikes({ myLikes: [...myLikes, postId] });
-      setPosts(posts.map(p => p.id === postId ? { ...p, like_count: (p.like_count || 0) + 1 } : p));
+      setPosts(prev => prev.map(p => p.id === postId ? { ...p, like_count: (p.like_count || 0) + 1 } : p));
     }
   };
 
@@ -882,6 +900,20 @@ export default function CoLab() {
           </div>
           {/* Content */}
           <div style={{ fontSize: 14, color: text, lineHeight: 1.7, marginBottom: 10, paddingLeft: 46 }}>{post.content}</div>
+          {/* Media embed */}
+          {post.media_url && (
+            <div style={{ paddingLeft: 46, marginBottom: 10 }}>
+              {post.media_url.includes("youtube.com") || post.media_url.includes("youtu.be") ? (
+                <iframe
+                  src={`https://www.youtube.com/embed/${post.media_url.split("v=")[1]?.split("&")[0] || post.media_url.split("/").pop()}`}
+                  style={{ width: "100%", height: 240, borderRadius: 8, border: "none" }}
+                  allowFullScreen
+                />
+              ) : (
+                <img src={post.media_url} alt="" style={{ width: "100%", maxHeight: 300, objectFit: "cover", borderRadius: 8, border: `1px solid ${border}` }} onError={e => e.target.style.display = "none"} />
+              )}
+            </div>
+          )}
           {/* Project tag */}
           {post.project_title && (
             <div style={{ paddingLeft: 46, marginBottom: 10 }}>
@@ -961,12 +993,15 @@ export default function CoLab() {
                 <div style={{ flex: 1 }}>
                   <textarea placeholder="share what you're working on..." value={newPostContent} onChange={e => setNewPostContent(e.target.value)} rows={3} style={{ ...inputStyle, resize: "none", fontSize: 13, padding: "10px 12px", background: bg3, borderColor: "transparent" }} />
                   {newPostContent.trim() && (
-                    <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 10 }}>
-                      <select value={newPostProject} onChange={e => setNewPostProject(e.target.value)} style={{ ...inputStyle, fontSize: 11, padding: "6px 10px", flex: 1 }}>
-                        <option value="">tag a project (optional)</option>
-                        {myProjects.map(p => <option key={p.id} value={p.id}>{p.title}</option>)}
-                      </select>
-                      <button className="hb" onClick={handleCreatePost} style={{ ...btnP, padding: "7px 18px", fontSize: 12, flexShrink: 0 }}>post</button>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 10 }}>
+                      <input placeholder="photo or YouTube URL (optional)..." value={newPostMediaUrl} onChange={e => setNewPostMediaUrl(e.target.value)} style={{ ...inputStyle, fontSize: 11, padding: "6px 10px" }} />
+                      <div style={{ display: "flex", gap: 8 }}>
+                        <select value={newPostProject} onChange={e => setNewPostProject(e.target.value)} style={{ ...inputStyle, fontSize: 11, padding: "6px 10px", flex: 1 }}>
+                          <option value="">tag a project (optional)</option>
+                          {myProjects.map(p => <option key={p.id} value={p.id}>{p.title}</option>)}
+                        </select>
+                        <button className="hb" onClick={handleCreatePost} style={{ ...btnP, padding: "7px 18px", fontSize: 12, flexShrink: 0 }}>post</button>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -1018,9 +1053,9 @@ export default function CoLab() {
   if (screen === "landing") return (
     <div style={{ minHeight: "100vh", width: "100%", background: bg, color: text, fontFamily: "'DM Mono', monospace", overflowX: "hidden" }}>
       <style>{CSS}</style>
-      <nav style={{ width: "100%", borderBottom: `1px solid ${border}`, position: "sticky", top: 0, background: dark ? "rgba(10,10,10,0.97)" : "rgba(255,255,255,0.97)", backdropFilter: "blur(12px)", zIndex: 50 }}>
+      <nav style={{ width: "100%", borderBottom: `1px solid ${border}`, position: "sticky", top: 0, background: bg, backdropFilter: "blur(12px)", zIndex: 50 }}>
         <div className="pad" style={{ padding: "0 40px", height: 52, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <div style={{ fontSize: 15, fontWeight: 500, letterSpacing: "-0.5px" }}>[CoLab]</div>
+          <div style={{ fontSize: 15, fontWeight: 500, letterSpacing: "-0.5px", color: text }}>[CoLab]</div>
           <div style={{ display: "flex", gap: 8 }}>
             <button className="hb" onClick={() => setDark(!dark)} style={{ background: "none", border: `1px solid ${border}`, borderRadius: 6, padding: "4px 10px", cursor: "pointer", fontSize: 11, color: textMuted, fontFamily: "inherit" }}>{dark ? "☀" : "☾"}</button>
             <button className="hb" onClick={() => { setAuthMode("login"); setScreen("auth"); }} style={{ ...btnG, padding: "7px 16px", fontSize: 12 }}>Log in</button>
@@ -1040,7 +1075,7 @@ export default function CoLab() {
         </div>
       </div>
       <div className="stat-grid" style={{ display: "flex", width: "100%", borderBottom: `1px solid ${border}` }}>
-        {[["500+","builders"],["200+","active projects"],["48","skill categories"],["100%","free to start"]].map(([v,l],i) => (
+        {[[liveStats.builders,"builders"],[liveStats.projects,"active projects"],["48","skill categories"],["100%","free to start"]].map(([v,l],i) => (
           <div key={i} className="stat-item" style={{ flex: 1, borderRight: i < 3 ? `1px solid ${border}` : "none", padding: "24px 40px", textAlign: "center" }}>
             <div style={{ fontSize: 28, color: text, letterSpacing: "-1px" }}>{v}</div>
             <div style={{ fontSize: 10, color: textMuted, marginTop: 4 }}>{l}</div>
@@ -1064,7 +1099,7 @@ export default function CoLab() {
         <p style={{ fontSize: 13, color: textMuted, marginBottom: 28 }}>Join hundreds of builders already collaborating on CoLab.</p>
         <button className="hb" onClick={() => { setAuthMode("signup"); setScreen("auth"); }} style={{ background: text, color: bg, border: "none", borderRadius: 8, padding: "14px 36px", fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}>Create your profile →</button>
       </div>
-      <div className="pad" style={{ padding: "18px 40px", borderTop: `1px solid ${border}`, display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
+      <div className="pad" style={{ padding: "18px 40px", borderTop: `1px solid ${border}`, background: bg, display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
         <div style={{ fontSize: 12, color: textMuted }}>[CoLab] — build together.</div>
         <div style={{ fontSize: 11, color: textMuted }}>© 2026</div>
       </div>
@@ -1184,6 +1219,35 @@ export default function CoLab() {
       {/* NAV */}
       <nav style={{ position: "sticky", top: 0, zIndex: 50, width: "100%", background: dark ? "rgba(10,10,10,0.97)" : "rgba(255,255,255,0.97)", backdropFilter: "blur(12px)", borderBottom: `1px solid ${border}`, padding: "0 12px", display: "flex", alignItems: "center", justifyContent: "space-between", height: 50 }}>
         <button onClick={() => { setAppScreen("explore"); setActiveProject(null); setViewingProfile(null); }} style={{ background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: 14, fontWeight: 500, color: text, letterSpacing: "-0.5px", flexShrink: 0 }}>[CoLab]</button>
+
+        {/* Global search */}
+        <div style={{ position: "relative", flex: 1, maxWidth: 200, margin: "0 8px" }}>
+          <input
+            placeholder="search people..."
+            value={globalSearch}
+            onChange={e => { setGlobalSearch(e.target.value); setShowGlobalSearch(e.target.value.length > 0); }}
+            onBlur={() => setTimeout(() => setShowGlobalSearch(false), 150)}
+            style={{ ...inputStyle, fontSize: 11, padding: "5px 10px", borderRadius: 6 }}
+          />
+          {showGlobalSearch && (
+            <div style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, background: bg, border: `1px solid ${border}`, borderRadius: 8, zIndex: 300, overflow: "hidden", boxShadow: dark ? "0 8px 24px rgba(0,0,0,0.6)" : "0 8px 24px rgba(0,0,0,0.1)" }}>
+              {users.filter(u => u.id !== authUser?.id && u.name?.toLowerCase().includes(globalSearch.toLowerCase())).slice(0, 5).map(u => (
+                <button key={u.id} onClick={() => { setViewingProfile(u); setGlobalSearch(""); setShowGlobalSearch(false); }} style={{ width: "100%", padding: "10px 14px", background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", display: "flex", gap: 10, alignItems: "center", textAlign: "left" }}
+                  onMouseEnter={e => e.currentTarget.style.background = bg2} onMouseLeave={e => e.currentTarget.style.background = "none"}>
+                  <Avatar initials={u.name?.split(" ").map(n => n[0]).join("").slice(0, 2)} size={26} dark={dark} />
+                  <div>
+                    <div style={{ fontSize: 12, color: text }}>{u.name}</div>
+                    <div style={{ fontSize: 10, color: textMuted }}>{u.role}</div>
+                  </div>
+                </button>
+              ))}
+              {users.filter(u => u.id !== authUser?.id && u.name?.toLowerCase().includes(globalSearch.toLowerCase())).length === 0 && (
+                <div style={{ padding: "12px 14px", fontSize: 12, color: textMuted }}>no results.</div>
+              )}
+            </div>
+          )}
+        </div>
+
         <div style={{ display: "flex", gap: 1, alignItems: "center" }}>
           {navItems.map(({ id, label, badge }) => (
             <button key={id} onClick={() => { setAppScreen(id); setActiveProject(null); setViewingProfile(null); setShowNotifications(false); }}
@@ -1539,6 +1603,7 @@ export default function CoLab() {
             <TabBtn id="tasks" label="tasks" count={tasks.filter(t => !t.done).length} setter={setProjectTab} current={projectTab} />
             <TabBtn id="messages" label="messages" count={messages.length} setter={setProjectTab} current={projectTab} />
             <TabBtn id="updates" label="updates" count={projectUpdates.length} setter={setProjectTab} current={projectTab} />
+            <TabBtn id="team" label="team" count={0} setter={setProjectTab} current={projectTab} />
             <TabBtn id="plugins" label="plugins" count={(activeProject.plugins || []).length} setter={setProjectTab} current={projectTab} />
           </div>
 
@@ -1641,6 +1706,46 @@ export default function CoLab() {
                   </div>
                 ))
               }
+            </div>
+          )}
+
+          {projectTab === "team" && (
+            <div>
+              <div style={{ fontSize: 10, color: textMuted, letterSpacing: "1px", marginBottom: 14 }}>TEAM MEMBERS</div>
+              {/* Owner */}
+              <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 0", borderBottom: `1px solid ${border}` }}>
+                <Avatar initials={activeProject.owner_initials} size={32} dark={dark} />
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 13, color: text }}>{activeProject.owner_name}</div>
+                  <div style={{ fontSize: 11, color: textMuted }}>owner</div>
+                </div>
+                <span style={{ fontSize: 10, padding: "2px 8px", border: `1px solid ${border}`, borderRadius: 3, color: text }}>owner</span>
+              </div>
+              {/* Accepted applicants */}
+              {applications.filter(a => a.project_id === activeProject.id && a.status === "accepted").map(a => {
+                const memberUser = users.find(u => u.id === a.applicant_id);
+                return (
+                  <div key={a.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 0", borderBottom: `1px solid ${border}` }}>
+                    <Avatar initials={a.applicant_initials} size={32} dark={dark} />
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 13, color: text }}>{a.applicant_name}</div>
+                      <div style={{ fontSize: 11, color: textMuted }}>{a.applicant_role}</div>
+                    </div>
+                    {activeProject.owner_id === authUser?.id ? (
+                      <select defaultValue={a.role || "contributor"} onChange={e => handleAssignRole(activeProject.id, a.applicant_id, e.target.value)} style={{ ...inputStyle, fontSize: 11, padding: "4px 8px", width: "auto" }}>
+                        <option value="admin">admin</option>
+                        <option value="contributor">contributor</option>
+                        <option value="viewer">viewer</option>
+                      </select>
+                    ) : (
+                      <span style={{ fontSize: 10, padding: "2px 8px", border: `1px solid ${border}`, borderRadius: 3, color: textMuted }}>{a.role || "contributor"}</span>
+                    )}
+                  </div>
+                );
+              })}
+              {applications.filter(a => a.project_id === activeProject.id && a.status === "accepted").length === 0 && (
+                <div style={{ fontSize: 12, color: textMuted, padding: "16px 0" }}>no collaborators yet. accept applications to add team members.</div>
+              )}
             </div>
           )}
 
