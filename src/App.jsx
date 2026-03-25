@@ -3,6 +3,7 @@ import { supabase } from "./supabase";
 
 const SKILLS = ["Design", "Engineering", "Marketing", "Finance", "Legal", "Writing", "Video", "Music", "Photography", "Data", "AI/ML", "Product", "Sales", "Operations", "3D/CAD", "Architecture"];
 const CATEGORIES = ["Tech / Software", "Creative / Art", "Music", "Film / Video", "Physical / Hardware", "Business / Startup", "Social Impact", "Research", "Other"];
+const AVAILABILITY = ["Full-time", "Part-time", "Weekends only", "Evenings only", "Flexible"];
 const PLUGINS = [
   { id: "slack", name: "Slack", icon: "#", desc: "Team messaging" },
   { id: "discord", name: "Discord", icon: "◈", desc: "Voice & chat" },
@@ -13,17 +14,16 @@ const PLUGINS = [
 ];
 
 function Avatar({ initials, size = 32, dark }) {
+  const i = (initials || "?").slice(0, 2).toUpperCase();
   return (
-    <div style={{ width: size, height: size, borderRadius: "50%", background: dark ? "#fff" : "#000", display: "flex", alignItems: "center", justifyContent: "center", fontSize: size * 0.32, fontWeight: 700, color: dark ? "#000" : "#fff", flexShrink: 0, fontFamily: "inherit" }}>
-      {(initials || "?").slice(0, 2).toUpperCase()}
-    </div>
+    <div style={{ width: size, height: size, borderRadius: "50%", background: dark ? "#fff" : "#000", display: "flex", alignItems: "center", justifyContent: "center", fontSize: size * 0.32, fontWeight: 700, color: dark ? "#000" : "#fff", flexShrink: 0, fontFamily: "inherit" }}>{i}</div>
   );
 }
 
 function ProgressBar({ value, dark }) {
   return (
     <div style={{ background: dark ? "#1a1a1a" : "#e8e8e8", borderRadius: 4, height: 3, width: "100%", overflow: "hidden" }}>
-      <div style={{ width: `${value}%`, height: "100%", background: dark ? "#fff" : "#000", borderRadius: 4, transition: "width 0.4s ease" }} />
+      <div style={{ width: `${Math.min(value || 0, 100)}%`, height: "100%", background: dark ? "#fff" : "#000", borderRadius: 4, transition: "width 0.4s ease" }} />
     </div>
   );
 }
@@ -46,29 +46,32 @@ export default function CoLab() {
   const [viewingProfile, setViewingProfile] = useState(null);
   const [projectTab, setProjectTab] = useState("tasks");
 
-  // Auth state
+  // Auth
   const [authUser, setAuthUser] = useState(null);
   const [profile, setProfile] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
-  const [authMode, setAuthMode] = useState("login"); // login | signup
+  const [authMode, setAuthMode] = useState("login");
   const [authEmail, setAuthEmail] = useState("");
   const [authPassword, setAuthPassword] = useState("");
   const [authError, setAuthError] = useState("");
   const [onboardStep, setOnboardStep] = useState(0);
   const [onboardData, setOnboardData] = useState({ name: "", role: "", bio: "", skills: [] });
 
-  // Data state
+  // Data
   const [projects, setProjects] = useState([]);
   const [users, setUsers] = useState([]);
   const [tasks, setTasks] = useState([]);
   const [messages, setMessages] = useState([]);
-  const [updates, setUpdates] = useState([]);
+  const [projectUpdates, setProjectUpdates] = useState([]);
   const [applications, setApplications] = useState([]);
   const [following, setFollowing] = useState([]);
   const [notifications, setNotifications] = useState([]);
+  const [dmThreads, setDmThreads] = useState([]);
+  const [dmMessages, setDmMessages] = useState({});
+  const [activeDmThread, setActiveDmThread] = useState(null);
   const [loading, setLoading] = useState(false);
 
-  // UI state
+  // UI
   const [showNotifications, setShowNotifications] = useState(false);
   const [filterSkill, setFilterSkill] = useState(null);
   const [networkFilter, setNetworkFilter] = useState(null);
@@ -77,13 +80,16 @@ export default function CoLab() {
   const [showCreate, setShowCreate] = useState(false);
   const [newProject, setNewProject] = useState({ title: "", description: "", category: CATEGORIES[0], skills: [], maxCollaborators: 2 });
   const [newTaskText, setNewTaskText] = useState("");
+  const [taskAssignee, setTaskAssignee] = useState("");
   const [newMessage, setNewMessage] = useState("");
   const [newUpdate, setNewUpdate] = useState("");
-  const [editProfile, setEditProfile] = useState(false);
-  const [dmOpen, setDmOpen] = useState(null);
-  const [dmMessages, setDmMessages] = useState({});
   const [dmInput, setDmInput] = useState("");
+  const [editProfile, setEditProfile] = useState(false);
+  const [showApplicationForm, setShowApplicationForm] = useState(null);
+  const [applicationForm, setApplicationForm] = useState({ skills: [], availability: "", motivation: "", portfolio_url: "" });
+  const [reviewingApplicants, setReviewingApplicants] = useState(null);
   const messagesEndRef = useRef(null);
+  const dmEndRef = useRef(null);
 
   const bg = dark ? "#0a0a0a" : "#ffffff";
   const bg2 = dark ? "#111111" : "#f5f5f5";
@@ -101,6 +107,8 @@ export default function CoLab() {
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(null), 3000); };
   const myInitials = profile?.name ? profile.name.split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase() : "ME";
   const getMatchScore = (p) => (profile?.skills || []).filter(s => (p.skills || []).includes(s)).length;
+  const unreadDms = dmThreads.filter(t => t.unread).length;
+  const unreadNotifs = notifications.filter(n => !n.read).length;
 
   const CSS = `
     @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&display=swap');
@@ -127,6 +135,7 @@ export default function CoLab() {
       .network-grid { grid-template-columns: 1fr !important; }
       .notif-w { width: calc(100vw - 24px) !important; right: 12px !important; }
       .proj-tabs { overflow-x: auto !important; }
+      .profile-layout { grid-template-columns: 1fr !important; }
     }
   `;
 
@@ -147,39 +156,34 @@ export default function CoLab() {
 
   const loadProfile = async (userId) => {
     const { data } = await supabase.from("profiles").select("*").eq("id", userId).single();
-    if (data) {
-      setProfile(data);
-      setScreen("app");
-      setAuthLoading(false);
-      loadAllData(userId);
-    } else {
-      setScreen("onboard");
-      setAuthLoading(false);
-    }
+    if (data) { setProfile(data); setScreen("app"); setAuthLoading(false); loadAllData(userId); }
+    else { setScreen("onboard"); setAuthLoading(false); }
   };
 
   const loadAllData = async (userId) => {
     setLoading(true);
     try {
-      const [{ data: projs }, { data: usrs }, { data: apps }, { data: fols }] = await Promise.all([
+      const [{ data: projs }, { data: usrs }, { data: apps }, { data: fols }, { data: threads }] = await Promise.all([
         supabase.from("projects").select("*").order("created_at", { ascending: false }),
         supabase.from("profiles").select("*"),
-        supabase.from("applications").select("*").eq("status", "pending"),
+        supabase.from("applications").select("*"),
         supabase.from("follows").select("*").eq("follower_id", userId),
+        supabase.from("dm_threads").select("*, profiles_a:user_a(id,name), profiles_b:user_b(id,name)").or(`user_a.eq.${userId},user_b.eq.${userId}`),
       ]);
       setProjects(projs || []);
       setUsers(usrs || []);
       setApplications(apps || []);
       setFollowing((fols || []).map(f => f.following_id));
-      const pendingApps = (apps || []).filter(a => {
-        const proj = (projs || []).find(p => p.id === a.project_id);
-        return proj?.owner_id === userId;
-      });
-      setNotifications(pendingApps.map(a => ({
-        id: a.id, type: "application", text: `${a.applicant_name} applied to your project`,
+      setDmThreads(threads || []);
+      const myProjectIds = (projs || []).filter(p => p.owner_id === userId).map(p => p.id);
+      const incoming = (apps || []).filter(a => myProjectIds.includes(a.project_id) && a.status === "pending");
+      setNotifications(incoming.map(a => ({
+        id: a.id, type: "application",
+        text: `${a.applicant_name} applied to your project`,
         sub: (projs || []).find(p => p.id === a.project_id)?.title || "",
-        time: new Date(a.created_at).toLocaleDateString(), read: false, projectId: a.project_id,
-        applicant: { initials: a.applicant_initials, name: a.applicant_name, role: a.applicant_role, bio: a.applicant_bio, id: a.applicant_id }
+        time: new Date(a.created_at).toLocaleDateString(), read: false,
+        projectId: a.project_id,
+        applicant: { id: a.applicant_id, initials: a.applicant_initials, name: a.applicant_name, role: a.applicant_role, bio: a.applicant_bio, skills: a.applicant_skills || [], availability: a.availability, motivation: a.motivation, portfolio_url: a.portfolio_url }
       })));
     } catch (e) { console.error(e); }
     setLoading(false);
@@ -193,19 +197,20 @@ export default function CoLab() {
     ]);
     setTasks(t || []);
     setMessages(m || []);
-    setUpdates(u || []);
+    setProjectUpdates(u || []);
   };
 
-  // ── AUTH ACTIONS ──
+  const loadDmMessages = async (threadId) => {
+    const { data } = await supabase.from("dm_messages").select("*").eq("thread_id", threadId).order("created_at");
+    setDmMessages(prev => ({ ...prev, [threadId]: data || [] }));
+  };
+
+  // ── AUTH ──
   const handleSignUp = async () => {
     setAuthError("");
     const { data, error } = await supabase.auth.signUp({ email: authEmail, password: authPassword });
     if (error) { setAuthError(error.message); return; }
-    if (data.user) {
-      setAuthUser(data.user);
-      setScreen("onboard");
-      showToast("Account created! Set up your profile.");
-    }
+    if (data.user) { setAuthUser(data.user); setScreen("onboard"); }
   };
 
   const handleLogin = async () => {
@@ -223,37 +228,16 @@ export default function CoLab() {
   const handleFinishOnboard = async () => {
     if (!onboardData.name) return;
     try {
-      // Get current session directly
       const { data: sessionData } = await supabase.auth.getSession();
       const userId = sessionData?.session?.user?.id || authUser?.id;
-      if (!userId) {
-        showToast("Session expired. Please log in again.");
-        setScreen("auth");
-        return;
-      }
+      if (!userId) { showToast("Session expired. Please log in again."); setScreen("auth"); return; }
       const { data, error } = await supabase.from("profiles").upsert({
-        id: userId,
-        name: onboardData.name,
-        role: onboardData.role || "",
-        bio: onboardData.bio || "",
-        skills: onboardData.skills || [],
+        id: userId, name: onboardData.name, role: onboardData.role || "",
+        bio: onboardData.bio || "", skills: onboardData.skills || [],
       }, { onConflict: "id" }).select().single();
-      if (error) {
-        console.error("Profile save error:", error.message);
-        showToast("Error saving profile: " + error.message);
-        return;
-      }
-      if (data) {
-        setProfile(data);
-        setScreen("app");
-        setAppScreen("explore");
-        loadAllData(userId);
-        showToast(`Welcome, ${data.name.split(" ")[0]}!`);
-      }
-    } catch (e) {
-      console.error("Onboard error:", e);
-      showToast("Something went wrong. Try again.");
-    }
+      if (error) { showToast("Error: " + error.message); return; }
+      if (data) { setProfile(data); setScreen("app"); setAppScreen("explore"); loadAllData(userId); showToast(`Welcome, ${data.name.split(" ")[0]}!`); }
+    } catch (e) { console.error(e); showToast("Something went wrong."); }
   };
 
   const handleSaveProfile = async () => {
@@ -263,28 +247,32 @@ export default function CoLab() {
     if (!error) { setProfile(data); setEditProfile(false); showToast("Profile saved."); }
   };
 
-  // ── PROJECT ACTIONS ──
+  // ── PROJECTS ──
   const handlePostProject = async () => {
     if (!newProject.title || !newProject.description) return;
-    const initials = myInitials;
     const { data, error } = await supabase.from("projects").insert({
-      ...newProject, max_collaborators: newProject.maxCollaborators,
-      owner_id: authUser.id, owner_name: profile.name, owner_initials: initials,
-      status: "open", progress: 0, plugins: [], collaborators: 0,
+      title: newProject.title, description: newProject.description,
+      category: newProject.category, skills: newProject.skills,
+      max_collaborators: newProject.maxCollaborators,
+      owner_id: authUser.id, owner_name: profile.name,
+      owner_initials: myInitials, status: "open", progress: 0, plugins: [], collaborators: 0,
     }).select().single();
     if (!error && data) {
       setProjects([data, ...projects]);
       setNewProject({ title: "", description: "", category: CATEGORIES[0], skills: [], maxCollaborators: 2 });
-      setShowCreate(false);
-      showToast("Project posted.");
+      setShowCreate(false); showToast("Project posted.");
     }
   };
 
-  // ── TASK ACTIONS ──
+  // ── TASKS ──
   const handleAddTask = async (projectId) => {
     if (!newTaskText.trim()) return;
-    const { data, error } = await supabase.from("tasks").insert({ project_id: projectId, text: newTaskText, done: false }).select().single();
-    if (!error) { setTasks([...tasks, data]); setNewTaskText(""); }
+    const assignedUser = users.find(u => u.name === taskAssignee);
+    const { data } = await supabase.from("tasks").insert({
+      project_id: projectId, text: newTaskText, done: false,
+      assigned_to: assignedUser?.id || null, assigned_name: taskAssignee || null,
+    }).select().single();
+    if (data) { setTasks([...tasks, data]); setNewTaskText(""); setTaskAssignee(""); }
   };
 
   const handleToggleTask = async (task) => {
@@ -297,7 +285,7 @@ export default function CoLab() {
     setTasks(tasks.filter(t => t.id !== taskId));
   };
 
-  // ── MESSAGE ACTIONS ──
+  // ── MESSAGES ──
   const handleSendMessage = async (projectId) => {
     if (!newMessage.trim()) return;
     const { data } = await supabase.from("messages").insert({
@@ -307,27 +295,69 @@ export default function CoLab() {
     if (data) { setMessages([...messages, data]); setNewMessage(""); setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }), 50); }
   };
 
-  // ── UPDATE ACTIONS ──
   const handlePostUpdate = async (projectId) => {
     if (!newUpdate.trim()) return;
     const { data } = await supabase.from("updates").insert({
       project_id: projectId, author_id: authUser.id,
       author: profile.name, initials: myInitials, text: newUpdate,
     }).select().single();
-    if (data) { setUpdates([data, ...updates]); setNewUpdate(""); showToast("Update posted."); }
+    if (data) { setProjectUpdates([data, ...projectUpdates]); setNewUpdate(""); showToast("Update posted."); }
   };
 
-  // ── APPLICATION ACTIONS ──
-  const handleApply = async (project) => {
+  // ── DMs ──
+  const openDm = async (user) => {
+    if (user.id === authUser?.id) return;
+    // Find or create thread
+    let thread = dmThreads.find(t =>
+      (t.user_a === authUser.id && t.user_b === user.id) ||
+      (t.user_b === authUser.id && t.user_a === user.id)
+    );
+    if (!thread) {
+      const { data } = await supabase.from("dm_threads").insert({
+        user_a: authUser.id, user_b: user.id,
+      }).select().single();
+      if (data) { thread = data; setDmThreads(prev => [...prev, data]); }
+    }
+    if (thread) {
+      setActiveDmThread({ ...thread, otherUser: user });
+      loadDmMessages(thread.id);
+      setAppScreen("messages");
+    }
+  };
+
+  const handleSendDm = async () => {
+    if (!dmInput.trim() || !activeDmThread) return;
+    const { data } = await supabase.from("dm_messages").insert({
+      thread_id: activeDmThread.id, sender_id: authUser.id,
+      sender_name: profile.name, sender_initials: myInitials, text: dmInput,
+    }).select().single();
+    if (data) {
+      setDmMessages(prev => ({ ...prev, [activeDmThread.id]: [...(prev[activeDmThread.id] || []), data] }));
+      setDmInput("");
+      setTimeout(() => dmEndRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
+    }
+  };
+
+  // ── APPLICATIONS ──
+  const handleApply = async () => {
+    const project = showApplicationForm;
+    if (!project) return;
     const already = applications.find(a => a.project_id === project.id && a.applicant_id === authUser.id);
     if (already) return;
     const { data } = await supabase.from("applications").insert({
       project_id: project.id, applicant_id: authUser.id,
       applicant_name: profile.name, applicant_initials: myInitials,
-      applicant_role: profile.role, applicant_bio: profile.bio, status: "pending",
+      applicant_role: profile.role, applicant_bio: profile.bio,
+      applicant_skills: applicationForm.skills,
+      availability: applicationForm.availability,
+      motivation: applicationForm.motivation,
+      portfolio_url: applicationForm.portfolio_url,
+      status: "pending",
     }).select().single();
     if (data) {
       setApplications([...applications, data]);
+      setShowApplicationForm(null);
+      setApplicationForm({ skills: [], availability: "", motivation: "", portfolio_url: "" });
       showToast(`Applied to "${project.title}"`);
       setActiveProject(null);
     }
@@ -335,7 +365,6 @@ export default function CoLab() {
 
   const handleAccept = async (notif) => {
     await supabase.from("applications").update({ status: "accepted" }).eq("id", notif.id);
-    await supabase.from("projects").update({ collaborators: supabase.rpc("increment", { x: 1 }) }).eq("id", notif.projectId);
     setNotifications(prev => prev.filter(n => n.id !== notif.id));
     showToast(`${notif.applicant.name} accepted!`);
     loadAllData(authUser.id);
@@ -347,7 +376,7 @@ export default function CoLab() {
     showToast("Application declined.");
   };
 
-  // ── FOLLOW ACTIONS ──
+  // ── FOLLOW ──
   const handleFollow = async (userId) => {
     if (following.includes(userId)) {
       await supabase.from("follows").delete().eq("follower_id", authUser.id).eq("following_id", userId);
@@ -360,9 +389,8 @@ export default function CoLab() {
     }
   };
 
-  // ── PLUGIN ACTIONS ──
   const handleAddPlugin = async (plugId, project) => {
-    const newPlugins = project.plugins?.includes(plugId)
+    const newPlugins = (project.plugins || []).includes(plugId)
       ? project.plugins.filter(x => x !== plugId)
       : [...(project.plugins || []), plugId];
     await supabase.from("projects").update({ plugins: newPlugins }).eq("id", project.id);
@@ -375,8 +403,10 @@ export default function CoLab() {
   const appliedProjectIds = applications.filter(a => a.applicant_id === authUser?.id).map(a => a.project_id);
   const browseBase = projects.filter(p => p.owner_id !== authUser?.id);
   const forYou = browseBase.map(p => ({ ...p, _s: getMatchScore(p) })).filter(p => p._s > 0).sort((a, b) => b._s - a._s);
-  const allP = browseBase.map(p => ({ ...p, _s: getMatchScore(p) })).filter(p => (!filterSkill || (p.skills || []).includes(filterSkill)) && (!search || p.title?.toLowerCase().includes(search.toLowerCase()))).sort((a, b) => b._s - a._s);
-  const unreadCount = notifications.filter(n => !n.read).length;
+  const allP = browseBase.map(p => ({ ...p, _s: getMatchScore(p) })).filter(p =>
+    (!filterSkill || (p.skills || []).includes(filterSkill)) &&
+    (!search || p.title?.toLowerCase().includes(search.toLowerCase()))
+  ).sort((a, b) => b._s - a._s);
 
   const TabBtn = ({ id, label, count, setter, current }) => (
     <button onClick={() => setter(id)} style={{ background: "none", border: "none", borderBottom: current === id ? `1px solid ${text}` : "1px solid transparent", color: current === id ? text : textMuted, padding: "8px 0", fontSize: 12, cursor: "pointer", fontFamily: "inherit", marginRight: 20, transition: "all 0.15s", display: "inline-flex", gap: 5, alignItems: "center", whiteSpace: "nowrap" }}>
@@ -388,7 +418,7 @@ export default function CoLab() {
     const spots = (p.max_collaborators || 2) - (p.collaborators || 0);
     const owner = users.find(u => u.id === p.owner_id);
     return (
-      <div style={{ borderBottom: `1px solid ${border}`, padding: "20px 0", display: "grid", gridTemplateColumns: "1fr auto", gap: 12, alignItems: "start", cursor: "pointer", transition: "opacity 0.15s" }}
+      <div style={{ borderBottom: `1px solid ${border}`, padding: "20px 0", display: "grid", gridTemplateColumns: "1fr auto", gap: 12, cursor: "pointer", transition: "opacity 0.15s" }}
         onMouseEnter={e => e.currentTarget.style.opacity = "0.65"} onMouseLeave={e => e.currentTarget.style.opacity = "1"}
         onClick={() => { setActiveProject(p); loadProjectData(p.id); }}>
         <div>
@@ -425,7 +455,7 @@ export default function CoLab() {
         <div style={{ display: "flex", gap: 12, alignItems: "flex-start", marginBottom: 12 }}>
           <Avatar initials={u.name?.split(" ").map(n => n[0]).join("").slice(0, 2)} size={44} dark={dark} />
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 14, fontWeight: 500, color: text, letterSpacing: "-0.3px" }}>{u.name}</div>
+            <div style={{ fontSize: 14, fontWeight: 500, color: text }}>{u.name}</div>
             <div style={{ fontSize: 11, color: textMuted, marginTop: 2 }}>{u.role}</div>
             <div style={{ fontSize: 10, color: textMuted, marginTop: 4 }}>{userProjects.length} project{userProjects.length !== 1 ? "s" : ""}</div>
           </div>
@@ -439,15 +469,15 @@ export default function CoLab() {
     );
   };
 
-  const ProfileView = ({ u, onClose }) => {
+  const ProfileModal = ({ u, onClose }) => {
     const isFollowing = following.includes(u.id);
     const userProjects = projects.filter(p => p.owner_id === u.id);
     const sharedSkills = (profile?.skills || []).filter(s => (u.skills || []).includes(s));
     const uInitials = u.name?.split(" ").map(n => n[0]).join("").slice(0, 2) || "?";
     return (
       <div style={{ position: "fixed", inset: 0, background: dark ? "rgba(0,0,0,0.88)" : "rgba(220,220,220,0.88)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 150, backdropFilter: "blur(10px)", padding: 16 }} onClick={onClose}>
-        <div style={{ background: bg, border: `1px solid ${border}`, borderRadius: 16, padding: "32px 28px", width: "100%", maxWidth: 540, maxHeight: "92vh", overflowY: "auto" }} onClick={e => e.stopPropagation()}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24 }}>
+        <div style={{ background: bg, border: `1px solid ${border}`, borderRadius: 16, padding: "32px 28px", width: "100%", maxWidth: 520, maxHeight: "92vh", overflowY: "auto" }} onClick={e => e.stopPropagation()}>
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 24 }}>
             <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px" }}>PROFILE</div>
             <button onClick={onClose} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontSize: 14, fontFamily: "inherit" }}>✕</button>
           </div>
@@ -458,15 +488,15 @@ export default function CoLab() {
               <div style={{ fontSize: 12, color: textMuted, marginTop: 2 }}>{u.role}</div>
             </div>
           </div>
-          <p style={{ fontSize: 13, color: textMuted, lineHeight: 1.75, marginBottom: 22 }}>{u.bio}</p>
-          <div style={{ marginBottom: 22 }}>
+          <p style={{ fontSize: 13, color: textMuted, lineHeight: 1.75, marginBottom: 20 }}>{u.bio}</p>
+          <div style={{ marginBottom: 20 }}>
             <div style={{ ...labelStyle, marginBottom: 8 }}>SKILLS</div>
             <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
               {(u.skills || []).map(s => <span key={s} style={{ fontSize: 11, padding: "3px 10px", border: `1px solid ${sharedSkills.includes(s) ? (dark ? "#ffffff40" : "#00000030") : border}`, borderRadius: 3, color: sharedSkills.includes(s) ? text : textMuted, fontWeight: sharedSkills.includes(s) ? 500 : 400 }}>{s}{sharedSkills.includes(s) ? " ★" : ""}</span>)}
             </div>
             {sharedSkills.length > 0 && <div style={{ fontSize: 11, color: textMuted, marginTop: 8 }}>★ {sharedSkills.length} shared skill{sharedSkills.length !== 1 ? "s" : ""} with you</div>}
           </div>
-          <div style={{ marginBottom: 24 }}>
+          <div style={{ marginBottom: 22 }}>
             <div style={{ ...labelStyle, marginBottom: 8 }}>PROJECTS</div>
             {userProjects.length === 0 ? <div style={{ fontSize: 12, color: textMuted }}>no projects yet.</div>
               : userProjects.map(p => (
@@ -486,7 +516,7 @@ export default function CoLab() {
               <button onClick={() => handleFollow(u.id)} style={{ flex: 1, background: isFollowing ? bg3 : text, color: isFollowing ? textMuted : bg, border: `1px solid ${isFollowing ? border : text}`, borderRadius: 8, padding: "11px", fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: "inherit", transition: "all 0.15s" }}>
                 {isFollowing ? "following" : "follow"}
               </button>
-              <button onClick={() => { setDmOpen(u); onClose(); }} style={{ flex: 1, background: "none", color: text, border: `1px solid ${border}`, borderRadius: 8, padding: "11px", fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>
+              <button onClick={() => { openDm(u); onClose(); }} style={{ flex: 1, background: "none", color: text, border: `1px solid ${border}`, borderRadius: 8, padding: "11px", fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>
                 message
               </button>
             </div>
@@ -496,32 +526,112 @@ export default function CoLab() {
     );
   };
 
-  const DmPanel = ({ u, onClose }) => {
-    const msgs = dmMessages[u.id] || [];
-    return (
-      <div style={{ position: "fixed", bottom: 16, right: 16, width: 320, background: bg, border: `1px solid ${border}`, borderRadius: 12, zIndex: 250, boxShadow: dark ? "0 8px 32px rgba(0,0,0,0.7)" : "0 8px 32px rgba(0,0,0,0.12)" }}>
-        <div style={{ padding: "12px 16px", borderBottom: `1px solid ${border}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            <Avatar initials={u.name?.split(" ").map(n => n[0]).join("").slice(0, 2)} size={26} dark={dark} />
-            <div style={{ fontSize: 13, color: text, fontWeight: 500 }}>{u.name}</div>
+  // Application form modal
+  const ApplicationFormModal = ({ project, onClose }) => (
+    <div style={{ position: "fixed", inset: 0, background: dark ? "rgba(0,0,0,0.9)" : "rgba(200,200,200,0.88)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200, backdropFilter: "blur(10px)", padding: 16 }} onClick={onClose}>
+      <div style={{ background: bg, border: `1px solid ${border}`, borderRadius: 16, padding: "28px", width: "100%", maxWidth: 520, maxHeight: "92vh", overflowY: "auto" }} onClick={e => e.stopPropagation()}>
+        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 20 }}>
+          <div>
+            <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px", marginBottom: 6 }}>APPLY</div>
+            <div style={{ fontSize: 16, color: text, fontWeight: 500 }}>{project.title}</div>
           </div>
           <button onClick={onClose} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontSize: 14, fontFamily: "inherit" }}>✕</button>
         </div>
-        <div style={{ maxHeight: 220, overflowY: "auto", padding: "12px 14px", display: "flex", flexDirection: "column", gap: 10 }}>
-          {msgs.length === 0 ? <div style={{ fontSize: 11, color: textMuted }}>say something.</div>
-            : msgs.map((m, i) => {
-              const isMe = m.from === "me";
-              return (
-                <div key={i} style={{ display: "flex", justifyContent: isMe ? "flex-end" : "flex-start" }}>
-                  <div style={{ background: isMe ? text : bg2, color: isMe ? bg : text, padding: "7px 11px", borderRadius: isMe ? "12px 12px 2px 12px" : "12px 12px 12px 2px", fontSize: 12, maxWidth: "80%", border: isMe ? "none" : `1px solid ${border}` }}>{m.text}</div>
-                </div>
-              );
-            })
-          }
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          <div>
+            <label style={labelStyle}>SKILLS YOU'RE BRINGING</label>
+            <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
+              {SKILLS.map(s => { const sel = applicationForm.skills.includes(s); return <button key={s} className="hb" onClick={() => setApplicationForm({ ...applicationForm, skills: sel ? applicationForm.skills.filter(x => x !== s) : [...applicationForm.skills, s] })} style={{ padding: "3px 10px", borderRadius: 3, fontSize: 10, cursor: "pointer", fontFamily: "inherit", background: sel ? text : "none", color: sel ? bg : textMuted, border: `1px solid ${sel ? text : border}`, transition: "all 0.15s" }}>{s}</button>; })}
+            </div>
+          </div>
+          <div>
+            <label style={labelStyle}>AVAILABILITY</label>
+            <select style={inputStyle} value={applicationForm.availability} onChange={e => setApplicationForm({ ...applicationForm, availability: e.target.value })}>
+              <option value="">Select availability...</option>
+              {AVAILABILITY.map(a => <option key={a}>{a}</option>)}
+            </select>
+          </div>
+          <div>
+            <label style={labelStyle}>WHY DO YOU WANT TO JOIN?</label>
+            <textarea style={{ ...inputStyle, resize: "none" }} rows={4} placeholder="Tell the project owner why you're a great fit..." value={applicationForm.motivation} onChange={e => setApplicationForm({ ...applicationForm, motivation: e.target.value })} />
+          </div>
+          <div>
+            <label style={labelStyle}>PORTFOLIO / LINK (optional)</label>
+            <input style={inputStyle} placeholder="https://..." value={applicationForm.portfolio_url} onChange={e => setApplicationForm({ ...applicationForm, portfolio_url: e.target.value })} />
+          </div>
         </div>
-        <div style={{ padding: "10px 14px", borderTop: `1px solid ${border}`, display: "flex", gap: 8 }}>
-          <input placeholder="message..." value={dmInput} onChange={e => setDmInput(e.target.value)} onKeyDown={e => { if (e.key === "Enter" && dmInput.trim()) { setDmMessages(prev => ({ ...prev, [u.id]: [...(prev[u.id] || []), { from: "me", text: dmInput }] })); setDmInput(""); } }} style={{ ...inputStyle, fontSize: 12, padding: "8px 12px" }} />
-          <button onClick={() => { if (dmInput.trim()) { setDmMessages(prev => ({ ...prev, [u.id]: [...(prev[u.id] || []), { from: "me", text: dmInput }] })); setDmInput(""); } }} style={{ ...btnP, padding: "8px 14px", fontSize: 11, flexShrink: 0 }}>↑</button>
+        <div style={{ display: "flex", gap: 10, marginTop: 20 }}>
+          <button className="hb" onClick={onClose} style={btnG}>cancel</button>
+          <button className="hb" onClick={handleApply} disabled={!applicationForm.motivation || !applicationForm.availability} style={{ ...btnP, flex: 1, opacity: (!applicationForm.motivation || !applicationForm.availability) ? 0.4 : 1 }}>submit application →</button>
+        </div>
+      </div>
+    </div>
+  );
+
+  // Applicant review modal
+  const ReviewModal = ({ project, onClose }) => {
+    const projectApps = applications.filter(a => a.project_id === project.id && a.status === "pending");
+    const [selected, setSelected] = useState(null);
+    return (
+      <div style={{ position: "fixed", inset: 0, background: dark ? "rgba(0,0,0,0.9)" : "rgba(200,200,200,0.88)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200, backdropFilter: "blur(10px)", padding: 16 }} onClick={onClose}>
+        <div style={{ background: bg, border: `1px solid ${border}`, borderRadius: 16, padding: "28px", width: "100%", maxWidth: 640, maxHeight: "92vh", overflowY: "auto" }} onClick={e => e.stopPropagation()}>
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 20 }}>
+            <div>
+              <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px", marginBottom: 6 }}>APPLICANTS</div>
+              <div style={{ fontSize: 16, color: text, fontWeight: 500 }}>{project.title}</div>
+            </div>
+            <button onClick={onClose} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontSize: 14, fontFamily: "inherit" }}>✕</button>
+          </div>
+          {projectApps.length === 0
+            ? <div style={{ fontSize: 13, color: textMuted, padding: "24px 0" }}>no applications yet.</div>
+            : !selected
+              ? <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  {projectApps.map(a => (
+                    <div key={a.id} onClick={() => setSelected(a)} style={{ background: bg2, border: `1px solid ${border}`, borderRadius: 10, padding: "14px 16px", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center", transition: "border 0.15s" }}
+                      onMouseEnter={e => e.currentTarget.style.borderColor = text} onMouseLeave={e => e.currentTarget.style.borderColor = border}>
+                      <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+                        <Avatar initials={a.applicant_initials} size={36} dark={dark} />
+                        <div>
+                          <div style={{ fontSize: 13, color: text, fontWeight: 500 }}>{a.applicant_name}</div>
+                          <div style={{ fontSize: 11, color: textMuted }}>{a.applicant_role} · {a.availability}</div>
+                        </div>
+                      </div>
+                      <div style={{ fontSize: 11, color: textMuted }}>view →</div>
+                    </div>
+                  ))}
+                </div>
+              : <div>
+                  <button onClick={() => setSelected(null)} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontFamily: "inherit", fontSize: 12, marginBottom: 20 }}>← all applicants</button>
+                  <div style={{ display: "flex", gap: 14, alignItems: "center", marginBottom: 16 }}>
+                    <Avatar initials={selected.applicant_initials} size={48} dark={dark} />
+                    <div>
+                      <div style={{ fontSize: 18, color: text, fontWeight: 400 }}>{selected.applicant_name}</div>
+                      <div style={{ fontSize: 12, color: textMuted }}>{selected.applicant_role}</div>
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 14, marginBottom: 20 }}>
+                    {selected.availability && <div><div style={labelStyle}>AVAILABILITY</div><div style={{ fontSize: 13, color: text }}>{selected.availability}</div></div>}
+                    {selected.motivation && <div><div style={labelStyle}>WHY THEY WANT TO JOIN</div><div style={{ fontSize: 13, color: textMuted, lineHeight: 1.7 }}>{selected.motivation}</div></div>}
+                    {selected.applicant_bio && <div><div style={labelStyle}>BIO</div><div style={{ fontSize: 13, color: textMuted, lineHeight: 1.7 }}>{selected.applicant_bio}</div></div>}
+                    {selected.portfolio_url && <div><div style={labelStyle}>PORTFOLIO</div><a href={selected.portfolio_url} target="_blank" rel="noreferrer" style={{ fontSize: 13, color: text }}>{selected.portfolio_url}</a></div>}
+                    {(selected.applicant_skills || []).length > 0 && <div><div style={labelStyle}>SKILLS</div><div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>{selected.applicant_skills.map(s => <span key={s} style={{ fontSize: 11, padding: "3px 10px", border: `1px solid ${border}`, borderRadius: 3, color: textMuted }}>{s}</span>)}</div></div>}
+                  </div>
+                  <div style={{ display: "flex", gap: 10 }}>
+                    <button className="hb" onClick={async () => {
+                      await supabase.from("applications").update({ status: "declined" }).eq("id", selected.id);
+                      setApplications(applications.filter(a => a.id !== selected.id));
+                      setSelected(null); showToast("Application declined.");
+                    }} style={{ ...btnG, flex: 1 }}>decline</button>
+                    <button className="hb" onClick={async () => {
+                      await supabase.from("applications").update({ status: "accepted" }).eq("id", selected.id);
+                      setApplications(applications.filter(a => a.id !== selected.id));
+                      const u = users.find(u => u.id === selected.applicant_id);
+                      if (u) openDm(u);
+                      setSelected(null); onClose(); showToast(`${selected.applicant_name} accepted! Message sent.`);
+                    }} style={{ ...btnP, flex: 1 }}>accept + message →</button>
+                  </div>
+                </div>
+          }
         </div>
       </div>
     );
@@ -547,7 +657,7 @@ export default function CoLab() {
           <div style={{ fontSize: 15, fontWeight: 500, letterSpacing: "-0.5px" }}>[CoLab]</div>
           <div style={{ display: "flex", gap: 8 }}>
             <button className="hb" onClick={() => setDark(!dark)} style={{ background: "none", border: `1px solid ${border}`, borderRadius: 6, padding: "4px 10px", cursor: "pointer", fontSize: 11, color: textMuted, fontFamily: "inherit" }}>{dark ? "☀" : "☾"}</button>
-            <button className="hb" onClick={() => setScreen("auth")} style={{ ...btnG, padding: "7px 16px", fontSize: 12 }}>Log in</button>
+            <button className="hb" onClick={() => { setAuthMode("login"); setScreen("auth"); }} style={{ ...btnG, padding: "7px 16px", fontSize: 12 }}>Log in</button>
             <button className="hb" onClick={() => { setAuthMode("signup"); setScreen("auth"); }} style={{ ...btnP, padding: "7px 16px", fontSize: 12 }}>Get started</button>
           </div>
         </div>
@@ -665,22 +775,35 @@ export default function CoLab() {
   }
 
   // ── MAIN APP ──
+  const navItems = [
+    { id: "explore", label: "explore" },
+    { id: "network", label: "network" },
+    { id: "dashboard", label: "dash" },
+    { id: "messages", label: "msgs", badge: unreadDms },
+    { id: "profile", label: profile?.name || "me" },
+  ];
+
   return (
     <div style={{ minHeight: "100vh", width: "100%", background: bg, color: text, fontFamily: "'DM Mono', monospace", transition: "all 0.2s", overflowX: "hidden" }}>
       <style>{CSS}</style>
 
       {/* NAV */}
       <nav style={{ position: "sticky", top: 0, zIndex: 50, width: "100%", background: dark ? "rgba(10,10,10,0.97)" : "rgba(255,255,255,0.97)", backdropFilter: "blur(12px)", borderBottom: `1px solid ${border}`, padding: "0 16px", display: "flex", alignItems: "center", justifyContent: "space-between", height: 50 }}>
-        <button onClick={() => { setAppScreen("explore"); setActiveProject(null); setViewingProfile(null); }} style={{ background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: 15, fontWeight: 500, color: text, letterSpacing: "-0.5px" }}>[CoLab]</button>
-        <div style={{ display: "flex", gap: 2, alignItems: "center" }}>
-          {[["explore","explore"],["network","network"],["dashboard","dash"],["profile",(profile?.name||"me").split(" ")[0].toLowerCase().slice(0,6)]].map(([id,label]) => (
-            <button key={id} onClick={() => { setAppScreen(id); setActiveProject(null); setViewingProfile(null); setShowNotifications(false); }} style={{ background: appScreen === id && !activeProject && !showNotifications ? bg3 : "none", color: appScreen === id && !activeProject && !showNotifications ? text : textMuted, border: "none", borderRadius: 6, padding: "5px 9px", fontSize: 12, cursor: "pointer", fontFamily: "inherit", transition: "all 0.15s" }}>{label}</button>
+        <button onClick={() => { setAppScreen("explore"); setActiveProject(null); setViewingProfile(null); }} style={{ background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: 15, fontWeight: 500, color: text, letterSpacing: "-0.5px", flexShrink: 0 }}>[CoLab]</button>
+        <div style={{ display: "flex", gap: 2, alignItems: "center", overflow: "hidden" }}>
+          {navItems.map(({ id, label, badge }) => (
+            <button key={id} onClick={() => { setAppScreen(id); setActiveProject(null); setViewingProfile(null); setShowNotifications(false); }}
+              style={{ position: "relative", background: appScreen === id && !activeProject && !showNotifications ? bg3 : "none", color: appScreen === id && !activeProject && !showNotifications ? text : textMuted, border: "none", borderRadius: 6, padding: "5px 9px", fontSize: 12, cursor: "pointer", fontFamily: "inherit", transition: "all 0.15s", whiteSpace: "nowrap", maxWidth: 80, overflow: "hidden", textOverflow: "ellipsis" }}>
+              {label}
+              {badge > 0 && <span style={{ position: "absolute", top: 2, right: 2, width: 6, height: 6, borderRadius: "50%", background: text, border: `1px solid ${bg}` }} />}
+            </button>
           ))}
-          <button onClick={() => { setShowNotifications(!showNotifications); if (!showNotifications) setNotifications(prev => prev.map(n => ({ ...n, read: true }))); }} style={{ position: "relative", background: showNotifications ? bg3 : "none", border: "none", borderRadius: 6, padding: "5px 8px", cursor: "pointer", color: textMuted, fontSize: 13, fontFamily: "inherit" }}>
-            ◎{unreadCount > 0 && <span style={{ position: "absolute", top: 3, right: 3, width: 6, height: 6, borderRadius: "50%", background: text, border: `1px solid ${bg}` }} />}
+          <button onClick={() => { setShowNotifications(!showNotifications); if (!showNotifications) setNotifications(prev => prev.map(n => ({ ...n, read: true }))); }}
+            style={{ position: "relative", background: showNotifications ? bg3 : "none", border: "none", borderRadius: 6, padding: "5px 8px", cursor: "pointer", color: textMuted, fontSize: 13, fontFamily: "inherit" }}>
+            ◎{unreadNotifs > 0 && <span style={{ position: "absolute", top: 3, right: 3, width: 6, height: 6, borderRadius: "50%", background: text, border: `1px solid ${bg}` }} />}
           </button>
-          <div style={{ width: 1, height: 16, background: border, margin: "0 3px" }} />
-          <button onClick={() => setDark(!dark)} style={{ background: "none", border: `1px solid ${border}`, borderRadius: 6, padding: "4px 8px", cursor: "pointer", fontSize: 11, color: textMuted, fontFamily: "inherit" }}>{dark ? "☀" : "☾"}</button>
+          <div style={{ width: 1, height: 16, background: border, margin: "0 3px", flexShrink: 0 }} />
+          <button onClick={() => setDark(!dark)} style={{ background: "none", border: `1px solid ${border}`, borderRadius: 6, padding: "4px 8px", cursor: "pointer", fontSize: 11, color: textMuted, fontFamily: "inherit", flexShrink: 0 }}>{dark ? "☀" : "☾"}</button>
         </div>
       </nav>
 
@@ -696,7 +819,7 @@ export default function CoLab() {
             {notifications.length === 0 ? <div style={{ padding: "24px 16px", fontSize: 12, color: textMuted }}>no notifications.</div>
               : notifications.map(n => (
                 <div key={n.id} style={{ padding: "14px 16px", borderBottom: `1px solid ${border}` }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 3 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 3 }}>
                     <div style={{ fontSize: 12, color: text }}>{n.text}</div>
                     <button className="hb" onClick={() => setNotifications(prev => prev.filter(x => x.id !== n.id))} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontSize: 12, fontFamily: "inherit", marginLeft: 8 }}>✕</button>
                   </div>
@@ -704,11 +827,11 @@ export default function CoLab() {
                   {n.type === "application" && n.applicant && (
                     <div>
                       <div style={{ background: bg2, border: `1px solid ${border}`, borderRadius: 8, padding: "10px 12px", marginBottom: 8 }}>
-                        <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 6 }}>
+                        <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 4 }}>
                           <Avatar initials={n.applicant.initials} size={28} dark={dark} />
-                          <div><div style={{ fontSize: 12, color: text }}>{n.applicant.name}</div><div style={{ fontSize: 10, color: textMuted }}>{n.applicant.role}</div></div>
+                          <div><div style={{ fontSize: 12, color: text }}>{n.applicant.name}</div><div style={{ fontSize: 10, color: textMuted }}>{n.applicant.role}{n.applicant.availability ? ` · ${n.applicant.availability}` : ""}</div></div>
                         </div>
-                        {n.applicant.bio && <div style={{ fontSize: 11, color: textMuted, lineHeight: 1.6 }}>{n.applicant.bio}</div>}
+                        {n.applicant.motivation && <div style={{ fontSize: 11, color: textMuted, lineHeight: 1.6, marginTop: 6 }}>{n.applicant.motivation.slice(0, 100)}...</div>}
                       </div>
                       <div style={{ display: "flex", gap: 6 }}>
                         <button className="hb" onClick={() => handleAccept(n)} style={{ flex: 1, background: text, color: bg, border: "none", borderRadius: 6, padding: "7px", fontSize: 11, cursor: "pointer", fontFamily: "inherit" }}>accept</button>
@@ -723,8 +846,9 @@ export default function CoLab() {
         </>
       )}
 
-      {viewingProfile && <ProfileView u={viewingProfile} onClose={() => setViewingProfile(null)} />}
-      {dmOpen && <DmPanel u={dmOpen} onClose={() => setDmOpen(null)} />}
+      {viewingProfile && <ProfileModal u={viewingProfile} onClose={() => setViewingProfile(null)} />}
+      {showApplicationForm && <ApplicationFormModal project={showApplicationForm} onClose={() => setShowApplicationForm(null)} />}
+      {reviewingApplicants && <ReviewModal project={reviewingApplicants} onClose={() => setReviewingApplicants(null)} />}
 
       {/* EXPLORE */}
       {appScreen === "explore" && !activeProject && (
@@ -753,12 +877,11 @@ export default function CoLab() {
           </div>
           {loading ? <Spinner dark={dark} /> : (
             <>
-              {exploreTab === "for-you" && (
-                (profile?.skills || []).length === 0
-                  ? <div style={{ padding: "36px 0", color: textMuted, fontSize: 13 }}>add skills to your profile to see matched projects. <button onClick={() => setAppScreen("profile")} style={{ background: "none", border: "none", color: text, cursor: "pointer", fontFamily: "inherit", fontSize: 13, textDecoration: "underline" }}>update profile →</button></div>
-                  : forYou.length === 0
-                    ? <div style={{ padding: "36px 0", color: textMuted, fontSize: 13 }}>no matches yet. <button className="hb" onClick={() => setExploreTab("all")} style={{ background: "none", border: "none", color: text, cursor: "pointer", fontFamily: "inherit", fontSize: 13, textDecoration: "underline" }}>browse all →</button></div>
-                    : <div><div style={{ padding: "14px 0 2px", fontSize: 11, color: textMuted }}>showing {forYou.length} project{forYou.length !== 1 ? "s" : ""} matching your skills</div>{forYou.map(p => <PRow key={p.id} p={p} />)}</div>
+              {exploreTab === "for-you" && ((profile?.skills || []).length === 0
+                ? <div style={{ padding: "36px 0", color: textMuted, fontSize: 13 }}>add skills to see matched projects. <button onClick={() => setAppScreen("profile")} style={{ background: "none", border: "none", color: text, cursor: "pointer", fontFamily: "inherit", fontSize: 13, textDecoration: "underline" }}>update profile →</button></div>
+                : forYou.length === 0
+                  ? <div style={{ padding: "36px 0", color: textMuted, fontSize: 13 }}>no matches yet. <button className="hb" onClick={() => setExploreTab("all")} style={{ background: "none", border: "none", color: text, cursor: "pointer", fontFamily: "inherit", fontSize: 13, textDecoration: "underline" }}>browse all →</button></div>
+                  : <div><div style={{ padding: "14px 0 2px", fontSize: 11, color: textMuted }}>{forYou.length} project{forYou.length !== 1 ? "s" : ""} matching your skills</div>{forYou.map(p => <PRow key={p.id} p={p} />)}</div>
               )}
               {exploreTab === "all" && (
                 <div>
@@ -804,8 +927,10 @@ export default function CoLab() {
           {appliedProjectIds.includes(activeProject.id)
             ? <div style={{ textAlign: "center", padding: 12, background: bg2, borderRadius: 8, color: textMuted, fontSize: 12, border: `1px solid ${border}` }}>applied — waiting to hear back</div>
             : activeProject.owner_id === authUser?.id
-              ? <div style={{ textAlign: "center", padding: 12, background: bg2, borderRadius: 8, color: textMuted, fontSize: 12, border: `1px solid ${border}` }}>this is your project</div>
-              : <button className="hb" onClick={() => handleApply(activeProject)} style={{ ...btnP, width: "100%", padding: "13px" }}>Apply to collaborate →</button>
+              ? <div style={{ display: "flex", gap: 10 }}>
+                  <button className="hb" onClick={() => setReviewingApplicants(activeProject)} style={{ ...btnP, flex: 1, padding: "13px" }}>review applicants ({applications.filter(a => a.project_id === activeProject.id && a.status === "pending").length})</button>
+                </div>
+              : <button className="hb" onClick={() => setShowApplicationForm(activeProject)} style={{ ...btnP, width: "100%", padding: "13px" }}>Apply to collaborate →</button>
           }
         </div>
       )}
@@ -847,6 +972,80 @@ export default function CoLab() {
         </div>
       )}
 
+      {/* MESSAGES */}
+      {appScreen === "messages" && (
+        <div className="pad fu" style={{ width: "100%", padding: "0" }}>
+          <div style={{ display: "grid", gridTemplateColumns: activeDmThread ? "280px 1fr" : "1fr", height: "calc(100vh - 50px)" }}>
+            {/* Thread list */}
+            <div style={{ borderRight: `1px solid ${border}`, overflowY: "auto" }}>
+              <div style={{ padding: "20px 20px 12px", borderBottom: `1px solid ${border}` }}>
+                <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px", marginBottom: 4 }}>MESSAGES</div>
+              </div>
+              {dmThreads.length === 0
+                ? <div style={{ padding: "24px 20px", fontSize: 12, color: textMuted }}>no conversations yet.<br />Message someone from their profile.</div>
+                : dmThreads.map(thread => {
+                    const otherId = thread.user_a === authUser?.id ? thread.user_b : thread.user_a;
+                    const other = users.find(u => u.id === otherId);
+                    if (!other) return null;
+                    const oInitials = other.name?.split(" ").map(n => n[0]).join("").slice(0, 2) || "?";
+                    const isActive = activeDmThread?.id === thread.id;
+                    return (
+                      <div key={thread.id} onClick={() => { setActiveDmThread({ ...thread, otherUser: other }); loadDmMessages(thread.id); }} style={{ padding: "14px 20px", borderBottom: `1px solid ${border}`, cursor: "pointer", background: isActive ? bg2 : "none", display: "flex", gap: 12, alignItems: "center", transition: "background 0.15s" }}
+                        onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = bg2; }} onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = "none"; }}>
+                        <Avatar initials={oInitials} size={36} dark={dark} />
+                        <div style={{ minWidth: 0 }}>
+                          <div style={{ fontSize: 13, color: text, fontWeight: 500 }}>{other.name}</div>
+                          <div style={{ fontSize: 11, color: textMuted }}>{other.role}</div>
+                        </div>
+                      </div>
+                    );
+                  })
+              }
+            </div>
+
+            {/* Active thread */}
+            {activeDmThread && (
+              <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+                <div style={{ padding: "16px 20px", borderBottom: `1px solid ${border}`, display: "flex", gap: 12, alignItems: "center" }}>
+                  <Avatar initials={activeDmThread.otherUser?.name?.split(" ").map(n => n[0]).join("").slice(0, 2) || "?"} size={32} dark={dark} />
+                  <div>
+                    <div style={{ fontSize: 14, color: text, fontWeight: 500 }}>{activeDmThread.otherUser?.name}</div>
+                    <div style={{ fontSize: 11, color: textMuted }}>{activeDmThread.otherUser?.role}</div>
+                  </div>
+                  <button className="hb" onClick={() => setViewingProfile(activeDmThread.otherUser)} style={{ marginLeft: "auto", background: "none", border: `1px solid ${border}`, borderRadius: 6, padding: "5px 10px", fontSize: 11, cursor: "pointer", color: textMuted, fontFamily: "inherit" }}>view profile</button>
+                </div>
+                <div style={{ flex: 1, overflowY: "auto", padding: "20px", display: "flex", flexDirection: "column", gap: 14 }}>
+                  {(dmMessages[activeDmThread.id] || []).length === 0
+                    ? <div style={{ fontSize: 12, color: textMuted, textAlign: "center", marginTop: 40 }}>start the conversation.</div>
+                    : (dmMessages[activeDmThread.id] || []).map((msg, i) => {
+                        const isMe = msg.sender_id === authUser?.id;
+                        return (
+                          <div key={i} style={{ display: "flex", gap: 10, alignItems: "flex-end", flexDirection: isMe ? "row-reverse" : "row" }}>
+                            <Avatar initials={msg.sender_initials} size={26} dark={dark} />
+                            <div style={{ maxWidth: "70%" }}>
+                              <div style={{ background: isMe ? text : bg2, color: isMe ? bg : text, padding: "9px 13px", borderRadius: isMe ? "14px 14px 2px 14px" : "14px 14px 14px 2px", fontSize: 13, lineHeight: 1.55, border: isMe ? "none" : `1px solid ${border}` }}>{msg.text}</div>
+                              <div style={{ fontSize: 10, color: textMuted, marginTop: 4, textAlign: isMe ? "right" : "left" }}>{new Date(msg.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</div>
+                            </div>
+                          </div>
+                        );
+                      })
+                  }
+                  <div ref={dmEndRef} />
+                </div>
+                <div style={{ padding: "14px 20px", borderTop: `1px solid ${border}`, display: "flex", gap: 10 }}>
+                  <input placeholder="message..." value={dmInput} onChange={e => setDmInput(e.target.value)} onKeyDown={e => e.key === "Enter" && handleSendDm()} style={{ ...inputStyle, fontSize: 13 }} />
+                  <button className="hb" onClick={handleSendDm} style={{ ...btnP, padding: "10px 18px", flexShrink: 0 }}>send</button>
+                </div>
+              </div>
+            )}
+
+            {!activeDmThread && dmThreads.length > 0 && (
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "center", color: textMuted, fontSize: 13 }}>select a conversation</div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* DASHBOARD */}
       {appScreen === "dashboard" && !activeProject && (
         <div className="pad fu" style={{ width: "100%", padding: "44px 32px" }}>
@@ -870,21 +1069,27 @@ export default function CoLab() {
             {loading ? <Spinner dark={dark} /> : myProjects.length === 0
               ? <div style={{ padding: "28px 0", color: textMuted, fontSize: 12, borderTop: `1px solid ${border}` }}>no projects yet. <button onClick={() => setShowCreate(true)} style={{ background: "none", border: "none", color: text, cursor: "pointer", fontFamily: "inherit", fontSize: 12, textDecoration: "underline" }}>post one →</button></div>
               : <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
-                  {myProjects.map((p,i) => (
-                    <div key={p.id} style={{ background: bg2, borderRadius: i === 0 && myProjects.length === 1 ? 8 : i === 0 ? "8px 8px 0 0" : i === myProjects.length - 1 ? "0 0 8px 8px" : 0, border: `1px solid ${border}`, borderBottom: i < myProjects.length - 1 ? "none" : `1px solid ${border}`, padding: "14px 18px", cursor: "pointer", transition: "opacity 0.15s" }}
-                      onMouseEnter={e => e.currentTarget.style.opacity = "0.7"} onMouseLeave={e => e.currentTarget.style.opacity = "1"}
-                      onClick={() => { setActiveProject(p); loadProjectData(p.id); setProjectTab("tasks"); }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10, gap: 10 }}>
-                        <div style={{ minWidth: 0 }}>
-                          <div style={{ fontSize: 14, color: text, letterSpacing: "-0.3px", marginBottom: 2 }}>{p.title}</div>
-                          <div style={{ fontSize: 11, color: textMuted }}>{p.category} · {p.status}</div>
+                  {myProjects.map((p,i) => {
+                    const pendingApps = applications.filter(a => a.project_id === p.id && a.status === "pending").length;
+                    return (
+                      <div key={p.id} style={{ background: bg2, borderRadius: i === 0 && myProjects.length === 1 ? 8 : i === 0 ? "8px 8px 0 0" : i === myProjects.length - 1 ? "0 0 8px 8px" : 0, border: `1px solid ${border}`, borderBottom: i < myProjects.length - 1 ? "none" : `1px solid ${border}`, padding: "14px 18px", cursor: "pointer", transition: "opacity 0.15s" }}
+                        onMouseEnter={e => e.currentTarget.style.opacity = "0.8"} onMouseLeave={e => e.currentTarget.style.opacity = "1"}
+                        onClick={() => { setActiveProject(p); loadProjectData(p.id); setProjectTab("tasks"); }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10, gap: 10 }}>
+                          <div style={{ minWidth: 0 }}>
+                            <div style={{ fontSize: 14, color: text, letterSpacing: "-0.3px", marginBottom: 2 }}>{p.title}</div>
+                            <div style={{ fontSize: 11, color: textMuted }}>{p.category} · {p.status}{pendingApps > 0 ? ` · ${pendingApps} applicant${pendingApps !== 1 ? "s" : ""}` : ""}</div>
+                          </div>
+                          <div style={{ display: "flex", gap: 8, alignItems: "center", flexShrink: 0 }}>
+                            {pendingApps > 0 && <button className="hb" onClick={e => { e.stopPropagation(); setReviewingApplicants(p); }} style={{ fontSize: 10, padding: "3px 10px", border: `1px solid ${border}`, borderRadius: 4, background: "none", color: text, cursor: "pointer", fontFamily: "inherit" }}>review</button>}
+                            <span style={{ fontSize: 10, padding: "2px 8px", border: `1px solid ${border}`, borderRadius: 3, color: p.status === "active" ? text : textMuted }}>{p.status}</span>
+                          </div>
                         </div>
-                        <span style={{ fontSize: 10, padding: "2px 8px", border: `1px solid ${border}`, borderRadius: 3, color: p.status === "active" ? text : textMuted, flexShrink: 0 }}>{p.status}</span>
+                        <ProgressBar value={p.progress || 0} dark={dark} />
+                        <div style={{ fontSize: 10, color: textMuted, marginTop: 5 }}>{p.progress || 0}% complete</div>
                       </div>
-                      <ProgressBar value={p.progress || 0} dark={dark} />
-                      <div style={{ fontSize: 10, color: textMuted, marginTop: 5 }}>{p.progress || 0}% complete</div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
             }
           </div>
@@ -892,13 +1097,15 @@ export default function CoLab() {
             <div>
               <div style={{ fontSize: 10, color: textMuted, letterSpacing: "1.5px", marginBottom: 14 }}>APPLICATIONS</div>
               <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
-                {projects.filter(p => appliedProjectIds.includes(p.id)).map((p,i,arr) => (
-                  <div key={p.id} style={{ background: bg2, borderRadius: i === 0 && arr.length === 1 ? 8 : i === 0 ? "8px 8px 0 0" : i === arr.length - 1 ? "0 0 8px 8px" : 0, border: `1px solid ${border}`, borderBottom: i < arr.length - 1 ? "none" : `1px solid ${border}`, padding: "12px 18px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}
-                    onMouseEnter={e => e.currentTarget.style.opacity = "0.7"} onMouseLeave={e => e.currentTarget.style.opacity = "1"}>
-                    <div style={{ minWidth: 0 }}><div style={{ fontSize: 13, color: text, marginBottom: 2 }}>{p.title}</div><div style={{ fontSize: 11, color: textMuted }}>{p.owner_name} · {p.category}</div></div>
-                    <span style={{ fontSize: 10, color: textMuted, border: `1px solid ${border}`, borderRadius: 3, padding: "2px 8px", flexShrink: 0 }}>pending</span>
-                  </div>
-                ))}
+                {projects.filter(p => appliedProjectIds.includes(p.id)).map((p,i,arr) => {
+                  const myApp = applications.find(a => a.project_id === p.id && a.applicant_id === authUser?.id);
+                  return (
+                    <div key={p.id} style={{ background: bg2, borderRadius: i === 0 && arr.length === 1 ? 8 : i === 0 ? "8px 8px 0 0" : i === arr.length - 1 ? "0 0 8px 8px" : 0, border: `1px solid ${border}`, borderBottom: i < arr.length - 1 ? "none" : `1px solid ${border}`, padding: "12px 18px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
+                      <div style={{ minWidth: 0 }}><div style={{ fontSize: 13, color: text, marginBottom: 2 }}>{p.title}</div><div style={{ fontSize: 11, color: textMuted }}>{p.owner_name} · {p.category}</div></div>
+                      <span style={{ fontSize: 10, color: myApp?.status === "accepted" ? text : textMuted, border: `1px solid ${border}`, borderRadius: 3, padding: "2px 8px", flexShrink: 0 }}>{myApp?.status || "pending"}</span>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}
@@ -919,15 +1126,22 @@ export default function CoLab() {
           <div className="proj-tabs" style={{ borderBottom: `1px solid ${border}`, marginBottom: 22, display: "flex" }}>
             <TabBtn id="tasks" label="tasks" count={tasks.filter(t => !t.done).length} setter={setProjectTab} current={projectTab} />
             <TabBtn id="messages" label="messages" count={messages.length} setter={setProjectTab} current={projectTab} />
-            <TabBtn id="updates" label="updates" count={updates.length} setter={setProjectTab} current={projectTab} />
+            <TabBtn id="updates" label="updates" count={projectUpdates.length} setter={setProjectTab} current={projectTab} />
             <TabBtn id="plugins" label="plugins" count={(activeProject.plugins || []).length} setter={setProjectTab} current={projectTab} />
           </div>
 
+          {/* TASKS */}
           {projectTab === "tasks" && (
             <div>
-              <div style={{ display: "flex", gap: 8, marginBottom: 18 }}>
-                <input placeholder="add a task..." value={newTaskText} onChange={e => setNewTaskText(e.target.value)} onKeyDown={e => e.key === "Enter" && handleAddTask(activeProject.id)} style={{ ...inputStyle, fontSize: 12 }} />
-                <button className="hb" onClick={() => handleAddTask(activeProject.id)} style={{ ...btnP, padding: "10px 16px", flexShrink: 0, fontSize: 12 }}>add</button>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 18 }}>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <input placeholder="add a task..." value={newTaskText} onChange={e => setNewTaskText(e.target.value)} onKeyDown={e => e.key === "Enter" && handleAddTask(activeProject.id)} style={{ ...inputStyle, fontSize: 12 }} />
+                  <button className="hb" onClick={() => handleAddTask(activeProject.id)} style={{ ...btnP, padding: "10px 16px", flexShrink: 0, fontSize: 12 }}>add</button>
+                </div>
+                <select value={taskAssignee} onChange={e => setTaskAssignee(e.target.value)} style={{ ...inputStyle, fontSize: 12 }}>
+                  <option value="">assign to... (optional)</option>
+                  {users.filter(u => [authUser?.id, ...(applications.filter(a => a.project_id === activeProject.id && a.status === "accepted").map(a => a.applicant_id))].includes(u.id)).map(u => <option key={u.id} value={u.name}>{u.name}</option>)}
+                </select>
               </div>
               {tasks.length === 0 ? <div style={{ fontSize: 12, color: textMuted, padding: "18px 0" }}>no tasks yet.</div> : (
                 <div>
@@ -938,6 +1152,7 @@ export default function CoLab() {
                         <div key={task.id} className="task-row" style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 0", borderBottom: `1px solid ${border}` }}>
                           <button onClick={() => handleToggleTask(task)} style={{ width: 16, height: 16, borderRadius: 4, border: `1px solid ${textMuted}`, background: "none", cursor: "pointer", flexShrink: 0 }} />
                           <span style={{ fontSize: 13, color: text, flex: 1 }}>{task.text}</span>
+                          {task.assigned_name && <span style={{ fontSize: 10, color: textMuted, border: `1px solid ${border}`, borderRadius: 3, padding: "1px 6px", flexShrink: 0 }}>{task.assigned_name}</span>}
                           <button className="tdel hb" onClick={() => handleDeleteTask(task.id)} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontSize: 12, opacity: 0, transition: "opacity 0.15s", fontFamily: "inherit" }}>✕</button>
                         </div>
                       ))}
@@ -950,6 +1165,7 @@ export default function CoLab() {
                         <div key={task.id} className="task-row" style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 0", borderBottom: `1px solid ${border}` }}>
                           <button onClick={() => handleToggleTask(task)} style={{ width: 16, height: 16, borderRadius: 4, border: `1px solid ${text}`, background: text, cursor: "pointer", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}><span style={{ color: bg, fontSize: 9 }}>✓</span></button>
                           <span style={{ fontSize: 13, color: textMuted, textDecoration: "line-through", flex: 1 }}>{task.text}</span>
+                          {task.assigned_name && <span style={{ fontSize: 10, color: textMuted, border: `1px solid ${border}`, borderRadius: 3, padding: "1px 6px", flexShrink: 0 }}>{task.assigned_name}</span>}
                           <button className="tdel hb" onClick={() => handleDeleteTask(task.id)} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontSize: 12, opacity: 0, transition: "opacity 0.15s", fontFamily: "inherit" }}>✕</button>
                         </div>
                       ))}
@@ -960,6 +1176,7 @@ export default function CoLab() {
             </div>
           )}
 
+          {/* PROJECT MESSAGES */}
           {projectTab === "messages" && (
             <div>
               <div style={{ maxHeight: 320, overflowY: "auto", display: "flex", flexDirection: "column", gap: 12, marginBottom: 14 }}>
@@ -998,8 +1215,8 @@ export default function CoLab() {
                   {newUpdate.trim() && <button className="hb" onClick={() => handlePostUpdate(activeProject.id)} style={{ ...btnP, marginTop: 8, padding: "7px 14px", fontSize: 11 }}>post</button>}
                 </div>
               </div>
-              {updates.length === 0 ? <div style={{ fontSize: 12, color: textMuted }}>no updates yet.</div>
-                : updates.map((u,i) => (
+              {projectUpdates.length === 0 ? <div style={{ fontSize: 12, color: textMuted }}>no updates yet.</div>
+                : projectUpdates.map((u,i) => (
                   <div key={i} style={{ display: "flex", gap: 10, marginBottom: 18 }}>
                     <Avatar initials={u.initials} size={28} dark={dark} />
                     <div>
@@ -1044,59 +1261,86 @@ export default function CoLab() {
         </div>
       )}
 
-      {/* PROFILE */}
+      {/* PROFILE — left aligned with breathing room */}
       {appScreen === "profile" && (
-        <div className="pad fu" style={{ width: "100%", maxWidth: 600, margin: "0 auto", padding: "48px 24px" }}>
-          <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px", marginBottom: 18 }}>PROFILE</div>
-          {!editProfile ? (
+        <div className="pad fu" style={{ width: "100%", padding: "48px 40px" }}>
+          <div className="profile-layout" style={{ display: "grid", gridTemplateColumns: "400px 1fr", gap: 48, maxWidth: 900 }}>
             <div>
-              <div style={{ display: "flex", gap: 16, alignItems: "center", marginBottom: 24 }}>
-                <Avatar initials={myInitials} size={52} dark={dark} />
+              <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px", marginBottom: 20 }}>PROFILE</div>
+              {!editProfile ? (
                 <div>
-                  <div style={{ fontSize: "clamp(16px, 4vw, 20px)", fontWeight: 400, color: text, letterSpacing: "-0.5px" }}>{profile?.name || "Anonymous"}</div>
-                  <div style={{ fontSize: 12, color: textMuted, marginTop: 2 }}>{profile?.role}</div>
-                  <div style={{ fontSize: 11, color: textMuted, marginTop: 3 }}>{following.length} following</div>
-                </div>
-              </div>
-              {profile?.bio && <p style={{ fontSize: 13, color: textMuted, lineHeight: 1.75, marginBottom: 22 }}>{profile.bio}</p>}
-              <div style={{ marginBottom: 22 }}>
-                <div style={{ ...labelStyle, marginBottom: 8 }}>SKILLS</div>
-                {(profile?.skills || []).length === 0
-                  ? <div style={{ fontSize: 12, color: textMuted }}>no skills. <button onClick={() => setEditProfile(true)} style={{ background: "none", border: "none", color: text, cursor: "pointer", fontFamily: "inherit", fontSize: 12, textDecoration: "underline" }}>add →</button></div>
-                  : <div>
-                      <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginBottom: 8 }}>{(profile?.skills || []).map(s => <span key={s} style={{ fontSize: 11, padding: "3px 10px", border: `1px solid ${border}`, borderRadius: 3, color: textMuted }}>{s}</span>)}</div>
-                      <div style={{ fontSize: 11, color: textMuted }}>★ your skills match {forYou.length} open project{forYou.length !== 1 ? "s" : ""} <button className="hb" onClick={() => { setAppScreen("explore"); setExploreTab("for-you"); }} style={{ background: "none", border: "none", color: text, cursor: "pointer", fontFamily: "inherit", fontSize: 11, textDecoration: "underline", marginLeft: 4 }}>view →</button></div>
+                  <div style={{ display: "flex", gap: 16, alignItems: "center", marginBottom: 20 }}>
+                    <Avatar initials={myInitials} size={52} dark={dark} />
+                    <div>
+                      <div style={{ fontSize: 20, fontWeight: 400, color: text, letterSpacing: "-0.5px" }}>{profile?.name || "Anonymous"}</div>
+                      <div style={{ fontSize: 12, color: textMuted, marginTop: 2 }}>{profile?.role}</div>
+                      <div style={{ fontSize: 11, color: textMuted, marginTop: 3 }}>{following.length} following · {myProjects.length} project{myProjects.length !== 1 ? "s" : ""}</div>
                     </div>
-                }
-              </div>
-              <div style={{ marginBottom: 22 }}>
-                <div style={{ ...labelStyle, marginBottom: 8 }}>MY PROJECTS</div>
-                {myProjects.length === 0 ? <span style={{ fontSize: 12, color: textMuted }}>none yet.</span> : myProjects.map(p => <div key={p.id} style={{ fontSize: 12, color: textMuted, padding: "8px 0", borderBottom: `1px solid ${border}` }}>{p.title}</div>)}
-              </div>
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                <button className="hb" onClick={() => setEditProfile(true)} style={btnG}>edit profile</button>
-                <button className="hb" onClick={handleSignOut} style={{ ...btnG, color: textMuted }}>sign out</button>
-              </div>
-            </div>
-          ) : (
-            <div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 14, marginBottom: 22 }}>
-                <div><label style={labelStyle}>NAME</label><input style={inputStyle} value={profile?.name || ""} onChange={e => setProfile({ ...profile, name: e.target.value })} /></div>
-                <div><label style={labelStyle}>ROLE</label><input style={inputStyle} placeholder="Founder, Designer, Engineer..." value={profile?.role || ""} onChange={e => setProfile({ ...profile, role: e.target.value })} /></div>
-                <div><label style={labelStyle}>BIO</label><textarea style={{ ...inputStyle, resize: "none" }} rows={4} value={profile?.bio || ""} onChange={e => setProfile({ ...profile, bio: e.target.value })} /></div>
-                <div>
-                  <label style={labelStyle}>SKILLS</label>
-                  <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
-                    {SKILLS.map(s => { const sel = (profile?.skills || []).includes(s); return <button key={s} className="hb" onClick={() => setProfile({ ...profile, skills: sel ? profile.skills.filter(x => x !== s) : [...(profile?.skills || []), s] })} style={{ padding: "3px 10px", borderRadius: 3, fontSize: 10, cursor: "pointer", fontFamily: "inherit", background: sel ? text : "none", color: sel ? bg : textMuted, border: `1px solid ${sel ? text : border}`, transition: "all 0.15s" }}>{s}</button>; })}
+                  </div>
+                  {profile?.bio && <p style={{ fontSize: 13, color: textMuted, lineHeight: 1.75, marginBottom: 20 }}>{profile.bio}</p>}
+                  <div style={{ marginBottom: 20 }}>
+                    <div style={{ ...labelStyle, marginBottom: 8 }}>SKILLS</div>
+                    {(profile?.skills || []).length === 0
+                      ? <div style={{ fontSize: 12, color: textMuted }}>no skills. <button onClick={() => setEditProfile(true)} style={{ background: "none", border: "none", color: text, cursor: "pointer", fontFamily: "inherit", fontSize: 12, textDecoration: "underline" }}>add →</button></div>
+                      : <div>
+                          <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginBottom: 8 }}>{(profile?.skills || []).map(s => <span key={s} style={{ fontSize: 11, padding: "3px 10px", border: `1px solid ${border}`, borderRadius: 3, color: textMuted }}>{s}</span>)}</div>
+                          <div style={{ fontSize: 11, color: textMuted }}>★ {forYou.length} matching project{forYou.length !== 1 ? "s" : ""} <button className="hb" onClick={() => { setAppScreen("explore"); setExploreTab("for-you"); }} style={{ background: "none", border: "none", color: text, cursor: "pointer", fontFamily: "inherit", fontSize: 11, textDecoration: "underline", marginLeft: 4 }}>view →</button></div>
+                        </div>
+                    }
+                  </div>
+                  <div style={{ marginBottom: 24 }}>
+                    <div style={{ ...labelStyle, marginBottom: 8 }}>MY PROJECTS</div>
+                    {myProjects.length === 0
+                      ? <span style={{ fontSize: 12, color: textMuted }}>none yet.</span>
+                      : myProjects.map(p => <div key={p.id} style={{ fontSize: 12, color: textMuted, padding: "8px 0", borderBottom: `1px solid ${border}` }}>{p.title}</div>)
+                    }
+                  </div>
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    <button className="hb" onClick={() => setEditProfile(true)} style={btnG}>edit profile</button>
+                    <button className="hb" onClick={handleSignOut} style={{ ...btnG, color: textMuted }}>sign out</button>
                   </div>
                 </div>
-              </div>
-              <div style={{ display: "flex", gap: 10 }}>
-                <button className="hb" onClick={() => setEditProfile(false)} style={btnG}>cancel</button>
-                <button className="hb" onClick={handleSaveProfile} style={{ ...btnP, flex: 1 }}>save</button>
+              ) : (
+                <div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 14, marginBottom: 22 }}>
+                    <div><label style={labelStyle}>NAME</label><input style={inputStyle} value={profile?.name || ""} onChange={e => setProfile({ ...profile, name: e.target.value })} /></div>
+                    <div><label style={labelStyle}>ROLE</label><input style={inputStyle} placeholder="Founder, Designer, Engineer..." value={profile?.role || ""} onChange={e => setProfile({ ...profile, role: e.target.value })} /></div>
+                    <div><label style={labelStyle}>BIO</label><textarea style={{ ...inputStyle, resize: "none" }} rows={4} value={profile?.bio || ""} onChange={e => setProfile({ ...profile, bio: e.target.value })} /></div>
+                    <div>
+                      <label style={labelStyle}>SKILLS</label>
+                      <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
+                        {SKILLS.map(s => { const sel = (profile?.skills || []).includes(s); return <button key={s} className="hb" onClick={() => setProfile({ ...profile, skills: sel ? profile.skills.filter(x => x !== s) : [...(profile?.skills || []), s] })} style={{ padding: "3px 10px", borderRadius: 3, fontSize: 10, cursor: "pointer", fontFamily: "inherit", background: sel ? text : "none", color: sel ? bg : textMuted, border: `1px solid ${sel ? text : border}`, transition: "all 0.15s" }}>{s}</button>; })}
+                      </div>
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", gap: 10 }}>
+                    <button className="hb" onClick={() => setEditProfile(false)} style={btnG}>cancel</button>
+                    <button className="hb" onClick={handleSaveProfile} style={{ ...btnP, flex: 1 }}>save</button>
+                  </div>
+                </div>
+              )}
+            </div>
+            {/* Right side — breathing room for future */}
+            <div style={{ paddingTop: 52 }}>
+              <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px", marginBottom: 16 }}>ACTIVITY</div>
+              <div style={{ fontSize: 12, color: textMuted }}>
+                {applications.filter(a => a.applicant_id === authUser?.id).length > 0
+                  ? <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                      {applications.filter(a => a.applicant_id === authUser?.id).slice(0, 5).map(a => {
+                        const p = projects.find(proj => proj.id === a.project_id);
+                        return p ? (
+                          <div key={a.id} style={{ padding: "10px 14px", background: bg2, borderRadius: 8, border: `1px solid ${border}` }}>
+                            <div style={{ fontSize: 12, color: text, marginBottom: 2 }}>Applied to {p.title}</div>
+                            <div style={{ fontSize: 10, color: textMuted }}>{a.status} · {new Date(a.created_at).toLocaleDateString()}</div>
+                          </div>
+                        ) : null;
+                      })}
+                    </div>
+                  : <div style={{ color: textMuted, fontSize: 12 }}>no activity yet.</div>
+                }
               </div>
             </div>
-          )}
+          </div>
         </div>
       )}
 
