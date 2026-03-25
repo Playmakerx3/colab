@@ -1955,6 +1955,13 @@ export default function CoLab() {
                               <div style={{ fontSize: 10, color: textMuted }}>{file.user_name} · {new Date(file.created_at).toLocaleDateString()} · {file.size ? `${(file.size / 1024).toFixed(0)}kb` : ""}</div>
                             </div>
                             <a href={file.url} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: text, textDecoration: "underline", flexShrink: 0 }}>open</a>
+                            <button className="hb" onClick={async () => {
+                              const path = file.url.split("/project-files/")[1];
+                              await supabase.storage.from("project-files").remove([path]);
+                              await supabase.from("project_files").delete().eq("id", file.id);
+                              setProjectFiles(prev => prev.filter(f => f.id !== file.id));
+                              showToast("File deleted.");
+                            }} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontSize: 12, fontFamily: "inherit", flexShrink: 0 }}>delete</button>
                           </div>
                           {file.type?.startsWith("image") && (
                             <img src={file.url} alt={file.name} style={{ width: "100%", maxHeight: 260, objectFit: "cover", borderRadius: 6, border: `1px solid ${border}` }} />
@@ -1987,8 +1994,18 @@ export default function CoLab() {
                 {activeDoc ? (
                   <div>
                     <button onClick={() => setActiveDoc(null)} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontFamily: "inherit", fontSize: 12, marginBottom: 16 }}>← all docs</button>
-                    <div style={{ fontSize: 16, color: text, fontWeight: 400, marginBottom: 4 }}>{activeDoc.title}</div>
-                    <div style={{ fontSize: 10, color: textMuted, marginBottom: 16 }}>last edited by {activeDoc.last_edited_by}</div>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
+                      <div>
+                        <div style={{ fontSize: 16, color: text, fontWeight: 400, marginBottom: 4 }}>{activeDoc.title}</div>
+                        <div style={{ fontSize: 10, color: textMuted }}>last edited by {activeDoc.last_edited_by}</div>
+                      </div>
+                      <button className="hb" onClick={async () => {
+                        await supabase.from("project_docs").delete().eq("id", activeDoc.id);
+                        setProjectDocs(prev => prev.filter(d => d.id !== activeDoc.id));
+                        setActiveDoc(null);
+                        showToast("Document deleted.");
+                      }} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontFamily: "inherit", fontSize: 11, textDecoration: "underline" }}>delete doc</button>
+                    </div>
                     <textarea
                       value={activeDoc.content || ""}
                       onChange={e => setActiveDoc({ ...activeDoc, content: e.target.value })}
@@ -2011,10 +2028,17 @@ export default function CoLab() {
                     ? <div style={{ fontSize: 13, color: textMuted }}>no documents yet. create one to start writing together.</div>
                     : <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
                         {projectDocs.map((doc, i) => (
-                          <div key={doc.id} onClick={() => setActiveDoc(doc)} style={{ background: bg2, borderRadius: i === 0 && projectDocs.length === 1 ? 8 : i === 0 ? "8px 8px 0 0" : i === projectDocs.length - 1 ? "0 0 8px 8px" : 0, border: `1px solid ${border}`, borderBottom: i < projectDocs.length - 1 ? "none" : `1px solid ${border}`, padding: "14px 18px", cursor: "pointer", transition: "opacity 0.15s" }}
-                            onMouseEnter={e => e.currentTarget.style.opacity = "0.7"} onMouseLeave={e => e.currentTarget.style.opacity = "1"}>
-                            <div style={{ fontSize: 14, color: text, marginBottom: 4 }}>{doc.title}</div>
-                            <div style={{ fontSize: 10, color: textMuted }}>edited by {doc.last_edited_by} · {new Date(doc.updated_at).toLocaleDateString()}</div>
+                          <div key={doc.id} style={{ background: bg2, borderRadius: i === 0 && projectDocs.length === 1 ? 8 : i === 0 ? "8px 8px 0 0" : i === projectDocs.length - 1 ? "0 0 8px 8px" : 0, border: `1px solid ${border}`, borderBottom: i < projectDocs.length - 1 ? "none" : `1px solid ${border}`, padding: "14px 18px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
+                            <div onClick={() => setActiveDoc(doc)} style={{ flex: 1, cursor: "pointer" }}
+                              onMouseEnter={e => e.currentTarget.style.opacity = "0.7"} onMouseLeave={e => e.currentTarget.style.opacity = "1"}>
+                              <div style={{ fontSize: 14, color: text, marginBottom: 4 }}>{doc.title}</div>
+                              <div style={{ fontSize: 10, color: textMuted }}>edited by {doc.last_edited_by} · {new Date(doc.updated_at).toLocaleDateString()}</div>
+                            </div>
+                            <button className="hb" onClick={async () => {
+                              await supabase.from("project_docs").delete().eq("id", doc.id);
+                              setProjectDocs(prev => prev.filter(d => d.id !== doc.id));
+                              showToast("Document deleted.");
+                            }} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontFamily: "inherit", fontSize: 11, flexShrink: 0 }}>delete</button>
                           </div>
                         ))}
                       </div>
