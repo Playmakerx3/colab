@@ -1261,17 +1261,14 @@ export default function CoLab() {
         </div>
       )}
 
-      {/* PROFILE */}
+      {/* PROFILE — left aligned with breathing room */}
       {appScreen === "profile" && (
-        <div className="pad fu" style={{ width: "100%", padding: "48px 32px" }}>
-          {!editProfile ? (
+        <div className="pad fu" style={{ width: "100%", padding: "48px 40px" }}>
+          <div className="profile-layout" style={{ display: "grid", gridTemplateColumns: "400px 1fr", gap: 48, maxWidth: 900 }}>
             <div>
-              {/* Top row: profile left, dashboard right */}
-              <div className="profile-layout" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 32, marginBottom: 40, alignItems: "start" }}>
-
-                {/* LEFT — profile */}
+              <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px", marginBottom: 20 }}>PROFILE</div>
+              {!editProfile ? (
                 <div>
-                  <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px", marginBottom: 20 }}>PROFILE</div>
                   <div style={{ display: "flex", gap: 16, alignItems: "center", marginBottom: 20 }}>
                     <Avatar initials={myInitials} size={52} dark={dark} />
                     <div>
@@ -1291,121 +1288,59 @@ export default function CoLab() {
                         </div>
                     }
                   </div>
+                  <div style={{ marginBottom: 24 }}>
+                    <div style={{ ...labelStyle, marginBottom: 8 }}>MY PROJECTS</div>
+                    {myProjects.length === 0
+                      ? <span style={{ fontSize: 12, color: textMuted }}>none yet.</span>
+                      : myProjects.map(p => <div key={p.id} style={{ fontSize: 12, color: textMuted, padding: "8px 0", borderBottom: `1px solid ${border}` }}>{p.title}</div>)
+                    }
+                  </div>
                   <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                     <button className="hb" onClick={() => setEditProfile(true)} style={btnG}>edit profile</button>
                     <button className="hb" onClick={handleSignOut} style={{ ...btnG, color: textMuted }}>sign out</button>
                   </div>
                 </div>
-
-                {/* RIGHT — dashboard */}
+              ) : (
                 <div>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-                    <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px" }}>DASHBOARD</div>
-                    <button className="hb" onClick={() => setShowCreate(true)} style={{ background: "none", border: "none", color: text, cursor: "pointer", fontFamily: "inherit", fontSize: 11, textDecoration: "underline" }}>+ new project</button>
-                  </div>
-
-                  {/* Stats */}
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 1, marginBottom: 20, border: `1px solid ${border}`, borderRadius: 10, overflow: "hidden" }}>
-                    {[["projects", myProjects.length], ["applied", appliedProjectIds.length], ["following", following.length]].map(([label, val], i) => (
-                      <div key={i} style={{ padding: "14px 16px", background: bg2, borderRight: i < 2 ? `1px solid ${border}` : "none" }}>
-                        <div style={{ fontSize: 22, fontWeight: 400, color: text, letterSpacing: "-1px" }}>{val}</div>
-                        <div style={{ fontSize: 10, color: textMuted, marginTop: 3 }}>{label}</div>
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* My projects */}
-                  <div style={{ marginBottom: 20 }}>
-                    <div style={{ ...labelStyle, marginBottom: 10 }}>MY PROJECTS</div>
-                    {loading ? <Spinner dark={dark} /> : myProjects.length === 0
-                      ? <div style={{ fontSize: 12, color: textMuted }}>no projects yet.</div>
-                      : <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
-                          {myProjects.map((p, i) => {
-                            const pendingApps = applications.filter(a => a.project_id === p.id && a.status === "pending").length;
-                            return (
-                              <div key={p.id} style={{ background: bg2, borderRadius: i === 0 && myProjects.length === 1 ? 8 : i === 0 ? "8px 8px 0 0" : i === myProjects.length - 1 ? "0 0 8px 8px" : 0, border: `1px solid ${border}`, borderBottom: i < myProjects.length - 1 ? "none" : `1px solid ${border}`, padding: "12px 16px", cursor: "pointer", transition: "opacity 0.15s" }}
-                                onMouseEnter={e => e.currentTarget.style.opacity = "0.8"} onMouseLeave={e => e.currentTarget.style.opacity = "1"}
-                                onClick={() => { setActiveProject(p); loadProjectData(p.id); setProjectTab("tasks"); setAppScreen("dashboard"); }}>
-                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8, gap: 8 }}>
-                                  <div style={{ minWidth: 0 }}>
-                                    <div style={{ fontSize: 13, color: text, letterSpacing: "-0.3px", marginBottom: 2 }}>{p.title}</div>
-                                    <div style={{ fontSize: 11, color: textMuted }}>{p.category}{pendingApps > 0 ? ` · ${pendingApps} pending` : ""}</div>
-                                  </div>
-                                  <div style={{ display: "flex", gap: 6, alignItems: "center", flexShrink: 0 }}>
-                                    {pendingApps > 0 && <button className="hb" onClick={e => { e.stopPropagation(); setReviewingApplicants(p); }} style={{ fontSize: 10, padding: "2px 8px", border: `1px solid ${border}`, borderRadius: 4, background: "none", color: text, cursor: "pointer", fontFamily: "inherit" }}>review</button>}
-                                  </div>
-                                </div>
-                                <ProgressBar value={p.progress || 0} dark={dark} />
-                                <div style={{ fontSize: 10, color: textMuted, marginTop: 4 }}>{p.progress || 0}%</div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                    }
-                  </div>
-
-                  {/* Applications */}
-                  {appliedProjectIds.length > 0 && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 14, marginBottom: 22 }}>
+                    <div><label style={labelStyle}>NAME</label><input style={inputStyle} value={profile?.name || ""} onChange={e => setProfile({ ...profile, name: e.target.value })} /></div>
+                    <div><label style={labelStyle}>ROLE</label><input style={inputStyle} placeholder="Founder, Designer, Engineer..." value={profile?.role || ""} onChange={e => setProfile({ ...profile, role: e.target.value })} /></div>
+                    <div><label style={labelStyle}>BIO</label><textarea style={{ ...inputStyle, resize: "none" }} rows={4} value={profile?.bio || ""} onChange={e => setProfile({ ...profile, bio: e.target.value })} /></div>
                     <div>
-                      <div style={{ ...labelStyle, marginBottom: 10 }}>APPLICATIONS</div>
-                      <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
-                        {projects.filter(p => appliedProjectIds.includes(p.id)).map((p, i, arr) => {
-                          const myApp = applications.find(a => a.project_id === p.id && a.applicant_id === authUser?.id);
-                          return (
-                            <div key={p.id} style={{ background: bg2, borderRadius: i === 0 && arr.length === 1 ? 8 : i === 0 ? "8px 8px 0 0" : i === arr.length - 1 ? "0 0 8px 8px" : 0, border: `1px solid ${border}`, borderBottom: i < arr.length - 1 ? "none" : `1px solid ${border}`, padding: "10px 16px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
-                              <div style={{ minWidth: 0 }}>
-                                <div style={{ fontSize: 12, color: text, marginBottom: 1 }}>{p.title}</div>
-                                <div style={{ fontSize: 10, color: textMuted }}>{p.owner_name}</div>
-                              </div>
-                              <span style={{ fontSize: 10, color: myApp?.status === "accepted" ? text : textMuted, border: `1px solid ${border}`, borderRadius: 3, padding: "1px 6px", flexShrink: 0 }}>{myApp?.status || "pending"}</span>
-                            </div>
-                          );
-                        })}
+                      <label style={labelStyle}>SKILLS</label>
+                      <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
+                        {SKILLS.map(s => { const sel = (profile?.skills || []).includes(s); return <button key={s} className="hb" onClick={() => setProfile({ ...profile, skills: sel ? profile.skills.filter(x => x !== s) : [...(profile?.skills || []), s] })} style={{ padding: "3px 10px", borderRadius: 3, fontSize: 10, cursor: "pointer", fontFamily: "inherit", background: sel ? text : "none", color: sel ? bg : textMuted, border: `1px solid ${sel ? text : border}`, transition: "all 0.15s" }}>{s}</button>; })}
                       </div>
                     </div>
-                  )}
+                  </div>
+                  <div style={{ display: "flex", gap: 10 }}>
+                    <button className="hb" onClick={() => setEditProfile(false)} style={btnG}>cancel</button>
+                    <button className="hb" onClick={handleSaveProfile} style={{ ...btnP, flex: 1 }}>save</button>
+                  </div>
                 </div>
-              </div>
-
-              {/* ACTIVITY — centered below both columns */}
-              <div style={{ borderTop: `1px solid ${border}`, paddingTop: 32, textAlign: "center" }}>
-                <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px", marginBottom: 16 }}>ACTIVITY</div>
-                {applications.filter(a => a.applicant_id === authUser?.id).length === 0
-                  ? <div style={{ fontSize: 12, color: textMuted }}>no activity yet.</div>
-                  : <div style={{ display: "flex", flexDirection: "column", gap: 8, maxWidth: 480, margin: "0 auto", textAlign: "left" }}>
-                      {applications.filter(a => a.applicant_id === authUser?.id).slice(0, 6).map(a => {
+              )}
+            </div>
+            {/* Right side — breathing room for future */}
+            <div style={{ paddingTop: 52 }}>
+              <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px", marginBottom: 16 }}>ACTIVITY</div>
+              <div style={{ fontSize: 12, color: textMuted }}>
+                {applications.filter(a => a.applicant_id === authUser?.id).length > 0
+                  ? <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                      {applications.filter(a => a.applicant_id === authUser?.id).slice(0, 5).map(a => {
                         const p = projects.find(proj => proj.id === a.project_id);
                         return p ? (
-                          <div key={a.id} style={{ padding: "10px 14px", background: bg2, borderRadius: 8, border: `1px solid ${border}`, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
-                            <div><div style={{ fontSize: 12, color: text, marginBottom: 2 }}>Applied to {p.title}</div><div style={{ fontSize: 10, color: textMuted }}>{new Date(a.created_at).toLocaleDateString()}</div></div>
-                            <span style={{ fontSize: 10, color: a.status === "accepted" ? text : textMuted, border: `1px solid ${border}`, borderRadius: 3, padding: "1px 6px", flexShrink: 0 }}>{a.status}</span>
+                          <div key={a.id} style={{ padding: "10px 14px", background: bg2, borderRadius: 8, border: `1px solid ${border}` }}>
+                            <div style={{ fontSize: 12, color: text, marginBottom: 2 }}>Applied to {p.title}</div>
+                            <div style={{ fontSize: 10, color: textMuted }}>{a.status} · {new Date(a.created_at).toLocaleDateString()}</div>
                           </div>
                         ) : null;
                       })}
                     </div>
+                  : <div style={{ color: textMuted, fontSize: 12 }}>no activity yet.</div>
                 }
               </div>
             </div>
-          ) : (
-            <div style={{ maxWidth: 480 }}>
-              <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px", marginBottom: 20 }}>EDIT PROFILE</div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 14, marginBottom: 22 }}>
-                <div><label style={labelStyle}>NAME</label><input style={inputStyle} value={profile?.name || ""} onChange={e => setProfile({ ...profile, name: e.target.value })} /></div>
-                <div><label style={labelStyle}>ROLE</label><input style={inputStyle} placeholder="Founder, Designer, Engineer..." value={profile?.role || ""} onChange={e => setProfile({ ...profile, role: e.target.value })} /></div>
-                <div><label style={labelStyle}>BIO</label><textarea style={{ ...inputStyle, resize: "none" }} rows={4} value={profile?.bio || ""} onChange={e => setProfile({ ...profile, bio: e.target.value })} /></div>
-                <div>
-                  <label style={labelStyle}>SKILLS</label>
-                  <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
-                    {SKILLS.map(s => { const sel = (profile?.skills || []).includes(s); return <button key={s} className="hb" onClick={() => setProfile({ ...profile, skills: sel ? profile.skills.filter(x => x !== s) : [...(profile?.skills || []), s] })} style={{ padding: "3px 10px", borderRadius: 3, fontSize: 10, cursor: "pointer", fontFamily: "inherit", background: sel ? text : "none", color: sel ? bg : textMuted, border: `1px solid ${sel ? text : border}`, transition: "all 0.15s" }}>{s}</button>; })}
-                  </div>
-                </div>
-              </div>
-              <div style={{ display: "flex", gap: 10 }}>
-                <button className="hb" onClick={() => setEditProfile(false)} style={btnG}>cancel</button>
-                <button className="hb" onClick={handleSaveProfile} style={{ ...btnP, flex: 1 }}>save</button>
-              </div>
-            </div>
-          )}
+          </div>
         </div>
       )}
 
