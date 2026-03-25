@@ -38,7 +38,7 @@ function Spinner({ dark }) {
 }
 
 // @mention input component
-function MentionInput({ value, onChange, onKeyDown, placeholder, users, style, rows }) {
+function MentionInput({ value, onChange, onKeyDown, placeholder, users, style, rows, dark }) {
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [suggestions, setSuggestions] = useState([]);
   const [mentionStart, setMentionStart] = useState(-1);
@@ -74,12 +74,12 @@ function MentionInput({ value, onChange, onKeyDown, placeholder, users, style, r
     <div style={{ position: "relative", width: "100%" }}>
       <Tag ref={ref} value={value} onChange={handleChange} onKeyDown={e => { if (e.key === "Escape") setShowSuggestions(false); if (onKeyDown) onKeyDown(e); }} placeholder={placeholder} rows={rows} style={{ ...style, resize: rows ? "none" : undefined }} />
       {showSuggestions && (
-        <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: "#111", border: "1px solid #222", borderRadius: 8, zIndex: 100, overflow: "hidden", marginTop: 4 }}>
+        <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: dark ? "#111" : "#fff", border: `1px solid ${dark ? "#222" : "#e0e0e0"}`, borderRadius: 8, zIndex: 100, overflow: "hidden", marginTop: 4 }}>
           {suggestions.map(u => (
-            <button key={u.id} onClick={() => selectUser(u)} style={{ width: "100%", padding: "8px 12px", background: "none", border: "none", color: "#fff", cursor: "pointer", textAlign: "left", fontSize: 12, fontFamily: "inherit", display: "flex", gap: 8, alignItems: "center" }}
-              onMouseEnter={e => e.currentTarget.style.background = "#1a1a1a"} onMouseLeave={e => e.currentTarget.style.background = "none"}>
-              <Avatar initials={u.name.split(" ").map(n => n[0]).join("").slice(0, 2)} size={24} dark={true} />
-              <div><div style={{ fontSize: 12 }}>{u.name}</div><div style={{ fontSize: 10, color: "#555" }}>{u.role}</div></div>
+            <button key={u.id} onClick={() => selectUser(u)} style={{ width: "100%", padding: "8px 12px", background: "none", border: "none", color: dark ? "#fff" : "#000", cursor: "pointer", textAlign: "left", fontSize: 12, fontFamily: "inherit", display: "flex", gap: 8, alignItems: "center" }}
+              onMouseEnter={e => e.currentTarget.style.background = dark ? "#1a1a1a" : "#f0f0f0"} onMouseLeave={e => e.currentTarget.style.background = "none"}>
+              <Avatar initials={u.name.split(" ").map(n => n[0]).join("").slice(0, 2)} size={24} dark={dark} />
+              <div><div style={{ fontSize: 12, color: dark ? "#fff" : "#000" }}>{u.name}</div><div style={{ fontSize: 10, color: dark ? "#555" : "#aaa" }}>{u.role}</div></div>
             </button>
           ))}
         </div>
@@ -176,7 +176,7 @@ export default function CoLab() {
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(null), 3000); };
   const myInitials = profile?.name ? profile.name.split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase() : "ME";
   const getMatchScore = (p) => (profile?.skills || []).filter(s => (p.skills || []).includes(s)).length;
-  const unreadDms = 0;
+  const unreadDms = dmThreads.filter(t => t.unread && t.id !== activeDmThread?.id).length;
   const unreadNotifs = notifications.filter(n => !n.read).length;
 
   // Render mentions with highlights
@@ -221,12 +221,11 @@ export default function CoLab() {
     }
   `;
 
-  // Force body background on mode switch — fixes mobile Safari bleed
+  // Force body background + mobile browser chrome color on mode switch
   useEffect(() => {
     const color = dark ? "#0a0a0a" : "#ffffff";
     document.body.style.backgroundColor = color;
     document.documentElement.style.backgroundColor = color;
-    // Update theme-color meta for mobile browser chrome
     let meta = document.querySelector('meta[name="theme-color"]');
     if (!meta) {
       meta = document.createElement("meta");
@@ -298,31 +297,65 @@ export default function CoLab() {
     const channel = supabase.channel("realtime-colab")
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages" }, (payload) => {
         if (activeProject && payload.new.project_id === activeProject.id) {
-          setMessages(prev => [...prev, payload.new]);
+          setMessages(prev => {
+            if (prev.find(m => m.id === payload.new.id)) return prev;
+            return [...prev, payload.new];
+          });
           setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
         }
       })
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "dm_messages" }, (payload) => {
-        if (activeDmThread && payload.new.thread_id === activeDmThread.id) {
-          setDmMessages(prev => ({ ...prev, [activeDmThread.id]: [...(prev[activeDmThread.id] || []), payload.new] }));
+        // Always update DM messages — works even when not on messages tab
+        setDmMessages(prev => {
+          const threadId = payload.new.thread_id;
+          const existing = prev[threadId] || [];
+          if (existing.find(m => m.id === payload.new.id)) return prev;
+          return { ...prev, [threadId]: [...existing, payload.new] };
+        });
+        // If this thread is active, scroll to bottom
+        if (activeDmThread?.id === payload.new.thread_id) {
           setTimeout(() => dmEndRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
+        }
+        // Show notification dot if message is from someone else and we're not on messages tab
+        if (payload.new.sender_id !== authUser.id) {
+          setDmThreads(prev => prev.map(t =>
+            t.id === payload.new.thread_id ? { ...t, unread: true } : t
+          ));
         }
       })
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "applications" }, (payload) => {
+        setApplications(prev => {
+          if (prev.find(a => a.id === payload.new.id)) return prev;
+          return [...prev, payload.new];
+        });
         const myProjectIds = projects.filter(p => p.owner_id === authUser.id).map(p => p.id);
         if (myProjectIds.includes(payload.new.project_id)) {
           const proj = projects.find(p => p.id === payload.new.project_id);
-          setNotifications(prev => [{
-            id: payload.new.id, type: "application",
-            text: `${payload.new.applicant_name} applied to your project`,
-            sub: proj?.title || "", time: "just now", read: false,
-            projectId: payload.new.project_id,
-            applicant: { id: payload.new.applicant_id, initials: payload.new.applicant_initials, name: payload.new.applicant_name, role: payload.new.applicant_role, bio: payload.new.applicant_bio, skills: payload.new.applicant_skills || [], availability: payload.new.availability, motivation: payload.new.motivation }
-          }, ...prev]);
+          setNotifications(prev => {
+            if (prev.find(n => n.id === payload.new.id)) return prev;
+            return [{
+              id: payload.new.id, type: "application",
+              text: `${payload.new.applicant_name} applied to your project`,
+              sub: proj?.title || "", time: "just now", read: false,
+              projectId: payload.new.project_id,
+              applicant: { id: payload.new.applicant_id, initials: payload.new.applicant_initials, name: payload.new.applicant_name, role: payload.new.applicant_role, bio: payload.new.applicant_bio, skills: payload.new.applicant_skills || [], availability: payload.new.availability, motivation: payload.new.motivation }
+            }, ...prev];
+          });
         }
       })
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "projects" }, (payload) => {
-        setProjects(prev => [payload.new, ...prev]);
+        setProjects(prev => {
+          if (prev.find(p => p.id === payload.new.id)) return prev;
+          return [payload.new, ...prev];
+        });
+      })
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "posts" }, (payload) => {
+        if (payload.new.user_id !== authUser.id) {
+          setPosts(prev => {
+            if (prev.find(p => p.id === payload.new.id)) return prev;
+            return [payload.new, ...prev];
+          });
+        }
       })
       .subscribe();
     return () => supabase.removeChannel(channel);
@@ -496,6 +529,8 @@ export default function CoLab() {
       setActiveDmThread({ ...thread, otherUser: user });
       loadDmMessages(thread.id);
       setAppScreen("messages");
+      // Clear unread flag
+      setDmThreads(prev => prev.map(t => t.id === thread.id ? { ...t, unread: false } : t));
     }
   };
 
@@ -1423,7 +1458,7 @@ export default function CoLab() {
                     if (!other) return null;
                     const isActive = activeDmThread?.id === thread.id;
                     return (
-                      <div key={thread.id} onClick={() => { setActiveDmThread({ ...thread, otherUser: other }); loadDmMessages(thread.id); }} style={{ padding: "14px 20px", borderBottom: `1px solid ${border}`, cursor: "pointer", background: isActive ? bg2 : "none", display: "flex", gap: 12, alignItems: "center" }}
+                      <div key={thread.id} onClick={() => { setActiveDmThread({ ...thread, otherUser: other }); loadDmMessages(thread.id); setDmThreads(prev => prev.map(t => t.id === thread.id ? { ...t, unread: false } : t)); }} style={{ padding: "14px 20px", borderBottom: `1px solid ${border}`, cursor: "pointer", background: isActive ? bg2 : "none", display: "flex", gap: 12, alignItems: "center" }}
                         onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = bg2; }} onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = "none"; }}>
                         <Avatar initials={other.name?.split(" ").map(n => n[0]).join("").slice(0, 2)} size={36} dark={dark} />
                         <div style={{ minWidth: 0 }}>
@@ -1690,7 +1725,7 @@ export default function CoLab() {
                 <div ref={messagesEndRef} />
               </div>
               <div style={{ display: "flex", gap: 8, borderTop: `1px solid ${border}`, paddingTop: 12 }}>
-                <MentionInput value={newMessage} onChange={setNewMessage} onKeyDown={e => e.key === "Enter" && !e.shiftKey && handleSendMessage(activeProject.id)} placeholder="send a message... (@mention someone)" users={users} style={{ ...inputStyle, fontSize: 12 }} />
+                <MentionInput dark={dark} value={newMessage} onChange={setNewMessage} onKeyDown={e => e.key === "Enter" && !e.shiftKey && handleSendMessage(activeProject.id)} placeholder="send a message... (@mention someone)" users={users} style={{ ...inputStyle, fontSize: 12 }} />
                 <button className="hb" onClick={() => handleSendMessage(activeProject.id)} style={{ ...btnP, padding: "10px 16px", flexShrink: 0, fontSize: 12 }}>send</button>
               </div>
             </div>
@@ -1701,7 +1736,7 @@ export default function CoLab() {
               <div style={{ display: "flex", gap: 10, marginBottom: 22, alignItems: "flex-start" }}>
                 <Avatar initials={myInitials} size={28} dark={dark} />
                 <div style={{ flex: 1 }}>
-                  <MentionInput value={newUpdate} onChange={setNewUpdate} placeholder="post an update... (@mention someone)" users={users} style={{ ...inputStyle, resize: "none", fontSize: 12, padding: "8px 12px" }} rows={2} />
+                  <MentionInput dark={dark} value={newUpdate} onChange={setNewUpdate} placeholder="post an update... (@mention someone)" users={users} style={{ ...inputStyle, resize: "none", fontSize: 12, padding: "8px 12px" }} rows={2} />
                   {newUpdate.trim() && <button className="hb" onClick={() => handlePostUpdate(activeProject.id)} style={{ ...btnP, marginTop: 8, padding: "7px 14px", fontSize: 11 }}>post</button>}
                 </div>
               </div>
