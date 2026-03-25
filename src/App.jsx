@@ -1273,11 +1273,11 @@ export default function CoLab() {
       <style>{CSS}</style>
 
       {/* NAV */}
-      <nav style={{ position: "sticky", top: 0, zIndex: 50, width: "100%", background: dark ? "rgba(10,10,10,0.97)" : "rgba(255,255,255,0.97)", backdropFilter: "blur(12px)", borderBottom: `1px solid ${border}`, padding: "0 12px", display: "flex", alignItems: "center", justifyContent: "space-between", height: 50 }}>
+      <nav style={{ position: "sticky", top: 0, zIndex: 50, width: "100%", background: dark ? "rgba(10,10,10,0.97)" : "rgba(255,255,255,0.97)", backdropFilter: "blur(12px)", borderBottom: `1px solid ${border}`, padding: "0 12px", display: "flex", alignItems: "center", gap: 10, height: 50 }}>
         <button onClick={() => { setAppScreen("explore"); setActiveProject(null); setViewingProfile(null); }} style={{ background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: 14, fontWeight: 500, color: text, letterSpacing: "-0.5px", flexShrink: 0 }}>[CoLab]</button>
 
-        {/* Global search */}
-        <div style={{ position: "relative", flex: 1, maxWidth: 200, margin: "0 8px" }}>
+        {/* Global search — right of logo */}
+        <div style={{ position: "relative", width: 180, flexShrink: 0 }}>
           <input
             placeholder="search people..."
             value={globalSearch}
@@ -1304,6 +1304,8 @@ export default function CoLab() {
           )}
         </div>
 
+        {/* Nav items pushed to the right */}
+        <div style={{ flex: 1 }} />
         <div style={{ display: "flex", gap: 1, alignItems: "center" }}>
           {navItems.map(({ id, label, badge }) => (
             <button key={id} onClick={() => { setAppScreen(id); setActiveProject(null); setViewingProfile(null); setShowNotifications(false); }}
