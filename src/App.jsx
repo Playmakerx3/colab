@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { supabase } from "./supabase";
 
 const SKILLS = ["Design", "Engineering", "Marketing", "Finance", "Legal", "Writing", "Video", "Music", "Photography", "Data", "AI/ML", "Product", "Sales", "Operations", "3D/CAD", "Architecture"];
@@ -88,6 +88,32 @@ function MentionInput({ value, onChange, onKeyDown, placeholder, users, style, r
   );
 }
 
+function FullProfilePortfolio({ userId, dark, bg, bg2, border, text, textMuted, labelStyle }) {
+  const [items, setItems] = React.useState([]);
+  React.useEffect(() => {
+    supabase.from("portfolio_items").select("*").eq("user_id", userId).then(({ data }) => setItems(data || []));
+  }, [userId]);
+  if (items.length === 0) return null;
+  return (
+    <div style={{ marginBottom: 28, paddingBottom: 28, borderBottom: `1px solid ${border}` }}>
+      <div style={{ ...labelStyle, marginBottom: 12 }}>PORTFOLIO</div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
+        {items.map((item, i) => (
+          <div key={item.id} style={{ background: bg2, borderRadius: i === 0 && items.length === 1 ? 8 : i === 0 ? "8px 8px 0 0" : i === items.length - 1 ? "0 0 8px 8px" : 0, border: `1px solid ${border}`, borderBottom: i < items.length - 1 ? "none" : `1px solid ${border}`, padding: "14px 18px" }}>
+            <div style={{ fontSize: 14, color: text, marginBottom: 4 }}>{item.title}</div>
+            {item.description && <div style={{ fontSize: 12, color: textMuted, lineHeight: 1.65, marginBottom: 6 }}>{item.description}</div>}
+            {item.url && (
+              item.url.match(/\.(jpg|jpeg|png|gif|webp)$/i)
+                ? <img src={item.url} alt={item.title} style={{ maxWidth: "100%", maxHeight: 200, borderRadius: 8, border: `1px solid ${border}`, marginTop: 4 }} />
+                : <a href={item.url} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: text, textDecoration: "underline", wordBreak: "break-all" }}>{item.url.includes("user-uploads") ? "view file" : item.url}</a>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function CoLab() {
   const [dark, setDark] = useState(true);
   const [screen, setScreen] = useState("landing");
@@ -96,6 +122,7 @@ export default function CoLab() {
   const [networkTab, setNetworkTab] = useState("feed");
   const [activeProject, setActiveProject] = useState(null);
   const [viewingProfile, setViewingProfile] = useState(null);
+  const [viewFullProfile, setViewFullProfile] = useState(null); // full page profile view
   const [projectTab, setProjectTab] = useState("tasks");
 
   // Auth
@@ -601,16 +628,16 @@ export default function CoLab() {
     if (!project) return;
     const already = applications.find(a => a.project_id === project.id && a.applicant_id === authUser.id);
     if (already) return;
-    const { data } = await supabase.from("applications").insert({
+    const { data, error } = await supabase.from("applications").insert({
       project_id: project.id, applicant_id: authUser.id,
       applicant_name: profile.name, applicant_initials: myInitials,
-      applicant_role: profile.role, applicant_bio: profile.bio,
-      applicant_skills: applicationForm.skills,
-      availability: applicationForm.availability,
-      motivation: applicationForm.motivation,
-      portfolio_url: applicationForm.portfolio_url,
+      applicant_role: profile.role || "", applicant_bio: profile.bio || "",
+      availability: applicationForm.availability || "",
+      motivation: applicationForm.motivation || "",
+      portfolio_url: applicationForm.portfolio_url || "",
       status: "pending",
     }).select().single();
+    if (error) { console.error("Apply error:", error); showToast("Error submitting. Try again."); return; }
     if (data) {
       setApplications([...applications, data]);
       setShowApplicationForm(null);
@@ -706,7 +733,7 @@ export default function CoLab() {
     const sharedSkills = (profile?.skills || []).filter(s => (u.skills || []).includes(s));
     const userProjects = projects.filter(p => p.owner_id === u.id);
     return (
-      <div onClick={() => setViewingProfile(u)} style={{ background: bg2, border: `1px solid ${border}`, borderRadius: 12, padding: "20px", cursor: "pointer", transition: "border 0.2s" }}
+      <div onClick={() => setViewFullProfile(u)} style={{ background: bg2, border: `1px solid ${border}`, borderRadius: 12, padding: "20px", cursor: "pointer", transition: "border 0.2s" }}
         onMouseEnter={e => e.currentTarget.style.borderColor = text} onMouseLeave={e => e.currentTarget.style.borderColor = border}>
         <div style={{ display: "flex", gap: 12, alignItems: "flex-start", marginBottom: 12 }}>
           <Avatar initials={u.name?.split(" ").map(n => n[0]).join("").slice(0, 2)} size={44} dark={dark} />
@@ -736,7 +763,7 @@ export default function CoLab() {
     }, [u.id]);
     return (
       <div style={{ position: "fixed", inset: 0, background: dark ? "rgba(0,0,0,0.88)" : "rgba(220,220,220,0.88)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 150, backdropFilter: "blur(10px)", padding: 16 }} onClick={onClose}>
-        <div style={{ background: bg, border: `1px solid ${border}`, borderRadius: 16, padding: "32px 28px", width: "100%", maxWidth: 520, maxHeight: "92vh", overflowY: "auto" }} onClick={e => e.stopPropagation()}>
+        <div style={{ background: bg, border: `1px solid ${border}`, borderRadius: 16, padding: "32px 28px", width: "100%", maxWidth: 520, maxHeight: "92vh", overflowY: "auto", cursor: "pointer" }} onClick={() => { setViewFullProfile(u); onClose(); }}>
           <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 24 }}>
             <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px" }}>PROFILE</div>
             <button onClick={onClose} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontSize: 14, fontFamily: "inherit" }}>✕</button>
@@ -789,11 +816,14 @@ export default function CoLab() {
             </div>
           )}
           {u.id !== authUser?.id && (
-            <div style={{ display: "flex", gap: 10 }}>
-              <button onClick={() => handleFollow(u.id)} style={{ flex: 1, background: isFollowing ? bg3 : text, color: isFollowing ? textMuted : bg, border: `1px solid ${isFollowing ? border : text}`, borderRadius: 8, padding: "11px", fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: "inherit", transition: "all 0.15s" }}>
-                {isFollowing ? "following" : "follow"}
-              </button>
-              <button onClick={() => { openDm(u); onClose(); }} style={{ flex: 1, background: "none", color: text, border: `1px solid ${border}`, borderRadius: 8, padding: "11px", fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>message</button>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              <button onClick={e => { e.stopPropagation(); setViewFullProfile(u); onClose(); }} style={{ ...btnG, width: "100%", textAlign: "center", fontSize: 12, padding: "10px" }}>view full profile →</button>
+              <div style={{ display: "flex", gap: 10 }}>
+                <button onClick={e => { e.stopPropagation(); handleFollow(u.id); }} style={{ flex: 1, background: isFollowing ? bg3 : text, color: isFollowing ? textMuted : bg, border: `1px solid ${isFollowing ? border : text}`, borderRadius: 8, padding: "11px", fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: "inherit", transition: "all 0.15s" }}>
+                  {isFollowing ? "following" : "follow"}
+                </button>
+                <button onClick={e => { e.stopPropagation(); openDm(u); onClose(); }} style={{ flex: 1, background: "none", color: text, border: `1px solid ${border}`, borderRadius: 8, padding: "11px", fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>message</button>
+              </div>
             </div>
           )}
         </div>
@@ -966,14 +996,17 @@ export default function CoLab() {
   const handleCreatePost = async () => {
     if (!newPostContent.trim()) return;
     const proj = myProjects.find(p => p.id === newPostProject);
-    const { data } = await supabase.from("posts").insert({
-      user_id: authUser.id, user_name: profile.name,
-      user_initials: myInitials, user_role: profile.role,
+    const { data, error } = await supabase.from("posts").insert({
+      user_id: authUser.id,
+      user_name: profile.name,
+      user_initials: myInitials,
+      user_role: profile.role || "",
       content: newPostContent,
       project_id: proj?.id || null,
       project_title: proj?.title || null,
       media_url: newPostMediaUrl || null,
     }).select().single();
+    if (error) { console.error("Post error:", error); showToast("Error posting. Try again."); return; }
     if (data) {
       setPosts([data, ...posts]);
       setNewPostContent("");
@@ -1049,7 +1082,6 @@ export default function CoLab() {
                   <button onClick={() => postUser && setViewingProfile(postUser)} style={{ background: "none", border: "none", cursor: "pointer", padding: 0 }}>
                     <span style={{ fontSize: 13, fontWeight: 500, color: text }}>{post.user_name}</span>
                   </button>
-                  {post.user_username && <span style={{ fontSize: 11, color: textMuted, marginLeft: 6 }}>@{post.user_username}</span>}
                   <span style={{ fontSize: 11, color: textMuted, marginLeft: 8 }}>{post.user_role}</span>
                   <div style={{ fontSize: 10, color: textMuted, marginTop: 2 }}>{new Date(post.created_at).toLocaleDateString()}</div>
                 </div>
@@ -1442,7 +1474,7 @@ export default function CoLab() {
                   style={{ ...inputStyle, fontSize: 13, marginBottom: globalSearch.length > 0 ? 8 : 0 }}
                 />
                 {globalSearch.length > 0 && users.filter(u => u.id !== authUser?.id && u.name?.toLowerCase().includes(globalSearch.toLowerCase())).slice(0, 5).map(u => (
-                  <button key={u.id} onClick={() => { setViewingProfile(u); setGlobalSearch(""); setShowGlobalSearch(false); }} style={{ width: "100%", padding: "10px 12px", background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", display: "flex", gap: 10, alignItems: "center", textAlign: "left", borderTop: `1px solid ${border}` }}
+                  <button key={u.id} onClick={() => { setViewFullProfile(u); setGlobalSearch(""); setShowGlobalSearch(false); }} style={{ width: "100%", padding: "10px 12px", background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", display: "flex", gap: 10, alignItems: "center", textAlign: "left", borderTop: `1px solid ${border}` }}
                     onMouseEnter={e => e.currentTarget.style.background = bg2} onMouseLeave={e => e.currentTarget.style.background = "none"}>
                     <Avatar initials={u.name?.split(" ").map(n => n[0]).join("").slice(0, 2)} size={28} dark={dark} />
                     <div>
@@ -1461,7 +1493,7 @@ export default function CoLab() {
           {showGlobalSearch && globalSearch.length > 0 && (
             <div className="search-desktop" style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, width: 180, background: bg, border: `1px solid ${border}`, borderRadius: 8, zIndex: 300, overflow: "hidden", boxShadow: dark ? "0 8px 24px rgba(0,0,0,0.6)" : "0 8px 24px rgba(0,0,0,0.1)" }}>
               {users.filter(u => u.id !== authUser?.id && u.name?.toLowerCase().includes(globalSearch.toLowerCase())).slice(0, 5).map(u => (
-                <button key={u.id} onClick={() => { setViewingProfile(u); setGlobalSearch(""); setShowGlobalSearch(false); }} style={{ width: "100%", padding: "10px 14px", background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", display: "flex", gap: 10, alignItems: "center", textAlign: "left" }}
+                <button key={u.id} onClick={() => { setViewFullProfile(u); setGlobalSearch(""); setShowGlobalSearch(false); }} style={{ width: "100%", padding: "10px 14px", background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", display: "flex", gap: 10, alignItems: "center", textAlign: "left" }}
                   onMouseEnter={e => e.currentTarget.style.background = bg2} onMouseLeave={e => e.currentTarget.style.background = "none"}>
                   <Avatar initials={u.name?.split(" ").map(n => n[0]).join("").slice(0, 2)} size={26} dark={dark} />
                   <div>
@@ -1552,7 +1584,7 @@ export default function CoLab() {
       {reviewingApplicants && <ReviewModal project={reviewingApplicants} onClose={() => setReviewingApplicants(null)} />}
 
       {/* EXPLORE */}
-      {appScreen === "explore" && !activeProject && (
+      {!viewFullProfile && appScreen === "explore" && !activeProject && (
         <div className="pad fu" style={{ width: "100%", padding: "48px 32px" }}>
           <div style={{ marginBottom: 32 }}>
             <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px", marginBottom: 14 }}>FIND YOUR PEOPLE. BUILD SOMETHING REAL.</div>
@@ -1652,7 +1684,7 @@ export default function CoLab() {
       )}
 
       {/* NETWORK */}
-      {appScreen === "network" && renderNetwork()}
+      {!viewFullProfile && appScreen === "network" && renderNetwork()}
 
       {/* MESSAGES */}
       {appScreen === "messages" && (
@@ -2203,6 +2235,64 @@ export default function CoLab() {
               </div>
             )}
           </div>
+        </div>
+      )}
+
+      {/* FULL PROFILE VIEW — other users */}
+      {viewFullProfile && (
+        <div className="pad fu" style={{ width: "100%", maxWidth: 680, margin: "0 auto", padding: "36px 24px" }}>
+          <button onClick={() => setViewFullProfile(null)} style={{ ...btnG, marginBottom: 24, padding: "6px 14px", fontSize: 11 }}>← back</button>
+          <div style={{ display: "flex", gap: 16, alignItems: "center", marginBottom: 20 }}>
+            <Avatar initials={viewFullProfile.name?.split(" ").map(n => n[0]).join("").slice(0, 2)} size={52} dark={dark} />
+            <div>
+              <div style={{ fontSize: 20, fontWeight: 400, color: text, letterSpacing: "-0.5px" }}>{viewFullProfile.name}</div>
+              {viewFullProfile.username && <div style={{ fontSize: 11, color: textMuted, marginTop: 1 }}>@{viewFullProfile.username}</div>}
+              <div style={{ fontSize: 12, color: textMuted, marginTop: 2 }}>{viewFullProfile.role}</div>
+            </div>
+          </div>
+          {viewFullProfile.bio && <p style={{ fontSize: 13, color: textMuted, lineHeight: 1.75, marginBottom: 24 }}>{viewFullProfile.bio}</p>}
+
+          {/* Skills */}
+          {(viewFullProfile.skills || []).length > 0 && (
+            <div style={{ marginBottom: 28, paddingBottom: 28, borderBottom: `1px solid ${border}` }}>
+              <div style={{ ...labelStyle, marginBottom: 8 }}>SKILLS</div>
+              <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
+                {viewFullProfile.skills.map(s => {
+                  const shared = (profile?.skills || []).includes(s);
+                  return <span key={s} style={{ fontSize: 11, padding: "3px 10px", border: `1px solid ${shared ? (dark ? "#ffffff40" : "#00000030") : border}`, borderRadius: 3, color: shared ? text : textMuted, fontWeight: shared ? 500 : 400 }}>{s}{shared ? " ★" : ""}</span>;
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Portfolio */}
+          <FullProfilePortfolio userId={viewFullProfile.id} dark={dark} bg={bg} bg2={bg2} border={border} text={text} textMuted={textMuted} labelStyle={labelStyle} />
+
+          {/* Projects */}
+          {projects.filter(p => p.owner_id === viewFullProfile.id).length > 0 && (
+            <div style={{ marginBottom: 28, paddingBottom: 28, borderBottom: `1px solid ${border}` }}>
+              <div style={{ ...labelStyle, marginBottom: 12 }}>PROJECTS</div>
+              {projects.filter(p => p.owner_id === viewFullProfile.id).map(p => (
+                <div key={p.id} onClick={() => { setActiveProject(p); loadProjectData(p.id); setViewFullProfile(null); setAppScreen("explore"); }} style={{ padding: "10px 0", borderBottom: `1px solid ${border}`, cursor: "pointer" }}
+                  onMouseEnter={e => e.currentTarget.style.opacity = "0.6"} onMouseLeave={e => e.currentTarget.style.opacity = "1"}>
+                  <div style={{ fontSize: 13, color: text, marginBottom: 4 }}>{p.title}</div>
+                  <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
+                    {(p.skills || []).map(s => <span key={s} style={{ fontSize: 10, padding: "1px 7px", border: `1px solid ${border}`, borderRadius: 3, color: textMuted }}>{s}</span>)}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Actions */}
+          {viewFullProfile.id !== authUser?.id && (
+            <div style={{ display: "flex", gap: 10 }}>
+              <button onClick={() => handleFollow(viewFullProfile.id)} style={{ flex: 1, background: following.includes(viewFullProfile.id) ? bg3 : text, color: following.includes(viewFullProfile.id) ? textMuted : bg, border: `1px solid ${following.includes(viewFullProfile.id) ? border : text}`, borderRadius: 8, padding: "12px", fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}>
+                {following.includes(viewFullProfile.id) ? "following" : "follow"}
+              </button>
+              <button onClick={() => { openDm(viewFullProfile); setViewFullProfile(null); }} style={{ flex: 1, background: "none", color: text, border: `1px solid ${border}`, borderRadius: 8, padding: "12px", fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>message</button>
+            </div>
+          )}
         </div>
       )}
 
