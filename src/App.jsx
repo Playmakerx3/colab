@@ -88,6 +88,158 @@ function MentionInput({ value, onChange, onKeyDown, placeholder, users, style, r
   );
 }
 
+// ── PIXEL BANNER PRESETS ──
+const COLS = 48, ROWS = 12;
+const PRESETS = {
+  empty: new Array(COLS * ROWS).fill(0),
+  wave: (() => {
+    const p = new Array(COLS * ROWS).fill(0);
+    for (let c = 0; c < COLS; c++) {
+      const h = Math.round(ROWS / 2 + Math.sin(c / 4) * 3);
+      for (let r = h; r < ROWS; r++) p[r * COLS + c] = 1;
+    }
+    return p;
+  })(),
+  checkerboard: (() => {
+    const p = new Array(COLS * ROWS).fill(0);
+    for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) if ((r + c) % 2 === 0) p[r * COLS + c] = 1;
+    return p;
+  })(),
+  diagonal: (() => {
+    const p = new Array(COLS * ROWS).fill(0);
+    for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) if ((c - r * 2 + 96) % 8 < 4) p[r * COLS + c] = 1;
+    return p;
+  })(),
+  mountains: (() => {
+    const p = new Array(COLS * ROWS).fill(0);
+    const heights = Array.from({ length: COLS }, (_, c) => {
+      const m1 = Math.max(0, ROWS - Math.abs(c - 12) * 0.7);
+      const m2 = Math.max(0, ROWS - Math.abs(c - 32) * 0.5);
+      const m3 = Math.max(0, ROWS * 0.6 - Math.abs(c - 22) * 0.9);
+      return Math.min(ROWS, Math.round(Math.max(m1, m2, m3)));
+    });
+    for (let c = 0; c < COLS; c++) for (let r = ROWS - heights[c]; r < ROWS; r++) p[r * COLS + c] = 1;
+    return p;
+  })(),
+  city: (() => {
+    const p = new Array(COLS * ROWS).fill(0);
+    const buildings = [
+      { x: 1, w: 5, h: 8 }, { x: 7, w: 4, h: 6 }, { x: 12, w: 6, h: 10 },
+      { x: 19, w: 3, h: 7 }, { x: 23, w: 7, h: 9 }, { x: 31, w: 4, h: 6 },
+      { x: 36, w: 5, h: 11 }, { x: 42, w: 5, h: 7 },
+    ];
+    buildings.forEach(({ x, w, h }) => {
+      for (let c = x; c < x + w && c < COLS; c++)
+        for (let r = ROWS - h; r < ROWS; r++) p[r * COLS + c] = 1;
+    });
+    return p;
+  })(),
+  dots: (() => {
+    const p = new Array(COLS * ROWS).fill(0);
+    for (let r = 1; r < ROWS; r += 3) for (let c = 1; c < COLS; c += 3) p[r * COLS + c] = 1;
+    return p;
+  })(),
+  grid: (() => {
+    const p = new Array(COLS * ROWS).fill(0);
+    for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) if (r % 3 === 0 || c % 4 === 0) p[r * COLS + c] = 1;
+    return p;
+  })(),
+};
+
+function PixelBannerDisplay({ pixels, dark, height = 80 }) {
+  if (!pixels || pixels.every(v => v === 0)) return null;
+  const cellW = 100 / COLS;
+  const cellH = 100 / ROWS;
+  const onColor = dark ? "#ffffff" : "#000000";
+  return (
+    <div style={{ width: "100%", height, position: "relative", overflow: "hidden" }}>
+      <svg width="100%" height="100%" viewBox={`0 0 ${COLS} ${ROWS}`} preserveAspectRatio="none" style={{ display: "block" }}>
+        {pixels.map((v, i) => v ? (
+          <rect key={i} x={i % COLS} y={Math.floor(i / COLS)} width={1} height={1} fill={onColor} opacity={0.9} />
+        ) : null)}
+      </svg>
+    </div>
+  );
+}
+
+function BannerEditor({ pixels, onSave, onClose, dark, bg, bg2, bg3, border, text, textMuted }) {
+  const [grid, setGrid] = React.useState([...pixels]);
+  const [drawing, setDrawing] = React.useState(false);
+  const [drawMode, setDrawMode] = React.useState(1); // 1 = fill, 0 = erase
+  const [activePreset, setActivePreset] = React.useState(null);
+
+  const toggle = (i, mode) => {
+    setGrid(prev => { const n = [...prev]; n[i] = mode; return n; });
+  };
+
+  const applyPreset = (name) => {
+    setGrid([...PRESETS[name]]);
+    setActivePreset(name);
+  };
+
+  const cellSize = Math.floor(Math.min(600, window.innerWidth - 80) / COLS);
+
+  return (
+    <div onClick={onClose} style={{ position: "fixed", inset: 0, background: dark ? "rgba(0,0,0,0.95)" : "rgba(200,200,200,0.9)", zIndex: 300, display: "flex", alignItems: "center", justifyContent: "center", backdropFilter: "blur(12px)", padding: 16 }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: bg, border: `1px solid ${border}`, borderRadius: 16, padding: 24, width: "100%", maxWidth: 680, maxHeight: "92vh", overflowY: "auto" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+          <div>
+            <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px", marginBottom: 4 }}>PROFILE BANNER</div>
+            <div style={{ fontSize: 14, color: text }}>design your 8-bit banner</div>
+          </div>
+          <button onClick={onClose} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontSize: 16, fontFamily: "inherit" }}>✕</button>
+        </div>
+
+        {/* Preview */}
+        <div style={{ marginBottom: 16, border: `1px solid ${border}`, borderRadius: 8, overflow: "hidden", background: dark ? "#000" : "#fff" }}>
+          <PixelBannerDisplay pixels={grid} dark={dark} height={60} />
+        </div>
+
+        {/* Presets */}
+        <div style={{ marginBottom: 16 }}>
+          <div style={{ fontSize: 10, color: textMuted, letterSpacing: "1.5px", marginBottom: 8 }}>PRESETS</div>
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+            {Object.keys(PRESETS).map(name => (
+              <button key={name} onClick={() => applyPreset(name)} style={{ padding: "4px 12px", borderRadius: 4, fontSize: 11, cursor: "pointer", fontFamily: "inherit", background: activePreset === name ? text : "none", color: activePreset === name ? bg : textMuted, border: `1px solid ${activePreset === name ? text : border}`, transition: "all 0.15s" }}>
+                {name}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Draw mode */}
+        <div style={{ display: "flex", gap: 8, marginBottom: 12, alignItems: "center" }}>
+          <div style={{ fontSize: 10, color: textMuted, letterSpacing: "1.5px" }}>TOOL</div>
+          <button onClick={() => setDrawMode(1)} style={{ padding: "3px 10px", borderRadius: 4, fontSize: 11, cursor: "pointer", fontFamily: "inherit", background: drawMode === 1 ? text : "none", color: drawMode === 1 ? bg : textMuted, border: `1px solid ${drawMode === 1 ? text : border}` }}>draw</button>
+          <button onClick={() => setDrawMode(0)} style={{ padding: "3px 10px", borderRadius: 4, fontSize: 11, cursor: "pointer", fontFamily: "inherit", background: drawMode === 0 ? text : "none", color: drawMode === 0 ? bg : textMuted, border: `1px solid ${drawMode === 0 ? text : border}` }}>erase</button>
+          <button onClick={() => { setGrid(new Array(COLS * ROWS).fill(0)); setActivePreset(null); }} style={{ padding: "3px 10px", borderRadius: 4, fontSize: 11, cursor: "pointer", fontFamily: "inherit", background: "none", color: textMuted, border: `1px solid ${border}`, marginLeft: "auto" }}>clear</button>
+        </div>
+
+        {/* Grid */}
+        <div
+          style={{ display: "grid", gridTemplateColumns: `repeat(${COLS}, ${cellSize}px)`, gap: 0, userSelect: "none", border: `1px solid ${border}`, borderRadius: 6, overflow: "hidden", cursor: "crosshair" }}
+          onMouseLeave={() => setDrawing(false)}
+        >
+          {grid.map((v, i) => (
+            <div
+              key={i}
+              style={{ width: cellSize, height: Math.max(6, cellSize * 0.75), background: v ? (dark ? "#fff" : "#000") : (dark ? "#111" : "#f5f5f5"), borderRight: `0.5px solid ${dark ? "#1a1a1a" : "#e8e8e8"}`, borderBottom: `0.5px solid ${dark ? "#1a1a1a" : "#e8e8e8"}`, boxSizing: "border-box" }}
+              onMouseDown={() => { setDrawing(true); toggle(i, drawMode); }}
+              onMouseEnter={() => { if (drawing) toggle(i, drawMode); }}
+              onMouseUp={() => setDrawing(false)}
+            />
+          ))}
+        </div>
+
+        <div style={{ display: "flex", gap: 10, marginTop: 20 }}>
+          <button onClick={onClose} style={{ flex: 1, background: "none", border: `1px solid ${border}`, borderRadius: 8, padding: "11px", fontSize: 12, cursor: "pointer", fontFamily: "inherit", color: textMuted }}>cancel</button>
+          <button onClick={() => { onSave(grid); onClose(); }} style={{ flex: 2, background: text, color: bg, border: "none", borderRadius: 8, padding: "11px", fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}>save banner →</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function FullProfilePortfolio({ userId, dark, bg, bg2, border, text, textMuted, labelStyle }) {
   const [items, setItems] = React.useState([]);
   const [loaded, setLoaded] = React.useState(false);
@@ -186,6 +338,8 @@ export default function CoLab() {
   const [newUpdate, setNewUpdate] = useState("");
   const [dmInput, setDmInput] = useState("");
   const [editProfile, setEditProfile] = useState(false);
+  const [showBannerEditor, setShowBannerEditor] = useState(false);
+  const [bannerPixels, setBannerPixels] = useState(new Array(48 * 12).fill(0));
   const [showApplicationForm, setShowApplicationForm] = useState(null);
   const [applicationForm, setApplicationForm] = useState({ skills: [], availability: "", motivation: "", portfolio_url: "" });
   const [reviewingApplicants, setReviewingApplicants] = useState(null);
@@ -304,7 +458,7 @@ export default function CoLab() {
 
   const loadProfile = async (userId) => {
     const { data } = await supabase.from("profiles").select("*").eq("id", userId).single();
-    if (data) { setProfile(data); setScreen("app"); setAuthLoading(false); loadAllData(userId); }
+    if (data) { setProfile(data); if (data?.banner_pixels) { try { setBannerPixels(JSON.parse(data.banner_pixels)); } catch {} } setScreen("app"); setAuthLoading(false); loadAllData(userId); }
     else { setScreen("onboard"); setAuthLoading(false); }
   };
 
@@ -992,6 +1146,14 @@ export default function CoLab() {
       }
     }
   };
+  const saveBanner = async (pixels) => {
+    const pixelStr = JSON.stringify(pixels);
+    await supabase.from("profiles").update({ banner_pixels: pixelStr }).eq("id", authUser.id);
+    setProfile(prev => ({ ...prev, banner_pixels: pixelStr }));
+    setBannerPixels(pixels);
+    showToast("Banner saved.");
+  };
+
   const handleCreatePost = async () => {
     if (!newPostContent.trim()) return;
     const proj = myProjects.find(p => p.id === newPostProject);
@@ -1581,6 +1743,7 @@ export default function CoLab() {
       {viewingProfile && <ProfileModal u={viewingProfile} onClose={() => setViewingProfile(null)} />}
       {renderApplicationForm()}
       {reviewingApplicants && <ReviewModal project={reviewingApplicants} onClose={() => setReviewingApplicants(null)} />}
+      {showBannerEditor && <BannerEditor pixels={bannerPixels} onSave={saveBanner} onClose={() => setShowBannerEditor(false)} dark={dark} bg={bg} bg2={bg2} bg3={bg3} border={border} text={text} textMuted={textMuted} />}
 
       {/* EXPLORE */}
       {!viewFullProfile && appScreen === "explore" && !activeProject && (
@@ -2244,14 +2407,23 @@ export default function CoLab() {
 
           {/* Identity — mirrors own profile */}
           <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px", marginBottom: 20 }}>PROFILE</div>
-          <div style={{ display: "flex", gap: 16, alignItems: "center", marginBottom: 20 }}>
-            <Avatar initials={viewFullProfile.name?.split(" ").map(n => n[0]).join("").slice(0, 2)} size={52} dark={dark} />
-            <div>
-              <div style={{ fontSize: 20, fontWeight: 400, color: text, letterSpacing: "-0.5px" }}>{viewFullProfile.name}</div>
-              {viewFullProfile.username && <div style={{ fontSize: 11, color: textMuted, marginTop: 1 }}>@{viewFullProfile.username}</div>}
-              <div style={{ fontSize: 12, color: textMuted, marginTop: 2 }}>{viewFullProfile.role}</div>
-              <div style={{ fontSize: 11, color: textMuted, marginTop: 3 }}>{projects.filter(p => p.owner_id === viewFullProfile.id).length} project{projects.filter(p => p.owner_id === viewFullProfile.id).length !== 1 ? "s" : ""}</div>
+          <div style={{ display: "flex", gap: 24, alignItems: "flex-start", marginBottom: 20 }}>
+            <div style={{ flexShrink: 0 }}>
+              <div style={{ display: "flex", gap: 16, alignItems: "center", marginBottom: 12 }}>
+                <Avatar initials={viewFullProfile.name?.split(" ").map(n => n[0]).join("").slice(0, 2)} size={52} dark={dark} />
+                <div>
+                  <div style={{ fontSize: 20, fontWeight: 400, color: text, letterSpacing: "-0.5px" }}>{viewFullProfile.name}</div>
+                  {viewFullProfile.username && <div style={{ fontSize: 11, color: textMuted, marginTop: 1 }}>@{viewFullProfile.username}</div>}
+                  <div style={{ fontSize: 12, color: textMuted, marginTop: 2 }}>{viewFullProfile.role}</div>
+                  <div style={{ fontSize: 11, color: textMuted, marginTop: 3 }}>{projects.filter(p => p.owner_id === viewFullProfile.id).length} project{projects.filter(p => p.owner_id === viewFullProfile.id).length !== 1 ? "s" : ""}</div>
+                </div>
+              </div>
             </div>
+            {viewFullProfile.banner_pixels && (
+              <div style={{ flex: 1, minWidth: 0, border: `1px solid ${border}`, borderRadius: 8, overflow: "hidden", background: dark ? "#000" : "#fff" }}>
+                <PixelBannerDisplay pixels={(() => { try { return JSON.parse(viewFullProfile.banner_pixels); } catch { return []; } })()} dark={dark} height={80} />
+              </div>
+            )}
           </div>
           {viewFullProfile.bio && <p style={{ fontSize: 13, color: textMuted, lineHeight: 1.75, marginBottom: 20 }}>{viewFullProfile.bio}</p>}
 
@@ -2334,15 +2506,33 @@ export default function CoLab() {
         <div className="pad fu" style={{ width: "100%", padding: "48px 32px" }}>
           {!editProfile ? (
             <div>
-              {/* Identity */}
+              {/* Identity + Banner side by side */}
               <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px", marginBottom: 20 }}>PROFILE</div>
-              <div style={{ display: "flex", gap: 16, alignItems: "center", marginBottom: 20 }}>
-                <Avatar initials={myInitials} size={52} dark={dark} />
-                <div>
-                  <div style={{ fontSize: 20, fontWeight: 400, color: text, letterSpacing: "-0.5px" }}>{profile?.name || "Anonymous"}</div>
-                  {profile?.username && <div style={{ fontSize: 11, color: textMuted, marginTop: 1 }}>@{profile.username}</div>}
-                  <div style={{ fontSize: 12, color: textMuted, marginTop: 2 }}>{profile?.role}</div>
-                  <div style={{ fontSize: 11, color: textMuted, marginTop: 3 }}>{following.length} following · {myProjects.length} project{myProjects.length !== 1 ? "s" : ""}</div>
+              <div style={{ display: "flex", gap: 24, alignItems: "flex-start", marginBottom: 20 }}>
+                {/* Left: identity */}
+                <div style={{ flexShrink: 0 }}>
+                  <div style={{ display: "flex", gap: 16, alignItems: "center", marginBottom: 12 }}>
+                    <Avatar initials={myInitials} size={52} dark={dark} />
+                    <div>
+                      <div style={{ fontSize: 20, fontWeight: 400, color: text, letterSpacing: "-0.5px" }}>{profile?.name || "Anonymous"}</div>
+                      {profile?.username && <div style={{ fontSize: 11, color: textMuted, marginTop: 1 }}>@{profile.username}</div>}
+                      <div style={{ fontSize: 12, color: textMuted, marginTop: 2 }}>{profile?.role}</div>
+                      <div style={{ fontSize: 11, color: textMuted, marginTop: 3 }}>{following.length} following · {myProjects.length} project{myProjects.length !== 1 ? "s" : ""}</div>
+                    </div>
+                  </div>
+                </div>
+                {/* Right: pixel banner */}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ position: "relative", border: `1px solid ${border}`, borderRadius: 8, overflow: "hidden", background: dark ? "#000" : "#fff", minHeight: 80, cursor: "pointer" }} onClick={() => setShowBannerEditor(true)}>
+                    {bannerPixels.some(v => v) ? (
+                      <PixelBannerDisplay pixels={bannerPixels} dark={dark} height={80} />
+                    ) : (
+                      <div style={{ height: 80, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                        <span style={{ fontSize: 11, color: textMuted }}>+ design your banner</span>
+                      </div>
+                    )}
+                    <div style={{ position: "absolute", bottom: 4, right: 6, fontSize: 9, color: textMuted, opacity: 0.6 }}>edit</div>
+                  </div>
                 </div>
               </div>
               {profile?.bio && <p style={{ fontSize: 13, color: textMuted, lineHeight: 1.75, marginBottom: 20 }}>{profile.bio}</p>}
