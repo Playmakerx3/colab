@@ -217,6 +217,7 @@ export default function CoLab() {
     @media (max-width: 640px) {
       .search-desktop { display: none !important; }
       .search-mobile { display: block !important; }
+      .nav-label { font-size: 10px !important; padding: 4px 4px !important; }
       .hero-h1 { font-size: 44px !important; letter-spacing: -2px !important; }
       .stat-grid { flex-direction: column !important; }
       .stat-item { border-right: none !important; border-bottom: 1px solid ${border} !important; padding: 16px 20px !important; }
@@ -1459,20 +1460,19 @@ export default function CoLab() {
         <div style={{ flex: 1 }} />
 
         {/* Nav items */}
-        <div style={{ display: "flex", gap: 1, alignItems: "center" }}>
+        <div style={{ display: "flex", gap: 0, alignItems: "center" }}>
           {navItems.map(({ id, label, badge }) => (
             <button key={id} onClick={() => { setAppScreen(id); setActiveProject(null); setViewingProfile(null); setShowNotifications(false); }}
-              style={{ position: "relative", background: appScreen === id && !activeProject && !showNotifications ? bg3 : "none", color: appScreen === id && !activeProject && !showNotifications ? text : textMuted, border: "none", borderRadius: 6, padding: "5px 7px", fontSize: 11, cursor: "pointer", fontFamily: "inherit", transition: "all 0.15s", whiteSpace: "nowrap", flexShrink: 0 }}>
+              style={{ position: "relative", background: appScreen === id && !activeProject && !showNotifications ? bg3 : "none", color: appScreen === id && !activeProject && !showNotifications ? text : textMuted, border: "none", borderRadius: 6, padding: "5px 5px", fontSize: 11, cursor: "pointer", fontFamily: "inherit", transition: "all 0.15s", whiteSpace: "nowrap", flexShrink: 0 }}>
               {label}
               {badge > 0 && <span style={{ position: "absolute", top: 2, right: 2, width: 5, height: 5, borderRadius: "50%", background: text, border: `1px solid ${bg}` }} />}
             </button>
           ))}
           <button onClick={() => { setShowNotifications(!showNotifications); if (!showNotifications) setNotifications(prev => prev.map(n => ({ ...n, read: true }))); }}
-            style={{ position: "relative", background: showNotifications ? bg3 : "none", border: "none", borderRadius: 6, padding: "5px 6px", cursor: "pointer", color: textMuted, fontSize: 12, fontFamily: "inherit", flexShrink: 0 }}>
+            style={{ position: "relative", background: showNotifications ? bg3 : "none", border: "none", borderRadius: 6, padding: "5px 4px", cursor: "pointer", color: textMuted, fontSize: 12, fontFamily: "inherit", flexShrink: 0 }}>
             ◎{unreadNotifs > 0 && <span style={{ position: "absolute", top: 3, right: 3, width: 5, height: 5, borderRadius: "50%", background: text, border: `1px solid ${bg}` }} />}
           </button>
-          <div style={{ width: 1, height: 14, background: border, margin: "0 2px", flexShrink: 0 }} />
-          <button onClick={() => setDark(!dark)} style={{ background: "none", border: `1px solid ${border}`, borderRadius: 6, padding: "3px 6px", cursor: "pointer", fontSize: 10, color: textMuted, fontFamily: "inherit", flexShrink: 0 }}>{dark ? "☀" : "☾"}</button>
+          <button onClick={() => setDark(!dark)} style={{ background: "none", border: `1px solid ${border}`, borderRadius: 6, padding: "3px 5px", cursor: "pointer", fontSize: 10, color: textMuted, fontFamily: "inherit", flexShrink: 0, marginLeft: 2 }}>{dark ? "☀" : "☾"}</button>
         </div>
       </nav>
 
