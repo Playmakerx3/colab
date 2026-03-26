@@ -202,7 +202,7 @@ export default function CoLab() {
   const CSS = `
     @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&display=swap');
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    html, body, #root { width: 100%; min-height: 100vh; margin: 0; padding: 0; overflow-x: hidden; background-color: ${dark ? "#0a0a0a" : "#ffffff"}; }
+    html, body, #root { width: 100%; min-height: 100vh; margin: 0; padding: 0; overflow-x: hidden; background-color: ${dark ? "#0a0a0a" : "#ffffff"}; transition: background-color 0.3s ease, color 0.3s ease; }
     body { background: ${dark ? "#0a0a0a" : "#ffffff"}; }
     input, select, textarea { outline: none; font-family: inherit; }
     ::-webkit-scrollbar { width: 3px; } ::-webkit-scrollbar-thumb { background: #2a2a2a; }
@@ -237,7 +237,9 @@ export default function CoLab() {
   useEffect(() => {
     const color = dark ? "#0a0a0a" : "#ffffff";
     document.body.style.backgroundColor = color;
+    document.body.style.transition = "background-color 0.3s ease";
     document.documentElement.style.backgroundColor = color;
+    document.documentElement.style.transition = "background-color 0.3s ease";
     let meta = document.querySelector('meta[name="theme-color"]');
     if (!meta) {
       meta = document.createElement("meta");
@@ -1386,7 +1388,7 @@ export default function CoLab() {
   ];
 
   return (
-    <div style={{ minHeight: "100vh", width: "100%", background: bg, color: text, fontFamily: "'DM Mono', monospace", transition: "background 0.2s, color 0.2s", overflowX: "hidden" }}>
+    <div style={{ minHeight: "100vh", width: "100%", background: bg, color: text, fontFamily: "'DM Mono', monospace", transition: "background-color 0.3s ease, color 0.3s ease", overflowX: "hidden" }}>
       <style>{CSS}</style>
 
       {/* NAV */}
