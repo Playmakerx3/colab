@@ -2202,6 +2202,7 @@ export default function CoLab() {
                 </div>
               </div>
             )}
+          </div>
         </div>
       )}
 
