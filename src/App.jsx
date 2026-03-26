@@ -90,26 +90,25 @@ function MentionInput({ value, onChange, onKeyDown, placeholder, users, style, r
 
 function FullProfilePortfolio({ userId, dark, bg, bg2, border, text, textMuted, labelStyle }) {
   const [items, setItems] = React.useState([]);
+  const [loaded, setLoaded] = React.useState(false);
   React.useEffect(() => {
-    supabase.from("portfolio_items").select("*").eq("user_id", userId).then(({ data }) => setItems(data || []));
+    supabase.from("portfolio_items").select("*").eq("user_id", userId).then(({ data }) => { setItems(data || []); setLoaded(true); });
   }, [userId]);
-  if (items.length === 0) return null;
+  if (!loaded) return <div style={{ fontSize: 12, color: textMuted }}>loading...</div>;
+  if (items.length === 0) return <div style={{ fontSize: 12, color: textMuted }}>no portfolio items yet.</div>;
   return (
-    <div style={{ marginBottom: 28, paddingBottom: 28, borderBottom: `1px solid ${border}` }}>
-      <div style={{ ...labelStyle, marginBottom: 12 }}>PORTFOLIO</div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
-        {items.map((item, i) => (
-          <div key={item.id} style={{ background: bg2, borderRadius: i === 0 && items.length === 1 ? 8 : i === 0 ? "8px 8px 0 0" : i === items.length - 1 ? "0 0 8px 8px" : 0, border: `1px solid ${border}`, borderBottom: i < items.length - 1 ? "none" : `1px solid ${border}`, padding: "14px 18px" }}>
-            <div style={{ fontSize: 14, color: text, marginBottom: 4 }}>{item.title}</div>
-            {item.description && <div style={{ fontSize: 12, color: textMuted, lineHeight: 1.65, marginBottom: 6 }}>{item.description}</div>}
-            {item.url && (
-              item.url.match(/\.(jpg|jpeg|png|gif|webp)$/i)
-                ? <img src={item.url} alt={item.title} style={{ maxWidth: "100%", maxHeight: 200, borderRadius: 8, border: `1px solid ${border}`, marginTop: 4 }} />
-                : <a href={item.url} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: text, textDecoration: "underline", wordBreak: "break-all" }}>{item.url.includes("user-uploads") ? "view file" : item.url}</a>
-            )}
-          </div>
-        ))}
-      </div>
+    <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
+      {items.map((item, i) => (
+        <div key={item.id} style={{ background: bg2, borderRadius: i === 0 && items.length === 1 ? 8 : i === 0 ? "8px 8px 0 0" : i === items.length - 1 ? "0 0 8px 8px" : 0, border: `1px solid ${border}`, borderBottom: i < items.length - 1 ? "none" : `1px solid ${border}`, padding: "14px 18px" }}>
+          <div style={{ fontSize: 14, color: text, marginBottom: 4 }}>{item.title}</div>
+          {item.description && <div style={{ fontSize: 12, color: textMuted, lineHeight: 1.65, marginBottom: 6 }}>{item.description}</div>}
+          {item.url && (
+            item.url.match(/\.(jpg|jpeg|png|gif|webp)$/i)
+              ? <img src={item.url} alt={item.title} style={{ maxWidth: "100%", maxHeight: 200, borderRadius: 8, border: `1px solid ${border}`, marginTop: 4 }} />
+              : <a href={item.url} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: text, textDecoration: "underline", wordBreak: "break-all" }}>{item.url.includes("user-uploads") ? "view file" : item.url}</a>
+          )}
+        </div>
+      ))}
     </div>
   );
 }
@@ -2240,57 +2239,91 @@ export default function CoLab() {
 
       {/* FULL PROFILE VIEW — other users */}
       {viewFullProfile && (
-        <div className="pad fu" style={{ width: "100%", maxWidth: 680, margin: "0 auto", padding: "36px 24px" }}>
-          <button onClick={() => setViewFullProfile(null)} style={{ ...btnG, marginBottom: 24, padding: "6px 14px", fontSize: 11 }}>← back</button>
+        <div className="pad fu" style={{ width: "100%", padding: "48px 32px" }}>
+          <button onClick={() => setViewFullProfile(null)} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontFamily: "inherit", fontSize: 12, marginBottom: 28 }}>← back</button>
+
+          {/* Identity — mirrors own profile */}
+          <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px", marginBottom: 20 }}>PROFILE</div>
           <div style={{ display: "flex", gap: 16, alignItems: "center", marginBottom: 20 }}>
             <Avatar initials={viewFullProfile.name?.split(" ").map(n => n[0]).join("").slice(0, 2)} size={52} dark={dark} />
             <div>
               <div style={{ fontSize: 20, fontWeight: 400, color: text, letterSpacing: "-0.5px" }}>{viewFullProfile.name}</div>
               {viewFullProfile.username && <div style={{ fontSize: 11, color: textMuted, marginTop: 1 }}>@{viewFullProfile.username}</div>}
               <div style={{ fontSize: 12, color: textMuted, marginTop: 2 }}>{viewFullProfile.role}</div>
+              <div style={{ fontSize: 11, color: textMuted, marginTop: 3 }}>{projects.filter(p => p.owner_id === viewFullProfile.id).length} project{projects.filter(p => p.owner_id === viewFullProfile.id).length !== 1 ? "s" : ""}</div>
             </div>
           </div>
-          {viewFullProfile.bio && <p style={{ fontSize: 13, color: textMuted, lineHeight: 1.75, marginBottom: 24 }}>{viewFullProfile.bio}</p>}
+          {viewFullProfile.bio && <p style={{ fontSize: 13, color: textMuted, lineHeight: 1.75, marginBottom: 20 }}>{viewFullProfile.bio}</p>}
 
           {/* Skills */}
-          {(viewFullProfile.skills || []).length > 0 && (
-            <div style={{ marginBottom: 28, paddingBottom: 28, borderBottom: `1px solid ${border}` }}>
-              <div style={{ ...labelStyle, marginBottom: 8 }}>SKILLS</div>
-              <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
-                {viewFullProfile.skills.map(s => {
-                  const shared = (profile?.skills || []).includes(s);
-                  return <span key={s} style={{ fontSize: 11, padding: "3px 10px", border: `1px solid ${shared ? (dark ? "#ffffff40" : "#00000030") : border}`, borderRadius: 3, color: shared ? text : textMuted, fontWeight: shared ? 500 : 400 }}>{s}{shared ? " ★" : ""}</span>;
-                })}
-              </div>
-            </div>
-          )}
+          <div style={{ marginBottom: 28, paddingBottom: 28, borderBottom: `1px solid ${border}` }}>
+            <div style={{ ...labelStyle, marginBottom: 8 }}>SKILLS</div>
+            {(viewFullProfile.skills || []).length === 0
+              ? <div style={{ fontSize: 12, color: textMuted }}>no skills listed.</div>
+              : <div>
+                  <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginBottom: 8 }}>
+                    {viewFullProfile.skills.map(s => {
+                      const shared = (profile?.skills || []).includes(s);
+                      return <span key={s} style={{ fontSize: 11, padding: "3px 10px", border: `1px solid ${shared ? (dark ? "#ffffff40" : "#00000030") : border}`, borderRadius: 3, color: shared ? text : textMuted, fontWeight: shared ? 500 : 400 }}>{s}{shared ? " ★" : ""}</span>;
+                    })}
+                  </div>
+                  {viewFullProfile.skills.filter(s => (profile?.skills || []).includes(s)).length > 0 &&
+                    <div style={{ fontSize: 10, color: textMuted }}>★ {viewFullProfile.skills.filter(s => (profile?.skills || []).includes(s)).length} shared skills with you</div>
+                  }
+                </div>
+            }
+          </div>
 
           {/* Portfolio */}
-          <FullProfilePortfolio userId={viewFullProfile.id} dark={dark} bg={bg} bg2={bg2} border={border} text={text} textMuted={textMuted} labelStyle={labelStyle} />
+          <div style={{ marginBottom: 28, paddingBottom: 28, borderBottom: `1px solid ${border}` }}>
+            <div style={{ ...labelStyle, marginBottom: 12 }}>PORTFOLIO</div>
+            <FullProfilePortfolio userId={viewFullProfile.id} dark={dark} bg={bg} bg2={bg2} border={border} text={text} textMuted={textMuted} labelStyle={labelStyle} />
+          </div>
 
           {/* Projects */}
-          {projects.filter(p => p.owner_id === viewFullProfile.id).length > 0 && (
-            <div style={{ marginBottom: 28, paddingBottom: 28, borderBottom: `1px solid ${border}` }}>
-              <div style={{ ...labelStyle, marginBottom: 12 }}>PROJECTS</div>
-              {projects.filter(p => p.owner_id === viewFullProfile.id).map(p => (
-                <div key={p.id} onClick={() => { setActiveProject(p); loadProjectData(p.id); setViewFullProfile(null); setAppScreen("explore"); }} style={{ padding: "10px 0", borderBottom: `1px solid ${border}`, cursor: "pointer" }}
-                  onMouseEnter={e => e.currentTarget.style.opacity = "0.6"} onMouseLeave={e => e.currentTarget.style.opacity = "1"}>
-                  <div style={{ fontSize: 13, color: text, marginBottom: 4 }}>{p.title}</div>
-                  <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
-                    {(p.skills || []).map(s => <span key={s} style={{ fontSize: 10, padding: "1px 7px", border: `1px solid ${border}`, borderRadius: 3, color: textMuted }}>{s}</span>)}
+          <div style={{ marginBottom: 28, paddingBottom: 28, borderBottom: `1px solid ${border}` }}>
+            <div style={{ ...labelStyle, marginBottom: 12 }}>PROJECTS</div>
+            {projects.filter(p => p.owner_id === viewFullProfile.id).length === 0
+              ? <div style={{ fontSize: 12, color: textMuted }}>no projects yet.</div>
+              : projects.filter(p => p.owner_id === viewFullProfile.id).map(p => (
+                  <div key={p.id} style={{ padding: "12px 0", borderBottom: `1px solid ${border}`, cursor: "pointer" }}
+                    onMouseEnter={e => e.currentTarget.style.opacity = "0.6"} onMouseLeave={e => e.currentTarget.style.opacity = "1"}
+                    onClick={() => { setActiveProject(p); loadProjectData(p.id); setViewFullProfile(null); setAppScreen("workspace"); }}>
+                    <div style={{ fontSize: 13, color: text, marginBottom: 4 }}>{p.title}</div>
+                    <div style={{ fontSize: 11, color: textMuted, marginBottom: 6 }}>{p.description?.slice(0, 80)}{p.description?.length > 80 ? "..." : ""}</div>
+                    <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
+                      {(p.skills || []).map(s => <span key={s} style={{ fontSize: 10, padding: "1px 7px", border: `1px solid ${border}`, borderRadius: 3, color: textMuted }}>{s}</span>)}
+                    </div>
                   </div>
-                </div>
-              ))}
-            </div>
-          )}
+                ))
+            }
+          </div>
+
+          {/* Activity — applications they've sent */}
+          <div style={{ marginBottom: 28, paddingBottom: 28, borderBottom: `1px solid ${border}` }}>
+            <div style={{ ...labelStyle, marginBottom: 12 }}>ACTIVITY</div>
+            {applications.filter(a => a.applicant_id === viewFullProfile.id && a.status === "accepted").length === 0
+              ? <div style={{ fontSize: 12, color: textMuted }}>no public activity.</div>
+              : applications.filter(a => a.applicant_id === viewFullProfile.id && a.status === "accepted").slice(0, 5).map(a => {
+                  const p = projects.find(proj => proj.id === a.project_id);
+                  return p ? (
+                    <div key={a.id} style={{ padding: "10px 14px", background: bg2, borderRadius: 8, border: `1px solid ${border}`, marginBottom: 8, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <div><div style={{ fontSize: 12, color: text, marginBottom: 2 }}>Collaborating on {p.title}</div><div style={{ fontSize: 10, color: textMuted }}>{new Date(a.created_at).toLocaleDateString()}</div></div>
+                      <span style={{ fontSize: 10, color: text, border: `1px solid ${border}`, borderRadius: 3, padding: "1px 6px" }}>collaborator</span>
+                    </div>
+                  ) : null;
+                })
+            }
+          </div>
 
           {/* Actions */}
           {viewFullProfile.id !== authUser?.id && (
-            <div style={{ display: "flex", gap: 10 }}>
-              <button onClick={() => handleFollow(viewFullProfile.id)} style={{ flex: 1, background: following.includes(viewFullProfile.id) ? bg3 : text, color: following.includes(viewFullProfile.id) ? textMuted : bg, border: `1px solid ${following.includes(viewFullProfile.id) ? border : text}`, borderRadius: 8, padding: "12px", fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}>
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+              <button onClick={() => handleFollow(viewFullProfile.id)} style={{ flex: 1, background: following.includes(viewFullProfile.id) ? bg3 : text, color: following.includes(viewFullProfile.id) ? textMuted : bg, border: `1px solid ${following.includes(viewFullProfile.id) ? border : text}`, borderRadius: 8, padding: "12px", fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: "inherit", minWidth: 100 }}>
                 {following.includes(viewFullProfile.id) ? "following" : "follow"}
               </button>
-              <button onClick={() => { openDm(viewFullProfile); setViewFullProfile(null); }} style={{ flex: 1, background: "none", color: text, border: `1px solid ${border}`, borderRadius: 8, padding: "12px", fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>message</button>
+              <button onClick={() => { openDm(viewFullProfile); setViewFullProfile(null); }} style={{ flex: 1, background: "none", color: text, border: `1px solid ${border}`, borderRadius: 8, padding: "12px", fontSize: 12, cursor: "pointer", fontFamily: "inherit", minWidth: 100 }}>message</button>
+              <button onClick={() => { setShowCreate(true); }} style={{ flex: 1, background: "none", color: text, border: `1px solid ${border}`, borderRadius: 8, padding: "12px", fontSize: 12, cursor: "pointer", fontFamily: "inherit", minWidth: 100 }}>collaborate →</button>
             </div>
           )}
         </div>
