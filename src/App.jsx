@@ -2656,14 +2656,13 @@ export default function CoLab() {
                       <div style={{ fontSize: 12, color: textMuted, marginTop: 2 }}>{profile?.role}</div>
                       {profile?.location && <div style={{ fontSize: 11, color: textMuted, marginTop: 1 }}>{profile.location}</div>}
                       <div style={{ fontSize: 11, color: textMuted, marginTop: 3, display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-                        <span>{following.length} following</span>
-                        <span style={{ opacity: 0.4 }}>·</span>
                         <button onClick={() => setShowCollaborators(authUser?.id)} style={{ background: "none", border: "none", color: myCollaborators.length > 0 ? text : textMuted, cursor: myCollaborators.length > 0 ? "pointer" : "default", fontFamily: "inherit", fontSize: 11, padding: 0, fontWeight: myCollaborators.length > 0 ? 500 : 400 }}>
                           {myCollaborators.length} collaborator{myCollaborators.length !== 1 ? "s" : ""}
                         </button>
                         <span style={{ opacity: 0.4 }}>·</span>
                         <span>{myProjects.length} project{myProjects.length !== 1 ? "s" : ""}</span>
                       </div>
+                      <div style={{ fontSize: 10, color: textMuted, marginTop: 4 }}>{following.length} following</div>
                     </div>
                   </div>
                 </div>
