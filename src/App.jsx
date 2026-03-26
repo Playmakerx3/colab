@@ -214,11 +214,9 @@ export default function CoLab() {
     .hb:hover { opacity: 0.7; cursor: pointer; }
     .card-h:hover { border-color: ${text} !important; }
     .task-row:hover .tdel { opacity: 1 !important; }
-    @media (max-width: 390px) {
-      .nav-label { display: none !important; }
-      .nav-icon { display: inline !important; }
-    }
     @media (max-width: 640px) {
+      .search-desktop { display: none !important; }
+      .search-mobile { display: block !important; }
       .hero-h1 { font-size: 44px !important; letter-spacing: -2px !important; }
       .stat-grid { flex-direction: column !important; }
       .stat-item { border-right: none !important; border-bottom: 1px solid ${border} !important; padding: 16px 20px !important; }
@@ -1391,20 +1389,55 @@ export default function CoLab() {
       <style>{CSS}</style>
 
       {/* NAV */}
-      <nav style={{ position: "sticky", top: 0, zIndex: 50, width: "100%", background: dark ? "rgba(10,10,10,0.97)" : "rgba(255,255,255,0.97)", backdropFilter: "blur(12px)", borderBottom: `1px solid ${border}`, padding: "0 12px", display: "flex", alignItems: "center", gap: 10, height: 50 }}>
+      <nav style={{ position: "sticky", top: 0, zIndex: 50, width: "100%", background: dark ? "rgba(10,10,10,0.97)" : "rgba(255,255,255,0.97)", backdropFilter: "blur(12px)", borderBottom: `1px solid ${border}`, padding: "0 12px", display: "flex", alignItems: "center", gap: 8, height: 50 }}>
         <button onClick={() => { setAppScreen("explore"); setActiveProject(null); setViewingProfile(null); }} style={{ background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: 14, fontWeight: 500, color: text, letterSpacing: "-0.5px", flexShrink: 0 }}>[CoLab]</button>
 
-        {/* Global search — right of logo */}
-        <div style={{ position: "relative", width: 180, flexShrink: 0 }}>
-          <input
-            placeholder="search people..."
-            value={globalSearch}
-            onChange={e => { setGlobalSearch(e.target.value); setShowGlobalSearch(e.target.value.length > 0); }}
-            onBlur={() => setTimeout(() => setShowGlobalSearch(false), 150)}
-            style={{ ...inputStyle, fontSize: 11, padding: "5px 10px", borderRadius: 6 }}
-          />
-          {showGlobalSearch && (
-            <div style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, background: bg, border: `1px solid ${border}`, borderRadius: 8, zIndex: 300, overflow: "hidden", boxShadow: dark ? "0 8px 24px rgba(0,0,0,0.6)" : "0 8px 24px rgba(0,0,0,0.1)" }}>
+        {/* Global search — full bar on desktop, expandable on mobile */}
+        <div style={{ position: "relative", flexShrink: 0 }} className="search-wrap">
+          {/* Desktop: full input */}
+          <div className="search-desktop" style={{ width: 180 }}>
+            <input
+              placeholder="search people..."
+              value={globalSearch}
+              onChange={e => { setGlobalSearch(e.target.value); setShowGlobalSearch(e.target.value.length > 0); }}
+              onBlur={() => setTimeout(() => setShowGlobalSearch(false), 150)}
+              style={{ ...inputStyle, fontSize: 11, padding: "5px 10px", borderRadius: 6 }}
+            />
+          </div>
+          {/* Mobile: tap to expand */}
+          <div className="search-mobile" style={{ display: "none" }}>
+            <button onClick={() => { setShowGlobalSearch(!showGlobalSearch); if (!showGlobalSearch) setTimeout(() => document.getElementById("mobile-search")?.focus(), 50); }} style={{ background: "none", border: `1px solid ${border}`, borderRadius: 6, padding: "4px 8px", cursor: "pointer", fontSize: 11, color: textMuted, fontFamily: "inherit" }}>
+              srch
+            </button>
+            {showGlobalSearch && (
+              <div style={{ position: "fixed", top: 58, left: 12, right: 12, background: bg, border: `1px solid ${border}`, borderRadius: 10, zIndex: 300, padding: "10px", boxShadow: dark ? "0 8px 24px rgba(0,0,0,0.8)" : "0 8px 24px rgba(0,0,0,0.15)" }}>
+                <input
+                  id="mobile-search"
+                  placeholder="search people..."
+                  value={globalSearch}
+                  onChange={e => setGlobalSearch(e.target.value)}
+                  autoFocus
+                  style={{ ...inputStyle, fontSize: 13, marginBottom: globalSearch.length > 0 ? 8 : 0 }}
+                />
+                {globalSearch.length > 0 && users.filter(u => u.id !== authUser?.id && u.name?.toLowerCase().includes(globalSearch.toLowerCase())).slice(0, 5).map(u => (
+                  <button key={u.id} onClick={() => { setViewingProfile(u); setGlobalSearch(""); setShowGlobalSearch(false); }} style={{ width: "100%", padding: "10px 12px", background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", display: "flex", gap: 10, alignItems: "center", textAlign: "left", borderTop: `1px solid ${border}` }}
+                    onMouseEnter={e => e.currentTarget.style.background = bg2} onMouseLeave={e => e.currentTarget.style.background = "none"}>
+                    <Avatar initials={u.name?.split(" ").map(n => n[0]).join("").slice(0, 2)} size={28} dark={dark} />
+                    <div>
+                      <div style={{ fontSize: 13, color: text }}>{u.name}</div>
+                      <div style={{ fontSize: 11, color: textMuted }}>{u.role}</div>
+                    </div>
+                  </button>
+                ))}
+                {globalSearch.length > 0 && users.filter(u => u.id !== authUser?.id && u.name?.toLowerCase().includes(globalSearch.toLowerCase())).length === 0 && (
+                  <div style={{ fontSize: 12, color: textMuted, padding: "8px 4px" }}>no results.</div>
+                )}
+              </div>
+            )}
+          </div>
+          {/* Desktop dropdown results */}
+          {showGlobalSearch && globalSearch.length > 0 && (
+            <div className="search-desktop" style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, width: 180, background: bg, border: `1px solid ${border}`, borderRadius: 8, zIndex: 300, overflow: "hidden", boxShadow: dark ? "0 8px 24px rgba(0,0,0,0.6)" : "0 8px 24px rgba(0,0,0,0.1)" }}>
               {users.filter(u => u.id !== authUser?.id && u.name?.toLowerCase().includes(globalSearch.toLowerCase())).slice(0, 5).map(u => (
                 <button key={u.id} onClick={() => { setViewingProfile(u); setGlobalSearch(""); setShowGlobalSearch(false); }} style={{ width: "100%", padding: "10px 14px", background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", display: "flex", gap: 10, alignItems: "center", textAlign: "left" }}
                   onMouseEnter={e => e.currentTarget.style.background = bg2} onMouseLeave={e => e.currentTarget.style.background = "none"}>
@@ -1422,22 +1455,24 @@ export default function CoLab() {
           )}
         </div>
 
-        {/* Nav items pushed to the right */}
+        {/* Spacer */}
         <div style={{ flex: 1 }} />
+
+        {/* Nav items */}
         <div style={{ display: "flex", gap: 1, alignItems: "center" }}>
           {navItems.map(({ id, label, badge }) => (
             <button key={id} onClick={() => { setAppScreen(id); setActiveProject(null); setViewingProfile(null); setShowNotifications(false); }}
-              style={{ position: "relative", background: appScreen === id && !activeProject && !showNotifications ? bg3 : "none", color: appScreen === id && !activeProject && !showNotifications ? text : textMuted, border: "none", borderRadius: 6, padding: "5px 8px", fontSize: 11, cursor: "pointer", fontFamily: "inherit", transition: "all 0.15s", whiteSpace: "nowrap", flexShrink: 0 }}>
+              style={{ position: "relative", background: appScreen === id && !activeProject && !showNotifications ? bg3 : "none", color: appScreen === id && !activeProject && !showNotifications ? text : textMuted, border: "none", borderRadius: 6, padding: "5px 7px", fontSize: 11, cursor: "pointer", fontFamily: "inherit", transition: "all 0.15s", whiteSpace: "nowrap", flexShrink: 0 }}>
               {label}
               {badge > 0 && <span style={{ position: "absolute", top: 2, right: 2, width: 5, height: 5, borderRadius: "50%", background: text, border: `1px solid ${bg}` }} />}
             </button>
           ))}
           <button onClick={() => { setShowNotifications(!showNotifications); if (!showNotifications) setNotifications(prev => prev.map(n => ({ ...n, read: true }))); }}
-            style={{ position: "relative", background: showNotifications ? bg3 : "none", border: "none", borderRadius: 6, padding: "5px 7px", cursor: "pointer", color: textMuted, fontSize: 12, fontFamily: "inherit", flexShrink: 0 }}>
+            style={{ position: "relative", background: showNotifications ? bg3 : "none", border: "none", borderRadius: 6, padding: "5px 6px", cursor: "pointer", color: textMuted, fontSize: 12, fontFamily: "inherit", flexShrink: 0 }}>
             ◎{unreadNotifs > 0 && <span style={{ position: "absolute", top: 3, right: 3, width: 5, height: 5, borderRadius: "50%", background: text, border: `1px solid ${bg}` }} />}
           </button>
           <div style={{ width: 1, height: 14, background: border, margin: "0 2px", flexShrink: 0 }} />
-          <button onClick={() => setDark(!dark)} style={{ background: "none", border: `1px solid ${border}`, borderRadius: 6, padding: "3px 7px", cursor: "pointer", fontSize: 10, color: textMuted, fontFamily: "inherit", flexShrink: 0 }}>{dark ? "☀" : "☾"}</button>
+          <button onClick={() => setDark(!dark)} style={{ background: "none", border: `1px solid ${border}`, borderRadius: 6, padding: "3px 6px", cursor: "pointer", fontSize: 10, color: textMuted, fontFamily: "inherit", flexShrink: 0 }}>{dark ? "☀" : "☾"}</button>
         </div>
       </nav>
 
