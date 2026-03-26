@@ -836,6 +836,32 @@ export default function CoLab() {
   };
 
   const myProjects = projects.filter(p => p.owner_id === authUser?.id);
+
+  // Derive collaborators from accepted applications (both directions)
+  const getCollaborators = (userId) => {
+    const asApplicant = applications.filter(a => a.applicant_id === userId && a.status === "accepted").map(a => {
+      const proj = projects.find(p => p.id === a.project_id);
+      const owner = users.find(u => u.id === proj?.owner_id);
+      return owner && owner.id !== userId ? { user: owner, project: proj } : null;
+    }).filter(Boolean);
+    const asOwner = applications.filter(a => {
+      const proj = projects.find(p => p.id === a.project_id);
+      return proj?.owner_id === userId && a.status === "accepted";
+    }).map(a => {
+      const collaborator = users.find(u => u.id === a.applicant_id);
+      const proj = projects.find(p => p.id === a.project_id);
+      return collaborator ? { user: collaborator, project: proj } : null;
+    }).filter(Boolean);
+    const seen = new Set();
+    return [...asApplicant, ...asOwner].filter(c => {
+      if (seen.has(c.user.id)) return false;
+      seen.add(c.user.id);
+      return true;
+    });
+  };
+
+  const myCollaborators = getCollaborators(authUser?.id);
+  const [showCollaborators, setShowCollaborators] = useState(null); // userId whose collaborators to show
   const appliedProjectIds = applications.filter(a => a.applicant_id === authUser?.id).map(a => a.project_id);
   const browseBase = projects.filter(p => p.owner_id !== authUser?.id);
   const forYou = browseBase.map(p => ({ ...p, _s: getMatchScore(p) })).filter(p => p._s > 0).sort((a, b) => b._s - a._s);
@@ -1745,6 +1771,56 @@ export default function CoLab() {
       {reviewingApplicants && <ReviewModal project={reviewingApplicants} onClose={() => setReviewingApplicants(null)} />}
       {showBannerEditor && <BannerEditor pixels={bannerPixels} onSave={saveBanner} onClose={() => setShowBannerEditor(false)} dark={dark} bg={bg} bg2={bg2} bg3={bg3} border={border} text={text} textMuted={textMuted} />}
 
+      {/* COLLABORATORS MODAL */}
+      {showCollaborators && (() => {
+        const collabs = getCollaborators(showCollaborators);
+        const isMe = showCollaborators === authUser?.id;
+        const subjectUser = isMe ? profile : users.find(u => u.id === showCollaborators);
+        return (
+          <div onClick={() => setShowCollaborators(null)} style={{ position: "fixed", inset: 0, background: dark ? "rgba(0,0,0,0.92)" : "rgba(200,200,200,0.88)", zIndex: 300, display: "flex", alignItems: "center", justifyContent: "center", backdropFilter: "blur(12px)", padding: 16 }}>
+            <div onClick={e => e.stopPropagation()} style={{ background: bg, border: `1px solid ${border}`, borderRadius: 16, padding: "28px", width: "100%", maxWidth: 480, maxHeight: "80vh", overflowY: "auto" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24 }}>
+                <div>
+                  <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px", marginBottom: 6 }}>COLLABORATORS</div>
+                  <div style={{ fontSize: 16, color: text, fontWeight: 400 }}>{isMe ? "your" : `${subjectUser?.name?.split(" ")[0]}'s`} network</div>
+                  <div style={{ fontSize: 12, color: textMuted, marginTop: 3 }}>{collabs.length} people {isMe ? "you've" : "they've"} built with</div>
+                </div>
+                <button onClick={() => setShowCollaborators(null)} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontSize: 16, fontFamily: "inherit" }}>✕</button>
+              </div>
+              {collabs.length === 0 ? (
+                <div style={{ fontSize: 13, color: textMuted, padding: "20px 0", textAlign: "center" }}>
+                  {isMe ? "no collaborators yet. accept someone into a project to start building your network." : "no collaborators yet."}
+                </div>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
+                  {collabs.map((c, i) => (
+                    <div key={c.user.id} onClick={() => { setShowCollaborators(null); setViewFullProfile(c.user); }} style={{ display: "flex", gap: 14, alignItems: "center", padding: "14px 16px", background: bg2, borderRadius: i === 0 && collabs.length === 1 ? 10 : i === 0 ? "10px 10px 0 0" : i === collabs.length - 1 ? "0 0 10px 10px" : 0, border: `1px solid ${border}`, borderBottom: i < collabs.length - 1 ? "none" : `1px solid ${border}`, cursor: "pointer", transition: "opacity 0.15s" }}
+                      onMouseEnter={e => e.currentTarget.style.opacity = "0.7"} onMouseLeave={e => e.currentTarget.style.opacity = "1"}>
+                      <Avatar initials={c.user.name?.split(" ").map(n => n[0]).join("").slice(0, 2)} size={40} dark={dark} />
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 14, color: text, fontWeight: 400, marginBottom: 2 }}>{c.user.name}</div>
+                        {c.user.username && <div style={{ fontSize: 11, color: textMuted, marginBottom: 3 }}>@{c.user.username}</div>}
+                        <div style={{ fontSize: 11, color: textMuted }}>{c.user.role}</div>
+                      </div>
+                      <div style={{ textAlign: "right", flexShrink: 0 }}>
+                        <div style={{ fontSize: 10, color: textMuted, marginBottom: 2 }}>via</div>
+                        <div style={{ fontSize: 11, color: text, maxWidth: 120, textAlign: "right", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.project?.title}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {isMe && collabs.length > 0 && (
+                <div style={{ marginTop: 20, padding: "14px 16px", background: bg3, borderRadius: 8, border: `1px solid ${border}` }}>
+                  <div style={{ fontSize: 12, color: text, marginBottom: 4 }}>grow your network</div>
+                  <div style={{ fontSize: 11, color: textMuted }}>every accepted collaboration adds to your profile. the more you build, the stronger your reputation on CoLab.</div>
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })()}
+
       {/* EXPLORE */}
       {!viewFullProfile && appScreen === "explore" && !activeProject && (
         <div className="pad fu" style={{ width: "100%", padding: "48px 32px" }}>
@@ -2415,7 +2491,13 @@ export default function CoLab() {
                   <div style={{ fontSize: 20, fontWeight: 400, color: text, letterSpacing: "-0.5px" }}>{viewFullProfile.name}</div>
                   {viewFullProfile.username && <div style={{ fontSize: 11, color: textMuted, marginTop: 1 }}>@{viewFullProfile.username}</div>}
                   <div style={{ fontSize: 12, color: textMuted, marginTop: 2 }}>{viewFullProfile.role}</div>
-                  <div style={{ fontSize: 11, color: textMuted, marginTop: 3 }}>{projects.filter(p => p.owner_id === viewFullProfile.id).length} project{projects.filter(p => p.owner_id === viewFullProfile.id).length !== 1 ? "s" : ""}</div>
+                  <div style={{ fontSize: 11, color: textMuted, marginTop: 3, display: "flex", gap: 10, flexWrap: "wrap" }}>
+                    <span>{projects.filter(p => p.owner_id === viewFullProfile.id).length} project{projects.filter(p => p.owner_id === viewFullProfile.id).length !== 1 ? "s" : ""}</span>
+                    <span>·</span>
+                    <button onClick={() => setShowCollaborators(viewFullProfile.id)} style={{ background: "none", border: "none", color: getCollaborators(viewFullProfile.id).length > 0 ? text : textMuted, cursor: getCollaborators(viewFullProfile.id).length > 0 ? "pointer" : "default", fontFamily: "inherit", fontSize: 11, padding: 0, fontWeight: getCollaborators(viewFullProfile.id).length > 0 ? 500 : 400 }}>
+                      {getCollaborators(viewFullProfile.id).length} collaborator{getCollaborators(viewFullProfile.id).length !== 1 ? "s" : ""}
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -2517,7 +2599,15 @@ export default function CoLab() {
                       <div style={{ fontSize: 20, fontWeight: 400, color: text, letterSpacing: "-0.5px" }}>{profile?.name || "Anonymous"}</div>
                       {profile?.username && <div style={{ fontSize: 11, color: textMuted, marginTop: 1 }}>@{profile.username}</div>}
                       <div style={{ fontSize: 12, color: textMuted, marginTop: 2 }}>{profile?.role}</div>
-                      <div style={{ fontSize: 11, color: textMuted, marginTop: 3 }}>{following.length} following · {myProjects.length} project{myProjects.length !== 1 ? "s" : ""}</div>
+                      <div style={{ fontSize: 11, color: textMuted, marginTop: 3, display: "flex", gap: 10, flexWrap: "wrap" }}>
+                        <span>{following.length} following</span>
+                        <span>·</span>
+                        <span>{myProjects.length} project{myProjects.length !== 1 ? "s" : ""}</span>
+                        <span>·</span>
+                        <button onClick={() => setShowCollaborators(authUser?.id)} style={{ background: "none", border: "none", color: myCollaborators.length > 0 ? text : textMuted, cursor: myCollaborators.length > 0 ? "pointer" : "default", fontFamily: "inherit", fontSize: 11, padding: 0, fontWeight: myCollaborators.length > 0 ? 500 : 400 }}>
+                          {myCollaborators.length} collaborator{myCollaborators.length !== 1 ? "s" : ""}
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>
