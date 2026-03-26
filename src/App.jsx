@@ -327,10 +327,11 @@ export default function CoLab() {
   const [showNotifications, setShowNotifications] = useState(false);
   const [filterSkill, setFilterSkill] = useState(null);
   const [networkFilter, setNetworkFilter] = useState(null);
+  const [regionFilter, setRegionFilter] = useState(null); // local, national, international
   const [search, setSearch] = useState("");
   const [toast, setToast] = useState(null);
   const [showCreate, setShowCreate] = useState(false);
-  const [newProject, setNewProject] = useState({ title: "", description: "", category: CATEGORIES[0], skills: [], maxCollaborators: 2 });
+  const [newProject, setNewProject] = useState({ title: "", description: "", category: CATEGORIES[0], skills: [], maxCollaborators: 2, location: "" });
   const [newTaskText, setNewTaskText] = useState("");
   const [taskAssignee, setTaskAssignee] = useState("");
   const [taskDueDate, setTaskDueDate] = useState("");
@@ -653,7 +654,8 @@ export default function CoLab() {
 
   const handleSaveProfile = async () => {
     const { data, error } = await supabase.from("profiles").update({
-      name: profile.name, username: profile.username, role: profile.role, bio: profile.bio, skills: profile.skills,
+      name: profile.name, username: profile.username, role: profile.role,
+      bio: profile.bio, skills: profile.skills, location: profile.location || "",
     }).eq("id", authUser.id).select().single();
     if (!error) { setProfile(data); setEditProfile(false); showToast("Profile saved."); }
   };
@@ -685,6 +687,7 @@ export default function CoLab() {
       title: newProject.title, description: newProject.description,
       category: newProject.category, skills: newProject.skills,
       max_collaborators: newProject.maxCollaborators,
+      location: newProject.location || profile?.location || "",
       owner_id: authUser.id, owner_name: profile.name,
       owner_initials: myInitials, status: "open", progress: 0, plugins: [], collaborators: 0,
     }).select().single();
@@ -903,6 +906,7 @@ export default function CoLab() {
         <div style={{ textAlign: "right", flexShrink: 0 }}>
           <div style={{ fontSize: 11, color: spots > 0 ? text : textMuted, fontWeight: spots > 0 ? 500 : 300, marginBottom: 3 }}>{spots > 0 ? `${spots} open` : "full"}</div>
           <div style={{ fontSize: 10, color: textMuted }}>{p.category}</div>
+          {p.location && <div style={{ fontSize: 10, color: textMuted, marginTop: 2 }}>{p.location}</div>}
         </div>
       </div>
     );
@@ -919,6 +923,7 @@ export default function CoLab() {
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: 14, fontWeight: 500, color: text }}>{u.name}</div>
             <div style={{ fontSize: 11, color: textMuted, marginTop: 2 }}>{u.role}</div>
+            {u.location && <div style={{ fontSize: 10, color: textMuted, marginTop: 2 }}>{u.location}</div>}
             <div style={{ fontSize: 10, color: textMuted, marginTop: 4 }}>{userProjects.length} project{userProjects.length !== 1 ? "s" : ""}</div>
           </div>
         </div>
@@ -1411,14 +1416,40 @@ export default function CoLab() {
               </div>
             </div>
 
+            {/* Feed region filter */}
+            <div style={{ marginBottom: 16, display: "flex", gap: 5, flexWrap: "wrap", alignItems: "center" }}>
+              <span style={{ fontSize: 10, color: textMuted, letterSpacing: "1px" }}>REGION</span>
+              {["local","city","national","international"].map(r => { const sel = regionFilter === r; return <button key={r} className="hb" onClick={() => setRegionFilter(sel ? null : r)} style={{ padding: "3px 10px", borderRadius: 3, fontSize: 10, cursor: "pointer", fontFamily: "inherit", background: sel ? text : "none", color: sel ? bg : textMuted, border: `1px solid ${sel ? text : border}`, transition: "all 0.15s" }}>{r}</button>; })}
+            </div>
+
             {/* Feed */}
-            {feedToShow.length === 0
+            {feedToShow.filter(post => {
+              if (!regionFilter) return true;
+              const poster = users.find(u => u.id === post.user_id);
+              const loc = (poster?.location || "").toLowerCase();
+              const myLoc = (profile?.location || "").toLowerCase();
+              const myCity = myLoc.split(",")[0].trim();
+              if (regionFilter === "local" || regionFilter === "city") return myCity && loc.includes(myCity);
+              if (regionFilter === "national") return loc.includes("us") || loc.includes("usa") || loc.includes("united states") || (myLoc && loc.split(",").pop().trim() === myLoc.split(",").pop().trim());
+              if (regionFilter === "international") return myLoc && !loc.includes(myLoc.split(",").pop().trim().toLowerCase());
+              return true;
+            }).length === 0
               ? <div style={{ fontSize: 13, color: textMuted, padding: "24px 0" }}>
-                  {networkTab === "feed-following"
+                  {regionFilter ? `no posts from ${regionFilter} builders yet.` : networkTab === "feed-following"
                     ? <>nothing yet from people you follow. <button className="hb" onClick={() => setNetworkTab("people")} style={{ background: "none", border: "none", color: text, cursor: "pointer", fontFamily: "inherit", fontSize: 13, textDecoration: "underline" }}>find people →</button></>
                     : "no posts yet. be the first."}
                 </div>
-              : feedToShow.map(post => <PostCard key={post.id} post={post} />)
+              : feedToShow.filter(post => {
+                  if (!regionFilter) return true;
+                  const poster = users.find(u => u.id === post.user_id);
+                  const loc = (poster?.location || "").toLowerCase();
+                  const myLoc = (profile?.location || "").toLowerCase();
+                  const myCity = myLoc.split(",")[0].trim();
+                  if (regionFilter === "local" || regionFilter === "city") return myCity && loc.includes(myCity);
+                  if (regionFilter === "national") return loc.includes("us") || loc.includes("usa") || loc.includes("united states") || (myLoc && loc.split(",").pop().trim() === myLoc.split(",").pop().trim());
+                  if (regionFilter === "international") return myLoc && !loc.includes(myLoc.split(",").pop().trim().toLowerCase());
+                  return true;
+                }).map(post => <PostCard key={post.id} post={post} />)
             }
           </div>
         )}
@@ -1426,12 +1457,30 @@ export default function CoLab() {
         {/* People tab */}
         {networkTab === "people" && (
           <div>
-            <div style={{ marginBottom: 16, display: "flex", gap: 5, flexWrap: "wrap" }}>
-              {["Design","Engineering","Marketing","Music","Finance","AI/ML","Writing","Video","Product"].map(s => { const sel = networkFilter === s; return <button key={s} className="hb" onClick={() => setNetworkFilter(sel ? null : s)} style={{ padding: "3px 10px", borderRadius: 3, fontSize: 10, cursor: "pointer", fontFamily: "inherit", background: sel ? text : "none", color: sel ? bg : textMuted, border: `1px solid ${sel ? text : border}`, transition: "all 0.15s" }}>{s}</button>; })}
-              {networkFilter && <button className="hb" onClick={() => setNetworkFilter(null)} style={{ padding: "3px 10px", borderRadius: 3, fontSize: 10, cursor: "pointer", fontFamily: "inherit", background: "none", color: textMuted, border: `1px solid ${border}` }}>clear</button>}
+            <div style={{ marginBottom: 16, display: "flex", flexDirection: "column", gap: 8 }}>
+              <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
+                {["Design","Engineering","Marketing","Music","Finance","AI/ML","Writing","Video","Product"].map(s => { const sel = networkFilter === s; return <button key={s} className="hb" onClick={() => setNetworkFilter(sel ? null : s)} style={{ padding: "3px 10px", borderRadius: 3, fontSize: 10, cursor: "pointer", fontFamily: "inherit", background: sel ? text : "none", color: sel ? bg : textMuted, border: `1px solid ${sel ? text : border}`, transition: "all 0.15s" }}>{s}</button>; })}
+                {networkFilter && <button className="hb" onClick={() => setNetworkFilter(null)} style={{ padding: "3px 10px", borderRadius: 3, fontSize: 10, cursor: "pointer", fontFamily: "inherit", background: "none", color: textMuted, border: `1px solid ${border}` }}>clear</button>}
+              </div>
+              <div style={{ display: "flex", gap: 5, flexWrap: "wrap", alignItems: "center" }}>
+                <span style={{ fontSize: 10, color: textMuted, letterSpacing: "1px" }}>REGION</span>
+                {["local","city","national","international"].map(r => { const sel = regionFilter === r; return <button key={r} className="hb" onClick={() => setRegionFilter(sel ? null : r)} style={{ padding: "3px 10px", borderRadius: 3, fontSize: 10, cursor: "pointer", fontFamily: "inherit", background: sel ? text : "none", color: sel ? bg : textMuted, border: `1px solid ${sel ? text : border}`, transition: "all 0.15s" }}>{r}</button>; })}
+              </div>
             </div>
             <div className="network-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 14 }}>
-              {users.filter(u => u.id !== authUser?.id && (!networkFilter || (u.skills || []).includes(networkFilter))).map(u => <UserCard key={u.id} u={u} />)}
+              {users.filter(u => {
+                if (u.id === authUser?.id) return false;
+                if (networkFilter && !(u.skills || []).includes(networkFilter)) return false;
+                if (regionFilter && u.location) {
+                  const loc = (u.location || "").toLowerCase();
+                  const myLoc = (profile?.location || "").toLowerCase();
+                  const myCity = myLoc.split(",")[0].trim();
+                  if (regionFilter === "local" || regionFilter === "city") return loc.includes(myCity) && myCity.length > 0;
+                  if (regionFilter === "national") return loc.includes("us") || loc.includes("usa") || loc.includes("united states") || (myLoc && loc.split(",").pop().trim() === myLoc.split(",").pop().trim());
+                  if (regionFilter === "international") return myLoc && !loc.includes(myLoc.split(",").pop().trim().toLowerCase());
+                }
+                return true;
+              }).map(u => <UserCard key={u.id} u={u} />)}
             </div>
           </div>
         )}
@@ -1879,8 +1928,13 @@ export default function CoLab() {
                       {["Design","Engineering","Marketing","Music","Video","Finance","AI/ML","Writing","Product"].map(s => { const sel = filterSkill === s; return <button key={s} className="hb" onClick={() => setFilterSkill(sel ? null : s)} style={{ padding: "3px 10px", borderRadius: 3, fontSize: 10, cursor: "pointer", fontFamily: "inherit", background: sel ? text : "none", color: sel ? bg : textMuted, border: `1px solid ${sel ? text : border}`, transition: "all 0.15s" }}>{s}</button>; })}
                       {filterSkill && <button className="hb" onClick={() => setFilterSkill(null)} style={{ padding: "3px 10px", borderRadius: 3, fontSize: 10, cursor: "pointer", fontFamily: "inherit", background: "none", color: textMuted, border: `1px solid ${border}` }}>clear</button>}
                     </div>
+                    {/* Region filter */}
+                    <div style={{ display: "flex", gap: 5, flexWrap: "wrap", alignItems: "center" }}>
+                      <span style={{ fontSize: 10, color: textMuted, letterSpacing: "1px" }}>REGION</span>
+                      {["local","city","national","international"].map(r => { const sel = regionFilter === r; return <button key={r} className="hb" onClick={() => setRegionFilter(sel ? null : r)} style={{ padding: "3px 10px", borderRadius: 3, fontSize: 10, cursor: "pointer", fontFamily: "inherit", background: sel ? text : "none", color: sel ? bg : textMuted, border: `1px solid ${sel ? text : border}`, transition: "all 0.15s" }}>{r}</button>; })}
+                    </div>
                   </div>
-                  {allP.length === 0 ? <div style={{ padding: "36px 0", textAlign: "center", color: textMuted, fontSize: 12 }}>no results.</div> : allP.map(p => <PRow key={p.id} p={p} />)}
+                  {allP.length === 0 ? <div style={{ padding: "36px 0", textAlign: "center", color: textMuted, fontSize: 12 }}>no results.</div> : allP.filter(p => !regionFilter || (p.location || "").toLowerCase().includes(regionFilter === "local" ? (profile?.location || "").split(",")[0].toLowerCase() : regionFilter === "city" ? (profile?.location || "").split(",")[0].toLowerCase() : regionFilter === "national" ? "us" : "")).map(p => <PRow key={p.id} p={p} />)}
                 </div>
               )}
             </>
@@ -2491,12 +2545,13 @@ export default function CoLab() {
                   <div style={{ fontSize: 20, fontWeight: 400, color: text, letterSpacing: "-0.5px" }}>{viewFullProfile.name}</div>
                   {viewFullProfile.username && <div style={{ fontSize: 11, color: textMuted, marginTop: 1 }}>@{viewFullProfile.username}</div>}
                   <div style={{ fontSize: 12, color: textMuted, marginTop: 2 }}>{viewFullProfile.role}</div>
-                  <div style={{ fontSize: 11, color: textMuted, marginTop: 3, display: "flex", gap: 10, flexWrap: "wrap" }}>
-                    <span>{projects.filter(p => p.owner_id === viewFullProfile.id).length} project{projects.filter(p => p.owner_id === viewFullProfile.id).length !== 1 ? "s" : ""}</span>
-                    <span>·</span>
+                  {viewFullProfile.location && <div style={{ fontSize: 11, color: textMuted, marginTop: 1 }}>{viewFullProfile.location}</div>}
+                  <div style={{ fontSize: 11, color: textMuted, marginTop: 3, display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
                     <button onClick={() => setShowCollaborators(viewFullProfile.id)} style={{ background: "none", border: "none", color: getCollaborators(viewFullProfile.id).length > 0 ? text : textMuted, cursor: getCollaborators(viewFullProfile.id).length > 0 ? "pointer" : "default", fontFamily: "inherit", fontSize: 11, padding: 0, fontWeight: getCollaborators(viewFullProfile.id).length > 0 ? 500 : 400 }}>
                       {getCollaborators(viewFullProfile.id).length} collaborator{getCollaborators(viewFullProfile.id).length !== 1 ? "s" : ""}
                     </button>
+                    <span style={{ opacity: 0.4 }}>·</span>
+                    <span>{projects.filter(p => p.owner_id === viewFullProfile.id).length} project{projects.filter(p => p.owner_id === viewFullProfile.id).length !== 1 ? "s" : ""}</span>
                   </div>
                 </div>
               </div>
@@ -2599,14 +2654,15 @@ export default function CoLab() {
                       <div style={{ fontSize: 20, fontWeight: 400, color: text, letterSpacing: "-0.5px" }}>{profile?.name || "Anonymous"}</div>
                       {profile?.username && <div style={{ fontSize: 11, color: textMuted, marginTop: 1 }}>@{profile.username}</div>}
                       <div style={{ fontSize: 12, color: textMuted, marginTop: 2 }}>{profile?.role}</div>
-                      <div style={{ fontSize: 11, color: textMuted, marginTop: 3, display: "flex", gap: 10, flexWrap: "wrap" }}>
+                      {profile?.location && <div style={{ fontSize: 11, color: textMuted, marginTop: 1 }}>{profile.location}</div>}
+                      <div style={{ fontSize: 11, color: textMuted, marginTop: 3, display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
                         <span>{following.length} following</span>
-                        <span>·</span>
-                        <span>{myProjects.length} project{myProjects.length !== 1 ? "s" : ""}</span>
-                        <span>·</span>
+                        <span style={{ opacity: 0.4 }}>·</span>
                         <button onClick={() => setShowCollaborators(authUser?.id)} style={{ background: "none", border: "none", color: myCollaborators.length > 0 ? text : textMuted, cursor: myCollaborators.length > 0 ? "pointer" : "default", fontFamily: "inherit", fontSize: 11, padding: 0, fontWeight: myCollaborators.length > 0 ? 500 : 400 }}>
                           {myCollaborators.length} collaborator{myCollaborators.length !== 1 ? "s" : ""}
                         </button>
+                        <span style={{ opacity: 0.4 }}>·</span>
+                        <span>{myProjects.length} project{myProjects.length !== 1 ? "s" : ""}</span>
                       </div>
                     </div>
                   </div>
@@ -2683,6 +2739,31 @@ export default function CoLab() {
                 }
               </div>
 
+              {/* Posts */}
+              <div style={{ marginBottom: 28, paddingBottom: 28, borderBottom: `1px solid ${border}` }}>
+                <div style={{ ...labelStyle, marginBottom: 16 }}>POSTS</div>
+                {posts.filter(p => p.user_id === authUser?.id).length === 0
+                  ? <div style={{ fontSize: 12, color: textMuted }}>no posts yet. <button className="hb" onClick={() => setAppScreen("network")} style={{ background: "none", border: "none", color: text, cursor: "pointer", fontFamily: "inherit", fontSize: 12, textDecoration: "underline" }}>share something →</button></div>
+                  : <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                      {posts.filter(p => p.user_id === authUser?.id).slice(0, 5).map(post => (
+                        <div key={post.id} style={{ padding: "12px 14px", background: bg2, borderRadius: 8, border: `1px solid ${border}` }}>
+                          <div style={{ fontSize: 13, color: text, lineHeight: 1.6, marginBottom: 6 }}>{post.content}</div>
+                          {post.media_url && post.media_url.match(/\.(jpg|jpeg|png|gif|webp)$/i) && (
+                            <img src={post.media_url} alt="" style={{ maxWidth: "100%", maxHeight: 160, objectFit: "cover", borderRadius: 6, marginBottom: 6 }} />
+                          )}
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                            <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                              <span style={{ fontSize: 11, color: textMuted }}>♥ {post.like_count || 0}</span>
+                              {post.project_title && <span style={{ fontSize: 10, color: textMuted, border: `1px solid ${border}`, borderRadius: 3, padding: "1px 6px" }}>↗ {post.project_title}</span>}
+                            </div>
+                            <span style={{ fontSize: 10, color: textMuted }}>{new Date(post.created_at).toLocaleDateString()}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                }
+              </div>
+
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                 <button className="hb" onClick={() => setEditProfile(true)} style={btnG}>edit profile</button>
                 <button className="hb" onClick={handleSignOut} style={{ ...btnG, color: textMuted }}>sign out</button>
@@ -2700,6 +2781,7 @@ export default function CoLab() {
                   </div>
                 </div>
                 <div><label style={labelStyle}>ROLE</label><input style={inputStyle} placeholder="Founder, Designer, Engineer..." value={profile?.role || ""} onChange={e => setProfile({ ...profile, role: e.target.value })} /></div>
+                <div><label style={labelStyle}>LOCATION</label><input style={inputStyle} placeholder="City, State or Country" value={profile?.location || ""} onChange={e => setProfile({ ...profile, location: e.target.value })} /></div>
                 <div><label style={labelStyle}>BIO</label><textarea style={{ ...inputStyle, resize: "none" }} rows={4} value={profile?.bio || ""} onChange={e => setProfile({ ...profile, bio: e.target.value })} /></div>
                 <div>
                   <label style={labelStyle}>SKILLS</label>
@@ -2780,6 +2862,7 @@ export default function CoLab() {
                 </div>
               </div>
               <div><label style={labelStyle}>COLLABORATORS NEEDED</label><select style={inputStyle} value={newProject.maxCollaborators} onChange={e => setNewProject({ ...newProject, maxCollaborators: parseInt(e.target.value) })}>{[1,2,3,4,5,6,7,8,9,10].map(n => <option key={n} value={n}>{n}</option>)}</select></div>
+              <div><label style={labelStyle}>LOCATION (optional)</label><input style={inputStyle} placeholder="City, remote, or global" value={newProject.location} onChange={e => setNewProject({ ...newProject, location: e.target.value })} /></div>
             </div>
             <div style={{ display: "flex", gap: 10, marginTop: 18 }}>
               <button className="hb" onClick={() => setShowCreate(false)} style={btnG}>cancel</button>
