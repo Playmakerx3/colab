@@ -108,7 +108,7 @@ export default function CoLab() {
   const [authError, setAuthError] = useState("");
   const [resetSent, setResetSent] = useState(false);
   const [onboardStep, setOnboardStep] = useState(0);
-  const [onboardData, setOnboardData] = useState({ name: "", role: "", bio: "", skills: [] });
+  const [onboardData, setOnboardData] = useState({ name: "", username: "", role: "", bio: "", skills: [] });
 
   // Data
   const [projects, setProjects] = useState([]);
@@ -217,6 +217,20 @@ export default function CoLab() {
     @media (max-width: 640px) {
       .search-desktop { display: none !important; }
       .search-mobile { display: block !important; }
+      .hero-h1 { font-size: 44px !important; letter-spacing: -2px !important; }
+      .stat-grid { flex-direction: column !important; }
+      .stat-item { border-right: none !important; border-bottom: 1px solid ${border} !important; padding: 16px 20px !important; }
+      .how-grid { grid-template-columns: 1fr !important; }
+      .how-card { border-right: 1px solid ${border} !important; border-bottom: none !important; }
+      .how-card:last-child { border-bottom: 1px solid ${border} !important; }
+      .pad { padding-left: 16px !important; padding-right: 16px !important; }
+      .network-grid { grid-template-columns: 1fr !important; }
+      .notif-w { width: calc(100vw - 24px) !important; right: 12px !important; }
+      .proj-tabs { overflow-x: auto !important; }
+      .profile-layout { grid-template-columns: 1fr !important; }
+      .msg-layout { grid-template-columns: 1fr !important; }
+      input, select, textarea { font-size: 16px !important; }
+    }
       .nav-label { font-size: 10px !important; padding: 4px 4px !important; }
       .hero-h1 { font-size: 44px !important; letter-spacing: -2px !important; }
       .stat-grid { flex-direction: column !important; }
@@ -449,7 +463,7 @@ export default function CoLab() {
       const userId = sessionData?.session?.user?.id || authUser?.id;
       if (!userId) { showToast("Session expired."); setScreen("auth"); return; }
       const { data, error } = await supabase.from("profiles").upsert({
-        id: userId, name: onboardData.name, role: onboardData.role || "",
+        id: userId, name: onboardData.name, username: onboardData.username || onboardData.name.toLowerCase().replace(/\s+/g, ""), role: onboardData.role || "",
         bio: onboardData.bio || "", skills: onboardData.skills || [],
       }, { onConflict: "id" }).select().single();
       if (error) { showToast("Error: " + error.message); return; }
@@ -459,7 +473,7 @@ export default function CoLab() {
 
   const handleSaveProfile = async () => {
     const { data, error } = await supabase.from("profiles").update({
-      name: profile.name, role: profile.role, bio: profile.bio, skills: profile.skills,
+      name: profile.name, username: profile.username, role: profile.role, bio: profile.bio, skills: profile.skills,
     }).eq("id", authUser.id).select().single();
     if (!error) { setProfile(data); setEditProfile(false); showToast("Profile saved."); }
   };
@@ -731,6 +745,7 @@ export default function CoLab() {
             <Avatar initials={uInitials} size={52} dark={dark} />
             <div>
               <div style={{ fontSize: 20, fontWeight: 400, color: text, letterSpacing: "-0.5px" }}>{u.name}</div>
+              {u.username && <div style={{ fontSize: 11, color: textMuted, marginTop: 1 }}>@{u.username}</div>}
               <div style={{ fontSize: 12, color: textMuted, marginTop: 2 }}>{u.role}</div>
             </div>
           </div>
@@ -786,15 +801,18 @@ export default function CoLab() {
     );
   };
 
-  const ApplicationFormModal = ({ project, onClose }) => (
-    <div style={{ position: "fixed", inset: 0, background: dark ? "rgba(0,0,0,0.9)" : "rgba(200,200,200,0.88)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200, backdropFilter: "blur(10px)", padding: 16 }} onClick={onClose}>
+  const renderApplicationForm = () => {
+    const project = showApplicationForm;
+    if (!project) return null;
+    return (
+    <div style={{ position: "fixed", inset: 0, background: dark ? "rgba(0,0,0,0.9)" : "rgba(200,200,200,0.88)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200, backdropFilter: "blur(10px)", padding: 16 }} onClick={() => setShowApplicationForm(null)}>
       <div style={{ background: bg, border: `1px solid ${border}`, borderRadius: 16, padding: "28px", width: "100%", maxWidth: 520, maxHeight: "92vh", overflowY: "auto" }} onClick={e => e.stopPropagation()}>
         <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 20 }}>
           <div>
             <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px", marginBottom: 6 }}>APPLY</div>
             <div style={{ fontSize: 16, color: text, fontWeight: 500 }}>{project.title}</div>
           </div>
-          <button onClick={onClose} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontSize: 14, fontFamily: "inherit" }}>✕</button>
+          <button onClick={() => setShowApplicationForm(null)} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontSize: 14, fontFamily: "inherit" }}>✕</button>
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
           <div>
@@ -817,12 +835,13 @@ export default function CoLab() {
           </div>
         </div>
         <div style={{ display: "flex", gap: 10, marginTop: 20 }}>
-          <button className="hb" onClick={onClose} style={btnG}>cancel</button>
+          <button className="hb" onClick={() => setShowApplicationForm(null)} style={btnG}>cancel</button>
           <button className="hb" onClick={handleApply} disabled={!applicationForm.motivation || !applicationForm.availability} style={{ ...btnP, flex: 1, opacity: (!applicationForm.motivation || !applicationForm.availability) ? 0.4 : 1 }}>submit application →</button>
         </div>
       </div>
     </div>
-  );
+    );
+  };
 
   const ReviewModal = ({ project, onClose }) => {
     const projectApps = applications.filter(a => a.project_id === project.id && a.status === "pending");
@@ -1012,12 +1031,7 @@ export default function CoLab() {
   };
 
 
-  const renderNetwork = () => {
-    const followingFeed = posts.filter(p => following.includes(p.user_id));
-    const allFeed = posts;
-    const feedToShow = networkTab === "feed-following" ? followingFeed : allFeed;
-
-    const PostCard = ({ post }) => {
+  const PostCard = ({ post }) => {
       const isLiked = (postLikes.myLikes || []).includes(post.id);
       const isOpen = expandedComments[post.id];
       const comments = postComments[post.id] || [];
@@ -1025,7 +1039,6 @@ export default function CoLab() {
       const postUser = users.find(u => u.id === post.user_id);
       return (
         <div style={{ borderBottom: `1px solid ${border}`, padding: "20px 0" }}>
-          {/* Header */}
           <div style={{ display: "flex", gap: 10, alignItems: "flex-start", marginBottom: 12 }}>
             <button onClick={() => postUser && setViewingProfile(postUser)} style={{ background: "none", border: "none", cursor: "pointer", padding: 0, flexShrink: 0 }}>
               <Avatar initials={post.user_initials} size={36} dark={dark} />
@@ -1036,6 +1049,7 @@ export default function CoLab() {
                   <button onClick={() => postUser && setViewingProfile(postUser)} style={{ background: "none", border: "none", cursor: "pointer", padding: 0 }}>
                     <span style={{ fontSize: 13, fontWeight: 500, color: text }}>{post.user_name}</span>
                   </button>
+                  {post.user_username && <span style={{ fontSize: 11, color: textMuted, marginLeft: 6 }}>@{post.user_username}</span>}
                   <span style={{ fontSize: 11, color: textMuted, marginLeft: 8 }}>{post.user_role}</span>
                   <div style={{ fontSize: 10, color: textMuted, marginTop: 2 }}>{new Date(post.created_at).toLocaleDateString()}</div>
                 </div>
@@ -1043,41 +1057,31 @@ export default function CoLab() {
               </div>
             </div>
           </div>
-          {/* Content */}
           <div style={{ fontSize: 14, color: text, lineHeight: 1.7, marginBottom: 10, paddingLeft: 46 }}>{post.content}</div>
-          {/* Media embed */}
           {post.media_url && (
             <div style={{ paddingLeft: 46, marginBottom: 10 }}>
               {post.media_url.includes("youtube.com") || post.media_url.includes("youtu.be") ? (
-                <iframe
-                  src={`https://www.youtube.com/embed/${post.media_url.split("v=")[1]?.split("&")[0] || post.media_url.split("/").pop()}`}
-                  style={{ width: "100%", height: 240, borderRadius: 8, border: "none" }}
-                  allowFullScreen
-                />
+                <iframe src={`https://www.youtube.com/embed/${post.media_url.split("v=")[1]?.split("&")[0] || post.media_url.split("/").pop()}`} style={{ width: "100%", height: 240, borderRadius: 8, border: "none" }} allowFullScreen />
+              ) : post.media_url.match(/\.(mp4|mov|webm)$/i) ? (
+                <video src={post.media_url} controls style={{ width: "100%", maxHeight: 300, borderRadius: 8, border: `1px solid ${border}` }} />
               ) : (
                 <img src={post.media_url} alt="" style={{ width: "100%", maxHeight: 300, objectFit: "cover", borderRadius: 8, border: `1px solid ${border}` }} onError={e => e.target.style.display = "none"} />
               )}
             </div>
           )}
-          {/* Project tag */}
           {post.project_title && (
             <div style={{ paddingLeft: 46, marginBottom: 10 }}>
               <span style={{ fontSize: 11, color: textMuted, border: `1px solid ${border}`, borderRadius: 4, padding: "2px 8px" }}>↗ {post.project_title}</span>
             </div>
           )}
-          {/* Actions */}
           <div style={{ paddingLeft: 46, display: "flex", gap: 16, alignItems: "center" }}>
             <button className="hb" onClick={() => handleLike(post.id)} style={{ background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: 12, color: isLiked ? text : textMuted, display: "flex", gap: 5, alignItems: "center" }}>
               {isLiked ? "♥" : "♡"} {post.like_count || 0}
             </button>
-            <button className="hb" onClick={() => {
-              setExpandedComments(prev => ({ ...prev, [post.id]: !prev[post.id] }));
-              if (!postComments[post.id]) loadComments(post.id);
-            }} style={{ background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: 12, color: textMuted, display: "flex", gap: 5, alignItems: "center" }}>
+            <button className="hb" onClick={() => { setExpandedComments(prev => ({ ...prev, [post.id]: !prev[post.id] })); if (!postComments[post.id]) loadComments(post.id); }} style={{ background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: 12, color: textMuted, display: "flex", gap: 5, alignItems: "center" }}>
               ◎ {isOpen ? "hide" : "comment"}
             </button>
           </div>
-          {/* Comments */}
           {isOpen && (
             <div style={{ paddingLeft: 46, marginTop: 14 }}>
               {comments.length > 0 && (
@@ -1104,7 +1108,12 @@ export default function CoLab() {
           )}
         </div>
       );
-    };
+  };
+
+  const renderNetwork = () => {
+    const followingFeed = posts.filter(p => following.includes(p.user_id));
+    const allFeed = posts;
+    const feedToShow = networkTab === "feed-following" ? followingFeed : allFeed;
 
     return (
       <div className="pad fu" style={{ width: "100%", padding: "48px 32px" }}>
@@ -1338,14 +1347,15 @@ export default function CoLab() {
   // ── ONBOARDING ──
   if (screen === "onboard") {
     const steps = [
-      { label: "who are you?", field: "name", placeholder: "Your full name", type: "input" },
+      { label: "what's your name?", field: "name", placeholder: "Your display name", type: "input" },
+      { label: "pick a username.", field: "username", placeholder: "@handle — unique, no spaces", type: "username" },
       { label: "what do you do?", field: "role", placeholder: "Founder, Designer, Engineer, Musician...", type: "input" },
       { label: "what's your story?", field: "bio", placeholder: "What are you about? What are you trying to build?", type: "textarea" },
       { label: "what are your skills?", field: "skills", type: "skills" },
     ];
     const step = steps[onboardStep];
     const isLast = onboardStep === steps.length - 1;
-    const canNext = step.field === "skills" ? onboardData.skills.length > 0 : (onboardData[step.field] || "").trim().length > 0;
+    const canNext = step.field === "skills" ? onboardData.skills.length > 0 : step.type === "username" ? (onboardData.username || "").length >= 3 : (onboardData[step.field] || "").trim().length > 0;
     return (
       <div style={{ minHeight: "100vh", width: "100%", background: bg, color: text, fontFamily: "'DM Mono', monospace", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "24px 16px" }}>
         <style>{CSS}</style>
@@ -1357,6 +1367,15 @@ export default function CoLab() {
             <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px", marginBottom: 14 }}>STEP {onboardStep + 1} OF {steps.length}</div>
             <h2 style={{ fontSize: "clamp(20px, 5vw, 26px)", fontWeight: 400, letterSpacing: "-1px", marginBottom: 26, color: text }}>{step.label}</h2>
             {step.type === "input" && <input autoFocus style={{ background: "none", border: "none", borderBottom: `1px solid ${border}`, padding: "10px 0", color: text, fontSize: "clamp(16px, 4vw, 18px)", width: "100%", fontFamily: "inherit", outline: "none" }} placeholder={step.placeholder} value={onboardData[step.field] || ""} onChange={e => setOnboardData({ ...onboardData, [step.field]: e.target.value })} onKeyDown={e => e.key === "Enter" && canNext && (isLast ? handleFinishOnboard() : setOnboardStep(s => s + 1))} />}
+            {step.type === "username" && (
+              <div>
+                <div style={{ display: "flex", alignItems: "center", borderBottom: `1px solid ${border}`, marginBottom: 8 }}>
+                  <span style={{ fontSize: "clamp(16px, 4vw, 18px)", color: textMuted, paddingBottom: 10, paddingTop: 10 }}>@</span>
+                  <input autoFocus style={{ background: "none", border: "none", padding: "10px 0 10px 4px", color: text, fontSize: "clamp(16px, 4vw, 18px)", flex: 1, fontFamily: "inherit", outline: "none" }} placeholder="yourhandle" value={onboardData.username || ""} onChange={e => setOnboardData({ ...onboardData, username: e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, "") })} onKeyDown={e => e.key === "Enter" && canNext && (isLast ? handleFinishOnboard() : setOnboardStep(s => s + 1))} />
+                </div>
+                <div style={{ fontSize: 11, color: textMuted }}>lowercase letters, numbers, underscores only</div>
+              </div>
+            )}
             {step.type === "textarea" && <textarea autoFocus style={{ background: "none", border: `1px solid ${border}`, borderRadius: 8, padding: "12px", color: text, fontSize: 13, width: "100%", fontFamily: "inherit", outline: "none", resize: "none", lineHeight: 1.7 }} rows={4} placeholder={step.placeholder} value={onboardData[step.field] || ""} onChange={e => setOnboardData({ ...onboardData, [step.field]: e.target.value })} />}
             {step.type === "skills" && (
               <div>
@@ -1384,7 +1403,7 @@ export default function CoLab() {
     { id: "network", label: "network" },
     { id: "workspace", label: "work" },
     { id: "messages", label: "msgs", badge: unreadDms },
-    { id: "profile", label: profile?.name?.split(" ")[0]?.toLowerCase() || "me" },
+    { id: "profile", label: profile?.username ? `@${profile.username}` : profile?.name?.split(" ")[0]?.toLowerCase() || "me" },
   ];
 
   return (
@@ -1529,7 +1548,7 @@ export default function CoLab() {
       )}
 
       {viewingProfile && <ProfileModal u={viewingProfile} onClose={() => setViewingProfile(null)} />}
-      {showApplicationForm && <ApplicationFormModal project={showApplicationForm} onClose={() => setShowApplicationForm(null)} />}
+      {renderApplicationForm()}
       {reviewingApplicants && <ReviewModal project={reviewingApplicants} onClose={() => setReviewingApplicants(null)} />}
 
       {/* EXPLORE */}
@@ -1859,6 +1878,7 @@ export default function CoLab() {
             <TabBtn id="docs" label="docs" count={0} setter={setProjectTab} current={projectTab} />
             <TabBtn id="updates" label="updates" count={projectUpdates.length} setter={setProjectTab} current={projectTab} />
             <TabBtn id="team" label="team" count={0} setter={setProjectTab} current={projectTab} />
+            <TabBtn id="plugins" label="plugins" count={(activeProject.plugins || []).length} setter={setProjectTab} current={projectTab} />
           </div>
 
           {/* Tab content */}
@@ -2145,7 +2165,43 @@ export default function CoLab() {
                 )}
               </div>
             )}
-          </div>
+
+            {/* PLUGINS */}
+            {projectTab === "plugins" && (
+              <div>
+                {(activeProject.plugins || []).length > 0 && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 20 }}>
+                    <div style={{ fontSize: 10, color: textMuted, letterSpacing: "1px", marginBottom: 4 }}>CONNECTED</div>
+                    {PLUGINS.filter(p => (activeProject.plugins || []).includes(p.id)).map(plug => (
+                      <div key={plug.id} style={{ display: "flex", gap: 12, alignItems: "center", padding: "12px 16px", background: bg2, borderRadius: 8, border: `1px solid ${border}` }}>
+                        <span style={{ fontSize: 16, color: text, width: 20, textAlign: "center", flexShrink: 0 }}>{plug.icon}</span>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontSize: 13, color: text }}>{plug.name}</div>
+                          <div style={{ fontSize: 11, color: textMuted }}>{plug.desc}</div>
+                        </div>
+                        <button className="hb" onClick={() => handleAddPlugin(plug.id, activeProject)} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontSize: 11, fontFamily: "inherit" }}>remove</button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <div>
+                  <div style={{ fontSize: 10, color: textMuted, letterSpacing: "1px", marginBottom: 10 }}>ADD PLUGIN</div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                    {PLUGINS.filter(p => !(activeProject.plugins || []).includes(p.id)).map(plug => (
+                      <button key={plug.id} className="hb" onClick={() => handleAddPlugin(plug.id, activeProject)} style={{ background: "none", border: `1px solid ${border}`, borderRadius: 8, padding: "12px 16px", fontSize: 12, cursor: "pointer", fontFamily: "inherit", color: textMuted, display: "flex", gap: 12, alignItems: "center", textAlign: "left", transition: "border 0.15s" }}
+                        onMouseEnter={e => e.currentTarget.style.borderColor = text} onMouseLeave={e => e.currentTarget.style.borderColor = border}>
+                        <span style={{ fontSize: 16, width: 20, textAlign: "center", flexShrink: 0 }}>{plug.icon}</span>
+                        <div>
+                          <div style={{ color: text, marginBottom: 2 }}>{plug.name}</div>
+                          <div style={{ fontSize: 11 }}>{plug.desc}</div>
+                        </div>
+                        <span style={{ marginLeft: "auto", fontSize: 11 }}>+ connect</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
         </div>
       )}
 
@@ -2160,6 +2216,7 @@ export default function CoLab() {
                 <Avatar initials={myInitials} size={52} dark={dark} />
                 <div>
                   <div style={{ fontSize: 20, fontWeight: 400, color: text, letterSpacing: "-0.5px" }}>{profile?.name || "Anonymous"}</div>
+                  {profile?.username && <div style={{ fontSize: 11, color: textMuted, marginTop: 1 }}>@{profile.username}</div>}
                   <div style={{ fontSize: 12, color: textMuted, marginTop: 2 }}>{profile?.role}</div>
                   <div style={{ fontSize: 11, color: textMuted, marginTop: 3 }}>{following.length} following · {myProjects.length} project{myProjects.length !== 1 ? "s" : ""}</div>
                 </div>
@@ -2231,7 +2288,13 @@ export default function CoLab() {
             <div>
               <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px", marginBottom: 20 }}>EDIT PROFILE</div>
               <div style={{ display: "flex", flexDirection: "column", gap: 14, marginBottom: 22 }}>
-                <div><label style={labelStyle}>NAME</label><input style={inputStyle} value={profile?.name || ""} onChange={e => setProfile({ ...profile, name: e.target.value })} /></div>
+                <div><label style={labelStyle}>DISPLAY NAME</label><input style={inputStyle} value={profile?.name || ""} onChange={e => setProfile({ ...profile, name: e.target.value })} /></div>
+                <div><label style={labelStyle}>USERNAME</label>
+                  <div style={{ display: "flex", alignItems: "center", background: bg2, border: `1px solid ${border}`, borderRadius: 8, padding: "0 14px" }}>
+                    <span style={{ fontSize: 13, color: textMuted }}>@</span>
+                    <input style={{ ...inputStyle, border: "none", background: "none", padding: "10px 6px" }} value={profile?.username || ""} onChange={e => setProfile({ ...profile, username: e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, "") })} placeholder="yourhandle" />
+                  </div>
+                </div>
                 <div><label style={labelStyle}>ROLE</label><input style={inputStyle} placeholder="Founder, Designer, Engineer..." value={profile?.role || ""} onChange={e => setProfile({ ...profile, role: e.target.value })} /></div>
                 <div><label style={labelStyle}>BIO</label><textarea style={{ ...inputStyle, resize: "none" }} rows={4} value={profile?.bio || ""} onChange={e => setProfile({ ...profile, bio: e.target.value })} /></div>
                 <div>
@@ -2312,7 +2375,7 @@ export default function CoLab() {
                   {SKILLS.map(s => { const sel = newProject.skills.includes(s); return <button key={s} className="hb" onClick={() => setNewProject({ ...newProject, skills: sel ? newProject.skills.filter(x => x !== s) : [...newProject.skills, s] })} style={{ padding: "3px 10px", borderRadius: 3, fontSize: 10, cursor: "pointer", fontFamily: "inherit", background: sel ? text : "none", color: sel ? bg : textMuted, border: `1px solid ${sel ? text : border}`, transition: "all 0.15s" }}>{s}</button>; })}
                 </div>
               </div>
-              <div><label style={labelStyle}>COLLABORATORS NEEDED</label><select style={inputStyle} value={newProject.maxCollaborators} onChange={e => setNewProject({ ...newProject, maxCollaborators: parseInt(e.target.value) })}>{[1,2,3,4,5].map(n => <option key={n} value={n}>{n}</option>)}</select></div>
+              <div><label style={labelStyle}>COLLABORATORS NEEDED</label><select style={inputStyle} value={newProject.maxCollaborators} onChange={e => setNewProject({ ...newProject, maxCollaborators: parseInt(e.target.value) })}>{[1,2,3,4,5,6,7,8,9,10].map(n => <option key={n} value={n}>{n}</option>)}</select></div>
             </div>
             <div style={{ display: "flex", gap: 10, marginTop: 18 }}>
               <button className="hb" onClick={() => setShowCreate(false)} style={btnG}>cancel</button>
