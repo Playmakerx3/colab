@@ -296,6 +296,7 @@ export default function CoLab() {
   const [projectUpdates, setProjectUpdates] = useState([]);
   const [applications, setApplications] = useState([]);
   const [following, setFollowing] = useState([]);
+  const [followers, setFollowers] = useState([]);
   const [notifications, setNotifications] = useState([]);
   const [dmThreads, setDmThreads] = useState([]);
   const [dmMessages, setDmMessages] = useState({});
@@ -466,11 +467,12 @@ export default function CoLab() {
   const loadAllData = async (userId) => {
     setLoading(true);
     try {
-      const [{ data: projs }, { data: usrs }, { data: apps }, { data: fols }, { data: threads }, { data: port }, { data: postsData }, { data: likesData }, { data: mentionNotifs }] = await Promise.all([
+      const [{ data: projs }, { data: usrs }, { data: apps }, { data: fols }, { data: folsByMe }, { data: threads }, { data: port }, { data: postsData }, { data: likesData }, { data: mentionNotifs }] = await Promise.all([
         supabase.from("projects").select("*").order("created_at", { ascending: false }),
         supabase.from("profiles").select("*"),
         supabase.from("applications").select("*"),
-        supabase.from("follows").select("*").eq("follower_id", userId),
+        supabase.from("follows").select("*").eq("following_id", userId), // people who follow YOU
+        supabase.from("follows").select("*").eq("follower_id", userId),  // people YOU follow
         supabase.from("dm_threads").select("*").or(`user_a.eq.${userId},user_b.eq.${userId}`),
         supabase.from("portfolio_items").select("*").eq("user_id", userId),
         supabase.from("posts").select("*").order("created_at", { ascending: false }),
@@ -480,7 +482,8 @@ export default function CoLab() {
       setProjects(projs || []);
       setUsers(usrs || []);
       setApplications(apps || []);
-      setFollowing((fols || []).map(f => f.following_id));
+      setFollowers((fols || []).map(f => f.follower_id));   // IDs of people who follow you
+      setFollowing((folsByMe || []).map(f => f.following_id)); // IDs you follow
       setDmThreads(threads || []);
       setPortfolioItems(port || []);
       setPosts(postsData || []);
@@ -493,10 +496,8 @@ export default function CoLab() {
         return bCount - aCount;
       }).slice(0, 3);
       setTrendingProjects(trending);
-      // Live skill category count from unique skills across all projects
       const allSkills = new Set((projs || []).flatMap(p => p.skills || []));
       setSkillCategoryCount(allSkills.size || 48);
-      // Live stats for landing page
       setLiveStats({ builders: (usrs || []).length, projects: (projs || []).length });
       const myProjectIds = (projs || []).filter(p => p.owner_id === userId).map(p => p.id);
       const incoming = (apps || []).filter(a => myProjectIds.includes(a.project_id) && a.status === "pending");
@@ -752,13 +753,12 @@ export default function CoLab() {
   // ── DMs ──
   const openDm = async (user) => {
     if (user.id === authUser?.id) return;
-    // Check local state first
     let thread = dmThreads.find(t =>
       (t.user_a === authUser.id && t.user_b === user.id) ||
       (t.user_b === authUser.id && t.user_a === user.id)
     );
     if (!thread) {
-      // Check DB for existing thread in both orderings before creating
+      // Check DB both orderings before creating — prevents duplicate threads
       const { data: existing } = await supabase.from("dm_threads").select("*")
         .or(`and(user_a.eq.${authUser.id},user_b.eq.${user.id}),and(user_a.eq.${user.id},user_b.eq.${authUser.id})`);
       if (existing && existing.length > 0) {
@@ -783,7 +783,7 @@ export default function CoLab() {
   const handleSendDm = async () => {
     if (!dmInput.trim() || !activeDmThread) return;
     const text = dmInput;
-    setDmInput(""); // optimistic clear
+    setDmInput("");
     const { data } = await supabase.from("dm_messages").insert({
       thread_id: activeDmThread.id, sender_id: authUser.id,
       sender_name: profile.name, sender_initials: myInitials, text,
@@ -1162,7 +1162,6 @@ export default function CoLab() {
   };
 
   const handleDeleteThread = async (threadId) => {
-    // Delete all messages then the thread itself
     await supabase.from("dm_messages").delete().eq("thread_id", threadId);
     await supabase.from("dm_threads").delete().eq("id", threadId);
     setDmMessages(prev => { const n = { ...prev }; delete n[threadId]; return n; });
@@ -1295,18 +1294,16 @@ export default function CoLab() {
 
   const handleDeletePost = async (postId) => {
     const post = posts.find(p => p.id === postId);
-    // Clean up storage file if the post has one
     if (post?.media_url && post.media_url.includes("user-uploads")) {
       try {
         const pathMatch = post.media_url.match(/user-uploads\/(.+)$/);
         if (pathMatch) await supabase.storage.from("user-uploads").remove([pathMatch[1]]);
-      } catch (e) { console.warn("Storage cleanup failed:", e); }
+      } catch (e) { console.warn("Storage cleanup:", e); }
     }
     await supabase.from("posts").delete().eq("id", postId);
     setPosts(posts.filter(p => p.id !== postId));
     showToast("Post deleted.");
   };
-
 
   const PostCard = ({ post }) => {
       const isLiked = (postLikes.myLikes || []).includes(post.id);
@@ -1314,20 +1311,18 @@ export default function CoLab() {
       const comments = postComments[post.id] || [];
       const isOwner = post.user_id === authUser?.id;
       const postUser = users.find(u => u.id === post.user_id);
-      // Local comment input state — keeps typing stable regardless of parent re-renders
+      // Local state — prevents parent re-renders from killing focus mid-typing
       const [localComment, setLocalComment] = useState("");
 
       const submitComment = async () => {
         if (!localComment.trim()) return;
         const content = localComment;
-        setLocalComment(""); // clear immediately for seamless typing feel
+        setLocalComment("");
         const { data } = await supabase.from("comments").insert({
           post_id: post.id, user_id: authUser.id,
           user_name: profile.name, user_initials: myInitials, content,
         }).select().single();
-        if (data) {
-          setPostComments(prev => ({ ...prev, [post.id]: [...(prev[post.id] || []), data] }));
-        }
+        if (data) setPostComments(prev => ({ ...prev, [post.id]: [...(prev[post.id] || []), data] }));
       };
 
       const handleDeleteComment = async (commentId) => {
@@ -1361,6 +1356,10 @@ export default function CoLab() {
                 <iframe src={`https://www.youtube.com/embed/${post.media_url.split("v=")[1]?.split("&")[0] || post.media_url.split("/").pop()}`} style={{ width: "100%", height: 240, borderRadius: 8, border: "none" }} allowFullScreen />
               ) : post.media_url.match(/\.(mp4|mov|webm)$/i) ? (
                 <video src={post.media_url} controls style={{ width: "100%", maxHeight: 300, borderRadius: 8, border: `1px solid ${border}` }} />
+              ) : post.media_url.match(/\.(mp3|wav|ogg|m4a|aac)$/i) ? (
+                <audio src={post.media_url} controls style={{ width: "100%", marginTop: 4 }} />
+              ) : post.media_url.match(/\.pdf$/i) ? (
+                <a href={post.media_url} target="_blank" rel="noreferrer" style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, color: text, border: `1px solid ${border}`, borderRadius: 6, padding: "6px 12px", textDecoration: "none" }}>↗ view PDF</a>
               ) : (
                 <img src={post.media_url} alt="" style={{ width: "100%", maxHeight: 300, objectFit: "cover", borderRadius: 8, border: `1px solid ${border}` }} onError={e => e.target.style.display = "none"} />
               )}
@@ -1392,7 +1391,7 @@ export default function CoLab() {
                         <div style={{ background: bg2, border: `1px solid ${border}`, borderRadius: 8, padding: "7px 12px", flex: 1 }}>
                           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 2 }}>
                             <button onClick={() => cUser && setViewingProfile(cUser)} style={{ background: "none", border: "none", cursor: "pointer", padding: 0, fontSize: 11, fontWeight: 500, color: text, fontFamily: "inherit" }}>{c.user_name}</button>
-                            {isMyComment && <button className="hb" onClick={() => handleDeleteComment(c.id)} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontSize: 10, fontFamily: "inherit", lineHeight: 1 }}>✕</button>}
+                            {isMyComment && <button className="hb" onClick={() => handleDeleteComment(c.id)} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontSize: 10, fontFamily: "inherit" }}>✕</button>}
                           </div>
                           <div style={{ fontSize: 12, color: textMuted, lineHeight: 1.55 }}>{c.content}</div>
                         </div>
@@ -1426,7 +1425,7 @@ export default function CoLab() {
     const feedToShow = networkTab === "feed-following" ? followingFeed : allFeed;
 
     return (
-      <div className="pad fu" style={{ width: "100%", maxWidth: 680, margin: "0 auto", padding: "40px 24px" }}>
+      <div className="pad fu" style={{ width: "100%", padding: "48px 32px" }}>
         <div style={{ marginBottom: 28 }}>
           <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px", marginBottom: 10 }}>NETWORK</div>
           <h2 style={{ fontSize: "clamp(24px, 4vw, 36px)", fontWeight: 400, letterSpacing: "-1.5px", color: text, marginBottom: 8 }}>Your network.</h2>
@@ -1449,7 +1448,7 @@ export default function CoLab() {
 
         {/* Feed tabs */}
         {(networkTab === "feed" || networkTab === "feed-following") && (
-          <div style={{ maxWidth: 640 }}>
+          <div>
             {/* Compose */}
             <div style={{ background: bg2, border: `1px solid ${border}`, borderRadius: 12, padding: "16px", marginBottom: 28 }}>
               <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
@@ -1475,7 +1474,7 @@ export default function CoLab() {
                           <div style={{ ...btnG, padding: "6px 12px", fontSize: 11, display: "inline-flex", alignItems: "center", gap: 5 }}>
                             ↑ upload
                           </div>
-                          <input type="file" accept="image/*,video/*,.pdf,.doc,.docx" style={{ display: "none" }} onChange={async (e) => {
+                          <input type="file" accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.mp3,.wav" style={{ display: "none" }} onChange={async (e) => {
                             const file = e.target.files[0];
                             if (!file) return;
                             showToast("Uploading...");
@@ -2066,41 +2065,54 @@ export default function CoLab() {
 
       {/* MESSAGES */}
       {appScreen === "messages" && (
-        <div style={{ width: "100%", padding: "0" }}>
-          <div className="msg-layout" style={{ display: "grid", gridTemplateColumns: "260px 1fr", height: "calc(100vh - 50px)" }}>
-            <div style={{ borderRight: `1px solid ${border}`, overflowY: "auto" }}>
-              <div style={{ padding: "18px 20px 12px", borderBottom: `1px solid ${border}` }}>
-                <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px" }}>MESSAGES</div>
-              </div>
-              {dmThreads.length === 0
-                ? <div style={{ padding: "24px 20px", fontSize: 12, color: textMuted }}>no conversations yet.<br />Message someone from their profile.</div>
-                : dmThreads.map(thread => {
-                    const otherId = thread.user_a === authUser?.id ? thread.user_b : thread.user_a;
-                    const other = users.find(u => u.id === otherId);
-                    if (!other) return null;
-                    const isActive = activeDmThread?.id === thread.id;
-                    return (
-                      <div key={thread.id} onClick={() => { setActiveDmThread({ ...thread, otherUser: other }); loadDmMessages(thread.id); setDmThreads(prev => prev.map(t => t.id === thread.id ? { ...t, unread: false } : t)); setTimeout(() => markDmRead(thread.id), 500); }} style={{ padding: "14px 20px", borderBottom: `1px solid ${border}`, cursor: "pointer", background: isActive ? bg2 : "none", display: "flex", gap: 12, alignItems: "center" }}
-                        onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = bg2; }} onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = "none"; }}>
-                        <Avatar initials={other.name?.split(" ").map(n => n[0]).join("").slice(0, 2)} size={36} dark={dark} />
-                        <div style={{ minWidth: 0 }}>
-                          <div style={{ fontSize: 13, color: text, fontWeight: 500 }}>{other.name}</div>
-                          <div style={{ fontSize: 11, color: textMuted }}>{other.role}</div>
-                        </div>
-                      </div>
-                    );
-                  })
-              }
+        <div style={{ width: "100%", padding: "0", display: "flex", height: "calc(100vh - 50px)" }}>
+          {/* Left panel — always visible */}
+          <div style={{ width: 260, flexShrink: 0, borderRight: `1px solid ${border}`, overflowY: "auto", display: "flex", flexDirection: "column" }}>
+            <div style={{ padding: "18px 20px 12px", borderBottom: `1px solid ${border}` }}>
+              <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px" }}>MESSAGES</div>
             </div>
+            {dmThreads.length === 0
+              ? <div style={{ padding: "24px 20px", fontSize: 12, color: textMuted, lineHeight: 1.7 }}>no conversations yet.<br />Message someone from their profile.</div>
+              : dmThreads.map(thread => {
+                  const otherId = thread.user_a === authUser?.id ? thread.user_b : thread.user_a;
+                  const other = users.find(u => u.id === otherId);
+                  if (!other) return null;
+                  const isActive = activeDmThread?.id === thread.id;
+                  const threadMsgs = dmMessages[thread.id] || [];
+                  const lastMsg = threadMsgs[threadMsgs.length - 1];
+                  return (
+                    <div key={thread.id} onClick={() => { setActiveDmThread({ ...thread, otherUser: other }); loadDmMessages(thread.id); setDmThreads(prev => prev.map(t => t.id === thread.id ? { ...t, unread: false } : t)); setTimeout(() => markDmRead(thread.id), 500); }}
+                      style={{ padding: "14px 20px", borderBottom: `1px solid ${border}`, cursor: "pointer", background: isActive ? bg2 : "none", display: "flex", gap: 12, alignItems: "center" }}
+                      onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = bg2; }}
+                      onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = "none"; }}>
+                      <div style={{ position: "relative", flexShrink: 0 }}>
+                        <Avatar initials={other.name?.split(" ").map(n => n[0]).join("").slice(0, 2)} size={36} dark={dark} />
+                        {thread.unread && <span style={{ position: "absolute", top: 0, right: 0, width: 8, height: 8, borderRadius: "50%", background: text, border: `2px solid ${bg}` }} />}
+                      </div>
+                      <div style={{ minWidth: 0, flex: 1 }}>
+                        <div style={{ fontSize: 13, color: text, fontWeight: thread.unread ? 500 : 400 }}>{other.name}</div>
+                        {lastMsg
+                          ? <div style={{ fontSize: 11, color: textMuted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{lastMsg.sender_id === authUser?.id ? "you: " : ""}{lastMsg.text}</div>
+                          : <div style={{ fontSize: 11, color: textMuted }}>{other.role}</div>
+                        }
+                      </div>
+                    </div>
+                  );
+                })
+            }
+          </div>
+
+          {/* Right panel — conversation */}
+          <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
             {activeDmThread ? (
-              <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+              <>
                 <div style={{ padding: "16px 20px", borderBottom: `1px solid ${border}`, display: "flex", gap: 12, alignItems: "center" }}>
                   <Avatar initials={activeDmThread.otherUser?.name?.split(" ").map(n => n[0]).join("").slice(0, 2) || "?"} size={32} dark={dark} />
-                  <div>
+                  <div style={{ flex: 1 }}>
                     <div style={{ fontSize: 14, color: text, fontWeight: 500 }}>{activeDmThread.otherUser?.name}</div>
                     <div style={{ fontSize: 11, color: textMuted }}>{activeDmThread.otherUser?.role}</div>
                   </div>
-                  <button className="hb" onClick={() => setViewingProfile(activeDmThread.otherUser)} style={{ marginLeft: "auto", background: "none", border: `1px solid ${border}`, borderRadius: 6, padding: "5px 10px", fontSize: 11, cursor: "pointer", color: textMuted, fontFamily: "inherit" }}>view profile</button>
+                  <button className="hb" onClick={() => setViewingProfile(activeDmThread.otherUser)} style={{ background: "none", border: `1px solid ${border}`, borderRadius: 6, padding: "5px 10px", fontSize: 11, cursor: "pointer", color: textMuted, fontFamily: "inherit" }}>profile</button>
                   <button className="hb" onClick={() => { if (window.confirm("Delete this entire conversation? This cannot be undone.")) handleDeleteThread(activeDmThread.id); }} style={{ background: "none", border: `1px solid ${border}`, borderRadius: 6, padding: "5px 10px", fontSize: 11, cursor: "pointer", color: textMuted, fontFamily: "inherit" }}>delete chat</button>
                 </div>
                 <div style={{ flex: 1, overflowY: "auto", padding: "20px", display: "flex", flexDirection: "column", gap: 14 }}>
@@ -2111,7 +2123,7 @@ export default function CoLab() {
                         const isRead = (msg.read_by || []).length > 0;
                         const isEditing = editingMessage?.id === msg.id;
                         return (
-                          <div key={i} style={{ display: "flex", gap: 10, alignItems: "flex-end", flexDirection: isMe ? "row-reverse" : "row" }}>
+                          <div key={msg.id || i} style={{ display: "flex", gap: 10, alignItems: "flex-end", flexDirection: isMe ? "row-reverse" : "row" }}>
                             <Avatar initials={msg.sender_initials} size={26} dark={dark} />
                             <div style={{ maxWidth: "70%" }}>
                               {isEditing ? (
@@ -2136,13 +2148,13 @@ export default function CoLab() {
                   <div ref={dmEndRef} />
                 </div>
                 <div style={{ padding: "14px 20px", borderTop: `1px solid ${border}`, display: "flex", gap: 10 }}>
-                  <input placeholder="message..." value={dmInput} onChange={e => setDmInput(e.target.value)} onKeyDown={e => e.key === "Enter" && handleSendDm()} style={{ ...inputStyle, fontSize: 13 }} />
+                  <input placeholder="message..." value={dmInput} onChange={e => setDmInput(e.target.value)} onKeyDown={e => e.key === "Enter" && handleSendDm()} style={{ ...inputStyle, fontSize: 13 }} autoFocus />
                   <button className="hb" onClick={handleSendDm} style={{ ...btnP, padding: "10px 18px", flexShrink: 0 }}>send</button>
                 </div>
-              </div>
+              </>
             ) : (
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "center", color: textMuted, fontSize: 13 }}>
-                {dmThreads.length > 0 ? "select a conversation" : "message someone from their profile to get started"}
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "center", flex: 1, color: textMuted, fontSize: 13 }}>
+                {dmThreads.length > 0 ? "select a conversation →" : "message someone from their profile to get started"}
               </div>
             )}
           </div>
@@ -2165,7 +2177,7 @@ export default function CoLab() {
             {[
               ["projects", myProjects.length],
               ["applied to", appliedProjectIds.length],
-              ["followers", following.length],
+              ["followers", followers.length],
               ["notifications", unreadNotifs],
             ].map(([label,val],i) => (
               <div key={i} style={{ padding: "16px 18px", background: bg2, borderRight: i < 3 ? `1px solid ${border}` : "none" }}>
@@ -2229,9 +2241,7 @@ export default function CoLab() {
                           <div style={{ minWidth: 0 }}><div style={{ fontSize: 12, color: text, marginBottom: 1 }}>{p.title}</div><div style={{ fontSize: 10, color: textMuted }}>{p.owner_name}</div></div>
                           <div style={{ display: "flex", gap: 6, alignItems: "center", flexShrink: 0 }}>
                             <span style={{ fontSize: 10, color: myApp?.status === "accepted" ? text : textMuted, border: `1px solid ${border}`, borderRadius: 3, padding: "1px 6px" }}>{myApp?.status || "pending"}</span>
-                            {myApp?.status === "declined" && (
-                              <button className="hb" onClick={() => handleRemoveDeniedApp(myApp.id)} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontSize: 10, fontFamily: "inherit" }}>✕</button>
-                            )}
+                            {myApp?.status === "declined" && <button className="hb" onClick={() => handleRemoveDeniedApp(myApp.id)} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontSize: 10, fontFamily: "inherit" }}>✕</button>}
                           </div>
                         </div>
                       );
@@ -2440,7 +2450,7 @@ export default function CoLab() {
                             <img src={file.url} alt={file.name} style={{ width: "100%", maxHeight: 260, objectFit: "cover", borderRadius: 6, border: `1px solid ${border}` }} />
                           )}
                           {file.type?.includes("pdf") && (
-                            <iframe src={file.url} style={{ width: "100%", height: 300, borderRadius: 6, border: `1px solid ${border}` }} title={file.name} />
+                            <a href={file.url} target="_blank" rel="noreferrer" style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, color: text, border: `1px solid ${border}`, borderRadius: 6, padding: "6px 12px", textDecoration: "none" }}>↗ view PDF</a>
                           )}
                         </div>
                       ))}
@@ -2754,7 +2764,7 @@ export default function CoLab() {
                         <span style={{ opacity: 0.4 }}>·</span>
                         <span>{myProjects.length} project{myProjects.length !== 1 ? "s" : ""}</span>
                       </div>
-                      <div style={{ fontSize: 10, color: textMuted, marginTop: 4 }}>{following.length} followers</div>
+                      <div style={{ fontSize: 10, color: textMuted, marginTop: 4 }}>{followers.length} follower{followers.length !== 1 ? "s" : ""} · {following.length} following</div>
                     </div>
                   </div>
                 </div>
