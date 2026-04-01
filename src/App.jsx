@@ -537,6 +537,9 @@ function CoLab() {
   const [showBannerEditor, setShowBannerEditor] = useState(false);
   const [bannerPixels, setBannerPixels] = useState(new Array(48 * 12).fill(0));
   const [showApplicationForm, setShowApplicationForm] = useState(null);
+  const [applicationSuccess, setApplicationSuccess] = useState(false);
+  const [showNewDm, setShowNewDm] = useState(false);
+  const [newDmSearch, setNewDmSearch] = useState("");
   const [applicationForm, setApplicationForm] = useState({ skills: [], availability: "", motivation: "", portfolio_url: "" });
   const [reviewingApplicants, setReviewingApplicants] = useState(null);
   const [editingProgress, setEditingProgress] = useState(null);
@@ -622,6 +625,15 @@ function CoLab() {
       .msg-layout { grid-template-columns: 1fr !important; }
     }
   `;
+
+  // Pre-populate application form with matching skills when it opens
+  useEffect(() => {
+    if (showApplicationForm) {
+      const matchingSkills = (showApplicationForm.skills || []).filter(s => (profile?.skills || []).includes(s));
+      setApplicationForm({ skills: matchingSkills, availability: "", motivation: "", portfolio_url: "" });
+      setApplicationSuccess(false);
+    }
+  }, [showApplicationForm?.id]);
 
   // Force body background + mobile browser chrome color on mode switch
   useEffect(() => {
@@ -905,7 +917,12 @@ function CoLab() {
     if (!error && data) {
       setProjects([data, ...projects]);
       setNewProject({ title: "", description: "", category: CATEGORIES[0], skills: [], maxCollaborators: 2, location: "", goals: "", timeline: "" });
-      setShowCreate(false); showToast("Project posted.");
+      setShowCreate(false);
+      setActiveProject(data);
+      loadProjectData(data.id);
+      setAppScreen("workspace");
+      setProjectTab("kanban");
+      showToast("Project posted — you're in your workspace.");
     } else {
       showToast("Failed to post project. Try again.");
     }
@@ -1070,9 +1087,7 @@ function CoLab() {
     if (error) { showToast("Error submitting. Try again."); return; }
     if (data) {
       setApplications([...applications, data]);
-      setShowApplicationForm(null);
-      setApplicationForm({ skills: [], availability: "", motivation: "", portfolio_url: "" });
-      showToast(`Applied to "${project.title}"`);
+      setApplicationSuccess(true);
     }
   };
 
@@ -1297,40 +1312,68 @@ function CoLab() {
   const renderApplicationForm = () => {
     const project = showApplicationForm;
     if (!project) return null;
+    const closeForm = () => { setShowApplicationForm(null); setApplicationSuccess(false); };
+    const projectSkills = project.skills || [];
+    const otherSkills = SKILLS.filter(s => !projectSkills.includes(s));
+    const toggleSkill = (s) => setApplicationForm(f => ({ ...f, skills: f.skills.includes(s) ? f.skills.filter(x => x !== s) : [...f.skills, s] }));
     return (
-    <div style={{ position: "fixed", inset: 0, background: dark ? "rgba(0,0,0,0.9)" : "rgba(200,200,200,0.88)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200, backdropFilter: "blur(10px)", padding: 16 }} onClick={() => setShowApplicationForm(null)}>
+    <div style={{ position: "fixed", inset: 0, background: dark ? "rgba(0,0,0,0.9)" : "rgba(200,200,200,0.88)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200, backdropFilter: "blur(10px)", padding: 16 }} onClick={closeForm}>
       <div style={{ background: bg, border: `1px solid ${border}`, borderRadius: 16, padding: "28px", width: "100%", maxWidth: 520, maxHeight: "92vh", overflowY: "auto" }} onClick={e => e.stopPropagation()}>
-        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 20 }}>
-          <div>
-            <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px", marginBottom: 6 }}>APPLY</div>
-            <div style={{ fontSize: 16, color: text, fontWeight: 500 }}>{project.title}</div>
-          </div>
-          <button onClick={() => setShowApplicationForm(null)} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontSize: 14, fontFamily: "inherit" }}>✕</button>
-        </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-          <div>
-            <label style={labelStyle}>SKILLS YOU'RE BRINGING</label>
-            <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
-              {SKILLS.map(s => { const sel = applicationForm.skills.includes(s); return <button key={s} className="hb" onClick={() => setApplicationForm({ ...applicationForm, skills: sel ? applicationForm.skills.filter(x => x !== s) : [...applicationForm.skills, s] })} style={{ padding: "3px 10px", borderRadius: 3, fontSize: 10, cursor: "pointer", fontFamily: "inherit", background: sel ? text : "none", color: sel ? bg : textMuted, border: `1px solid ${sel ? text : border}`, transition: "all 0.15s" }}>{s}</button>; })}
+        {applicationSuccess ? (
+          <div style={{ textAlign: "center", padding: "20px 0" }}>
+            <div style={{ fontSize: 28, marginBottom: 16 }}>✓</div>
+            <div style={{ fontSize: 16, color: text, fontWeight: 500, marginBottom: 10 }}>Application sent!</div>
+            <div style={{ fontSize: 13, color: textMuted, lineHeight: 1.75, marginBottom: 28, maxWidth: 320, margin: "0 auto 28px" }}>
+              {project.owner_name ? `${project.owner_name} will` : "The project owner will"} reach out via Messages if they want to move forward.
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              <button className="hb" onClick={() => { closeForm(); setAppScreen("explore"); setActiveProject(null); }} style={{ ...btnP, width: "100%", padding: "12px" }}>browse more projects →</button>
+              <button className="hb" onClick={closeForm} style={{ ...btnG, width: "100%" }}>close</button>
             </div>
           </div>
-          <div><label style={labelStyle}>AVAILABILITY</label>
-            <select style={inputStyle} value={applicationForm.availability} onChange={e => setApplicationForm({ ...applicationForm, availability: e.target.value })}>
-              <option value="">Select availability...</option>
-              {AVAILABILITY.map(a => <option key={a}>{a}</option>)}
-            </select>
-          </div>
-          <div><label style={labelStyle}>WHY DO YOU WANT TO JOIN?</label>
-            <textarea style={{ ...inputStyle, resize: "none" }} rows={4} placeholder="Tell the project owner why you're a great fit..." value={applicationForm.motivation} onChange={e => setApplicationForm({ ...applicationForm, motivation: e.target.value })} />
-          </div>
-          <div><label style={labelStyle}>PORTFOLIO / LINK (optional)</label>
-            <input style={inputStyle} placeholder="https://..." value={applicationForm.portfolio_url} onChange={e => setApplicationForm({ ...applicationForm, portfolio_url: e.target.value })} />
-          </div>
-        </div>
-        <div style={{ display: "flex", gap: 10, marginTop: 20 }}>
-          <button className="hb" onClick={() => setShowApplicationForm(null)} style={btnG}>cancel</button>
-          <button className="hb" onClick={handleApply} disabled={!applicationForm.motivation || !applicationForm.availability} style={{ ...btnP, flex: 1, opacity: (!applicationForm.motivation || !applicationForm.availability) ? 0.4 : 1 }}>submit application →</button>
-        </div>
+        ) : (
+          <>
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 20 }}>
+              <div>
+                <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px", marginBottom: 6 }}>APPLY</div>
+                <div style={{ fontSize: 16, color: text, fontWeight: 500 }}>{project.title}</div>
+              </div>
+              <button onClick={closeForm} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontSize: 14, fontFamily: "inherit" }}>✕</button>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+              <div>
+                <label style={labelStyle}>SKILLS YOU'RE BRINGING</label>
+                {projectSkills.length > 0 && (
+                  <div style={{ marginBottom: 8, padding: "10px 12px", background: bg2, borderRadius: 6, border: `1px solid ${border}` }}>
+                    <div style={{ fontSize: 10, color: textMuted, letterSpacing: "1px", marginBottom: 6 }}>NEEDED FOR THIS PROJECT</div>
+                    <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
+                      {projectSkills.map(s => { const sel = applicationForm.skills.includes(s); const match = (profile?.skills || []).includes(s); return <button key={s} className="hb" onClick={() => toggleSkill(s)} style={{ padding: "3px 10px", borderRadius: 3, fontSize: 10, cursor: "pointer", fontFamily: "inherit", background: sel ? text : "none", color: sel ? bg : match ? text : textMuted, border: `1px solid ${sel ? text : match ? (dark ? "#ffffff45" : "#00000025") : border}`, fontWeight: match ? 500 : 400, transition: "all 0.15s" }}>{s}{match && !sel ? " ★" : ""}</button>; })}
+                    </div>
+                  </div>
+                )}
+                <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
+                  {otherSkills.map(s => { const sel = applicationForm.skills.includes(s); return <button key={s} className="hb" onClick={() => toggleSkill(s)} style={{ padding: "3px 10px", borderRadius: 3, fontSize: 10, cursor: "pointer", fontFamily: "inherit", background: sel ? text : "none", color: sel ? bg : textMuted, border: `1px solid ${sel ? text : border}`, transition: "all 0.15s" }}>{s}</button>; })}
+                </div>
+              </div>
+              <div><label style={labelStyle}>AVAILABILITY</label>
+                <select style={inputStyle} value={applicationForm.availability} onChange={e => setApplicationForm({ ...applicationForm, availability: e.target.value })}>
+                  <option value="">Select availability...</option>
+                  {AVAILABILITY.map(a => <option key={a}>{a}</option>)}
+                </select>
+              </div>
+              <div><label style={labelStyle}>WHY DO YOU WANT TO JOIN?</label>
+                <textarea style={{ ...inputStyle, resize: "none" }} rows={4} placeholder="Tell the project owner why you're a great fit..." value={applicationForm.motivation} onChange={e => setApplicationForm({ ...applicationForm, motivation: e.target.value })} />
+              </div>
+              <div><label style={labelStyle}>PORTFOLIO / LINK (optional)</label>
+                <input style={inputStyle} placeholder="https://..." value={applicationForm.portfolio_url} onChange={e => setApplicationForm({ ...applicationForm, portfolio_url: e.target.value })} />
+              </div>
+            </div>
+            <div style={{ display: "flex", gap: 10, marginTop: 20 }}>
+              <button className="hb" onClick={closeForm} style={btnG}>cancel</button>
+              <button className="hb" onClick={handleApply} disabled={!applicationForm.motivation || !applicationForm.availability} style={{ ...btnP, flex: 1, opacity: (!applicationForm.motivation || !applicationForm.availability) ? 0.4 : 1 }}>submit application →</button>
+            </div>
+          </>
+        )}
       </div>
     </div>
     );
@@ -2083,7 +2126,9 @@ function CoLab() {
                 <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
                   {SKILLS.map(s => { const sel = onboardData.skills.includes(s); return <button key={s} className="hb" onClick={() => setOnboardData({ ...onboardData, skills: sel ? onboardData.skills.filter(x => x !== s) : [...onboardData.skills, s] })} style={{ padding: "6px 14px", borderRadius: 4, fontSize: 12, cursor: "pointer", fontFamily: "inherit", background: sel ? text : "none", color: sel ? bg : textMuted, border: `1px solid ${sel ? text : border}`, transition: "all 0.15s" }}>{s}</button>; })}
                 </div>
-                {onboardData.skills.length > 0 && <div style={{ fontSize: 11, color: textMuted }}>{onboardData.skills.length} selected</div>}
+                <div style={{ fontSize: 11, color: onboardData.skills.length === 0 ? text : textMuted, marginTop: 4 }}>
+                  {onboardData.skills.length === 0 ? "select at least one to continue" : `${onboardData.skills.length} selected`}
+                </div>
               </div>
             )}
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 30 }}>
@@ -2251,6 +2296,44 @@ function CoLab() {
       {viewingProfile && <ProfileModal u={viewingProfile} onClose={() => setViewingProfile(null)} />}
       {renderApplicationForm()}
       {reviewingApplicants && <ReviewModal project={reviewingApplicants} onClose={() => setReviewingApplicants(null)} />}
+
+      {/* NEW DM PICKER */}
+      {showNewDm && (
+        <div style={{ position: "fixed", inset: 0, background: dark ? "rgba(0,0,0,0.9)" : "rgba(200,200,200,0.88)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200, backdropFilter: "blur(10px)", padding: 16 }} onClick={() => setShowNewDm(false)}>
+          <div style={{ background: bg, border: `1px solid ${border}`, borderRadius: 16, padding: "24px", width: "100%", maxWidth: 440, maxHeight: "70vh", display: "flex", flexDirection: "column" }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+              <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px" }}>NEW MESSAGE</div>
+              <button onClick={() => setShowNewDm(false)} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontSize: 14, fontFamily: "inherit" }}>✕</button>
+            </div>
+            <input
+              autoFocus
+              placeholder="search people..."
+              value={newDmSearch}
+              onChange={e => setNewDmSearch(e.target.value)}
+              style={{ ...inputStyle, marginBottom: 12 }}
+            />
+            <div style={{ overflowY: "auto", flex: 1, display: "flex", flexDirection: "column", gap: 2 }}>
+              {users
+                .filter(u => u.id !== authUser?.id && (!newDmSearch || u.name?.toLowerCase().includes(newDmSearch.toLowerCase()) || u.username?.toLowerCase().includes(newDmSearch.toLowerCase()) || u.role?.toLowerCase().includes(newDmSearch.toLowerCase())))
+                .slice(0, 20)
+                .map(u => (
+                  <button key={u.id} onClick={() => { openDm(u); setShowNewDm(false); setNewDmSearch(""); }} style={{ display: "flex", gap: 12, alignItems: "center", padding: "10px 12px", background: "none", border: "none", borderRadius: 8, cursor: "pointer", textAlign: "left", fontFamily: "inherit", width: "100%" }}
+                    onMouseEnter={e => e.currentTarget.style.background = bg2} onMouseLeave={e => e.currentTarget.style.background = "none"}>
+                    <Avatar initials={u.name?.split(" ").map(n => n[0]).join("").slice(0, 2)} size={36} dark={dark} />
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontSize: 13, color: text }}>{u.name}</div>
+                      <div style={{ fontSize: 11, color: textMuted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{u.role}{u.username ? ` · @${u.username}` : ""}</div>
+                    </div>
+                  </button>
+                ))
+              }
+              {users.filter(u => u.id !== authUser?.id && (!newDmSearch || u.name?.toLowerCase().includes(newDmSearch.toLowerCase()) || u.username?.toLowerCase().includes(newDmSearch.toLowerCase()) || u.role?.toLowerCase().includes(newDmSearch.toLowerCase()))).length === 0 && (
+                <div style={{ fontSize: 12, color: textMuted, padding: "20px 0", textAlign: "center" }}>no one found.</div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
       {showBannerEditor && <BannerEditor pixels={bannerPixels} onSave={saveBanner} onClose={() => setShowBannerEditor(false)} dark={dark} bg={bg} bg2={bg2} bg3={bg3} border={border} text={text} textMuted={textMuted} />}
 
       {/* COLLABORATORS MODAL */}
@@ -2435,11 +2518,12 @@ function CoLab() {
         <div style={{ width: "100%", padding: "0", display: "flex", height: "calc(100vh - 50px)" }}>
           {/* Left panel — always visible */}
           <div style={{ width: 260, flexShrink: 0, borderRight: `1px solid ${border}`, overflowY: "auto", display: "flex", flexDirection: "column" }}>
-            <div style={{ padding: "18px 20px 12px", borderBottom: `1px solid ${border}` }}>
+            <div style={{ padding: "18px 20px 12px", borderBottom: `1px solid ${border}`, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
               <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px" }}>MESSAGES</div>
+              <button className="hb" onClick={() => { setShowNewDm(true); setNewDmSearch(""); }} style={{ background: "none", border: `1px solid ${border}`, borderRadius: 5, width: 22, height: 22, cursor: "pointer", fontSize: 14, color: textMuted, fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center", lineHeight: 1 }}>+</button>
             </div>
             {dmThreads.length === 0
-              ? <div style={{ padding: "24px 20px", fontSize: 12, color: textMuted, lineHeight: 1.7 }}>no conversations yet.<br />Message someone from their profile.</div>
+              ? <div style={{ padding: "24px 20px", fontSize: 12, color: textMuted, lineHeight: 1.7 }}>no conversations yet.<br /><button className="hb" onClick={() => { setShowNewDm(true); setNewDmSearch(""); }} style={{ background: "none", border: "none", color: text, cursor: "pointer", fontFamily: "inherit", fontSize: 12, textDecoration: "underline", padding: 0 }}>start one →</button></div>
               : dmThreads.map(thread => {
                   const otherId = thread.user_a === authUser?.id ? thread.user_b : thread.user_a;
                   const other = users.find(u => u.id === otherId);
