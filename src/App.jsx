@@ -306,7 +306,7 @@ export default function CoLab() {
   const [globalSearch, setGlobalSearch] = useState("");
   const [showGlobalSearch, setShowGlobalSearch] = useState(false);
   const [posts, setPosts] = useState([]);
-  const [postLikes, setPostLikes] = useState({});
+  const [postLikes, setPostLikes] = useState({ myLikes: [] });
   const [postComments, setPostComments] = useState({});
   const [newPostContent, setNewPostContent] = useState("");
   const [newPostProject, setNewPostProject] = useState("");
@@ -347,6 +347,7 @@ export default function CoLab() {
   const [editingProgress, setEditingProgress] = useState(null);
   const [showAddPortfolio, setShowAddPortfolio] = useState(false);
   const [newPortfolioItem, setNewPortfolioItem] = useState({ title: "", description: "", url: "" });
+  const [showCollaborators, setShowCollaborators] = useState(null); // userId whose collaborators to show
   const messagesEndRef = useRef(null);
   const dmEndRef = useRef(null);
 
@@ -752,18 +753,33 @@ export default function CoLab() {
   // ── DMs ──
   const openDm = async (user) => {
     if (user.id === authUser?.id) return;
+    // Check local state first
     let thread = dmThreads.find(t =>
       (t.user_a === authUser.id && t.user_b === user.id) ||
       (t.user_b === authUser.id && t.user_a === user.id)
     );
     if (!thread) {
-      const { data } = await supabase.from("dm_threads").insert({ user_a: authUser.id, user_b: user.id }).select().single();
-      if (data) { thread = data; setDmThreads(prev => [...prev, data]); }
+      // Check DB for existing thread in both orderings before creating
+      const { data: existing } = await supabase.from("dm_threads").select("*")
+        .or(`and(user_a.eq.${authUser.id},user_b.eq.${user.id}),and(user_a.eq.${user.id},user_b.eq.${authUser.id})`);
+      if (existing && existing.length > 0) {
+        thread = existing[0];
+        // Merge any duplicate threads: keep first, ignore rest
+        setDmThreads(prev => {
+          const exists = prev.find(t => t.id === thread.id);
+          return exists ? prev : [...prev, thread];
+        });
+      } else {
+        const { data } = await supabase.from("dm_threads").insert({ user_a: authUser.id, user_b: user.id }).select().single();
+        if (data) { thread = data; setDmThreads(prev => [...prev, data]); }
+      }
     }
     if (thread) {
       setActiveDmThread({ ...thread, otherUser: user });
       loadDmMessages(thread.id);
       setAppScreen("messages");
+      setViewingProfile(null);
+      setViewFullProfile(null);
       setDmThreads(prev => prev.map(t => t.id === thread.id ? { ...t, unread: false } : t));
       setTimeout(() => markDmRead(thread.id), 500);
     }
@@ -771,19 +787,39 @@ export default function CoLab() {
 
   const handleSendDm = async () => {
     if (!dmInput.trim() || !activeDmThread) return;
-    await supabase.from("dm_messages").insert({
+    const text = dmInput;
+    setDmInput(""); // optimistic clear so it feels instant
+    const { data } = await supabase.from("dm_messages").insert({
       thread_id: activeDmThread.id, sender_id: authUser.id,
-      sender_name: profile.name, sender_initials: myInitials, text: dmInput,
-    });
-    setDmInput("");
+      sender_name: profile.name, sender_initials: myInitials, text,
+    }).select().single();
+    // Optimistically add to local state (realtime will also fire but we dedupe by id)
+    if (data) {
+      setDmMessages(prev => {
+        const existing = prev[activeDmThread.id] || [];
+        if (existing.find(m => m.id === data.id)) return prev;
+        return { ...prev, [activeDmThread.id]: [...existing, data] };
+      });
+      setTimeout(() => dmEndRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
+    }
   };
 
   // ── APPLICATIONS ──
   const handleApply = async () => {
     const project = showApplicationForm;
     if (!project) return;
-    const already = applications.find(a => a.project_id === project.id && a.applicant_id === authUser.id);
-    if (already) return;
+    const existing = applications.find(a => a.project_id === project.id && a.applicant_id === authUser.id);
+    if (existing) {
+      if (existing.status === "pending") { showToast("Already applied."); return; }
+      if (existing.status === "accepted") { showToast("You're already on this project."); return; }
+      if (existing.status === "declined") {
+        const hoursSince = (Date.now() - new Date(existing.created_at).getTime()) / 3600000;
+        if (hoursSince < 24) { showToast(`You can reapply in ${Math.ceil(24 - hoursSince)}h`); return; }
+        // Delete old declined app so we can submit fresh
+        await supabase.from("applications").delete().eq("id", existing.id);
+        setApplications(prev => prev.filter(a => a.id !== existing.id));
+      }
+    }
     const { data, error } = await supabase.from("applications").insert({
       project_id: project.id, applicant_id: authUser.id,
       applicant_name: profile.name, applicant_initials: myInitials,
@@ -793,14 +829,19 @@ export default function CoLab() {
       portfolio_url: applicationForm.portfolio_url || "",
       status: "pending",
     }).select().single();
-    if (error) { console.error("Apply error:", error); showToast("Error submitting. Try again."); return; }
+    if (error) { showToast("Error submitting. Try again."); return; }
     if (data) {
       setApplications([...applications, data]);
       setShowApplicationForm(null);
       setApplicationForm({ skills: [], availability: "", motivation: "", portfolio_url: "" });
       showToast(`Applied to "${project.title}"`);
-      setActiveProject(null);
     }
+  };
+
+  const handleRemoveDeniedApp = async (appId) => {
+    await supabase.from("applications").delete().eq("id", appId);
+    setApplications(prev => prev.filter(a => a.id !== appId));
+    showToast("Application removed.");
   };
 
   const handleAccept = async (notif) => {
@@ -864,7 +905,6 @@ export default function CoLab() {
   };
 
   const myCollaborators = getCollaborators(authUser?.id);
-  const [showCollaborators, setShowCollaborators] = useState(null); // userId whose collaborators to show
   const appliedProjectIds = applications.filter(a => a.applicant_id === authUser?.id).map(a => a.project_id);
   const browseBase = projects.filter(p => p.owner_id !== authUser?.id);
   const forYou = browseBase.map(p => ({ ...p, _s: getMatchScore(p) })).filter(p => p._s > 0).sort((a, b) => b._s - a._s);
@@ -1250,6 +1290,15 @@ export default function CoLab() {
   };
 
   const handleDeletePost = async (postId) => {
+    const post = posts.find(p => p.id === postId);
+    // Clean up storage file if the post has one
+    if (post?.media_url && post.media_url.includes("user-uploads")) {
+      try {
+        // Extract the path after the bucket name
+        const pathMatch = post.media_url.match(/user-uploads\/(.+)$/);
+        if (pathMatch) await supabase.storage.from("user-uploads").remove([pathMatch[1]]);
+      } catch (e) { console.warn("Storage cleanup failed:", e); }
+    }
     await supabase.from("posts").delete().eq("id", postId);
     setPosts(posts.filter(p => p.id !== postId));
     showToast("Post deleted.");
@@ -1326,7 +1375,8 @@ export default function CoLab() {
               )}
               <div style={{ display: "flex", gap: 8 }}>
                 <Avatar initials={myInitials} size={24} dark={dark} />
-                <input placeholder="write a comment..." value={newCommentText[post.id] || ""} onChange={e => setNewCommentText(prev => ({ ...prev, [post.id]: e.target.value }))} onKeyDown={e => e.key === "Enter" && handleComment(post.id)} style={{ ...inputStyle, fontSize: 12, padding: "7px 12px", flex: 1 }} />
+                <input placeholder="write a comment..." value={newCommentText[post.id] || ""} onChange={e => setNewCommentText(prev => ({ ...prev, [post.id]: e.target.value }))} onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); handleComment(post.id); } }} style={{ ...inputStyle, fontSize: 12, padding: "7px 12px", flex: 1 }} />
+                <button className="hb" onClick={() => handleComment(post.id)} style={{ ...btnP, padding: "7px 12px", fontSize: 11, flexShrink: 0 }}>post</button>
               </div>
             </div>
           )}
@@ -1680,7 +1730,7 @@ export default function CoLab() {
 
       {/* NAV */}
       <nav style={{ position: "sticky", top: 0, zIndex: 50, width: "100%", background: dark ? "rgba(10,10,10,0.97)" : "rgba(255,255,255,0.97)", backdropFilter: "blur(12px)", borderBottom: `1px solid ${border}`, padding: "0 12px", display: "flex", alignItems: "center", gap: 8, height: 50 }}>
-        <button onClick={() => { setAppScreen("explore"); setActiveProject(null); setViewingProfile(null); }} style={{ background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: 14, fontWeight: 500, color: text, letterSpacing: "-0.5px", flexShrink: 0 }}>[CoLab]</button>
+        <button onClick={() => { setAppScreen("explore"); setActiveProject(null); setViewingProfile(null); setViewFullProfile(null); }} style={{ background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: 14, fontWeight: 500, color: text, letterSpacing: "-0.5px", flexShrink: 0 }}>[CoLab]</button>
 
         {/* Global search — full bar on desktop, expandable on mobile */}
         <div style={{ position: "relative", flexShrink: 0 }} className="search-wrap">
@@ -1751,7 +1801,7 @@ export default function CoLab() {
         {/* Nav items */}
         <div style={{ display: "flex", gap: 0, alignItems: "center" }}>
           {navItems.map(({ id, label, badge }) => (
-            <button key={id} onClick={() => { setAppScreen(id); setActiveProject(null); setViewingProfile(null); setShowNotifications(false); }}
+            <button key={id} onClick={() => { setAppScreen(id); setActiveProject(null); setViewingProfile(null); setViewFullProfile(null); setShowNotifications(false); }}
               style={{ position: "relative", background: appScreen === id && !activeProject && !showNotifications ? bg3 : "none", color: appScreen === id && !activeProject && !showNotifications ? text : textMuted, border: "none", borderRadius: 6, padding: "5px 5px", fontSize: 11, cursor: "pointer", fontFamily: "inherit", transition: "all 0.15s", whiteSpace: "nowrap", flexShrink: 0 }}>
               {label}
               {badge > 0 && <span style={{ position: "absolute", top: 2, right: 2, width: 5, height: 5, borderRadius: "50%", background: text, border: `1px solid ${bg}` }} />}
@@ -2140,7 +2190,12 @@ export default function CoLab() {
                       return (
                         <div key={p.id} style={{ background: bg2, borderRadius: i === 0 && arr.length === 1 ? 8 : i === 0 ? "8px 8px 0 0" : i === arr.length - 1 ? "0 0 8px 8px" : 0, border: `1px solid ${border}`, borderBottom: i < arr.length - 1 ? "none" : `1px solid ${border}`, padding: "10px 16px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
                           <div style={{ minWidth: 0 }}><div style={{ fontSize: 12, color: text, marginBottom: 1 }}>{p.title}</div><div style={{ fontSize: 10, color: textMuted }}>{p.owner_name}</div></div>
-                          <span style={{ fontSize: 10, color: myApp?.status === "accepted" ? text : textMuted, border: `1px solid ${border}`, borderRadius: 3, padding: "1px 6px", flexShrink: 0 }}>{myApp?.status || "pending"}</span>
+                          <div style={{ display: "flex", gap: 6, alignItems: "center", flexShrink: 0 }}>
+                            <span style={{ fontSize: 10, color: myApp?.status === "accepted" ? text : textMuted, border: `1px solid ${border}`, borderRadius: 3, padding: "1px 6px" }}>{myApp?.status || "pending"}</span>
+                            {myApp?.status === "declined" && (
+                              <button className="hb" onClick={() => handleRemoveDeniedApp(myApp.id)} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontSize: 10, fontFamily: "inherit" }}>✕</button>
+                            )}
+                          </div>
                         </div>
                       );
                     })}
