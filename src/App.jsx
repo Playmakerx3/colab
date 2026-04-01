@@ -312,6 +312,7 @@ export default function CoLab() {
   const [newPostContent, setNewPostContent] = useState("");
   const [newPostProject, setNewPostProject] = useState("");
   const [newPostMediaUrl, setNewPostMediaUrl] = useState("");
+  const [newPostMediaType, setNewPostMediaType] = useState(""); // image|video|audio|youtube|pdf
   const [expandedComments, setExpandedComments] = useState({});
   const [newCommentText, setNewCommentText] = useState({});
   const [projectMembers, setProjectMembers] = useState([]);
@@ -332,7 +333,7 @@ export default function CoLab() {
   const [search, setSearch] = useState("");
   const [toast, setToast] = useState(null);
   const [showCreate, setShowCreate] = useState(false);
-  const [newProject, setNewProject] = useState({ title: "", description: "", category: CATEGORIES[0], skills: [], maxCollaborators: 2, location: "" });
+  const [newProject, setNewProject] = useState({ title: "", description: "", category: CATEGORIES[0], skills: [], maxCollaborators: 2, location: "", goals: "", timeline: "" });
   const [newTaskText, setNewTaskText] = useState("");
   const [taskAssignee, setTaskAssignee] = useState("");
   const [taskDueDate, setTaskDueDate] = useState("");
@@ -689,12 +690,14 @@ export default function CoLab() {
       category: newProject.category, skills: newProject.skills,
       max_collaborators: newProject.maxCollaborators,
       location: newProject.location || profile?.location || "",
+      goals: newProject.goals || null,
+      timeline: newProject.timeline || null,
       owner_id: authUser.id, owner_name: profile.name,
       owner_initials: myInitials, status: "open", progress: 0, plugins: [], collaborators: 0,
     }).select().single();
     if (!error && data) {
       setProjects([data, ...projects]);
-      setNewProject({ title: "", description: "", category: CATEGORIES[0], skills: [], maxCollaborators: 2 });
+      setNewProject({ title: "", description: "", category: CATEGORIES[0], skills: [], maxCollaborators: 2, location: "", goals: "", timeline: "" });
       setShowCreate(false); showToast("Project posted.");
     }
   };
@@ -708,6 +711,21 @@ export default function CoLab() {
     showToast("Progress updated.");
   };
 
+  // Auto-calculate progress from task completion
+  const calcProgress = (projectId, taskList) => {
+    const pt = taskList.filter(t => t.project_id === projectId);
+    if (pt.length === 0) return null;
+    return Math.round((pt.filter(t => t.done).length / pt.length) * 100);
+  };
+
+  const syncProgress = async (projectId, taskList) => {
+    const prog = calcProgress(projectId, taskList);
+    if (prog === null) return;
+    await supabase.from("projects").update({ progress: prog }).eq("id", projectId);
+    setProjects(prev => prev.map(p => p.id === projectId ? { ...p, progress: prog } : p));
+    if (activeProject?.id === projectId) setActiveProject(prev => ({ ...prev, progress: prog }));
+  };
+
   // ── TASKS ──
   const handleAddTask = async (projectId) => {
     if (!newTaskText.trim()) return;
@@ -717,28 +735,45 @@ export default function CoLab() {
       assigned_to: assignedUser?.id || null, assigned_name: taskAssignee || null,
       due_date: taskDueDate || null,
     }).select().single();
-    if (data) { setTasks([...tasks, data]); setNewTaskText(""); setTaskAssignee(""); setTaskDueDate(""); }
+    if (data) {
+      const newTasks = [...tasks, data];
+      setTasks(newTasks);
+      setNewTaskText(""); setTaskAssignee(""); setTaskDueDate("");
+      syncProgress(projectId, newTasks);
+    }
   };
 
   const handleToggleTask = async (task) => {
     const { data } = await supabase.from("tasks").update({ done: !task.done }).eq("id", task.id).select().single();
-    if (data) setTasks(tasks.map(t => t.id === task.id ? data : t));
+    if (data) {
+      const newTasks = tasks.map(t => t.id === task.id ? data : t);
+      setTasks(newTasks);
+      syncProgress(task.project_id, newTasks);
+    }
   };
 
   const handleDeleteTask = async (taskId) => {
+    const task = tasks.find(t => t.id === taskId);
     await supabase.from("tasks").delete().eq("id", taskId);
-    setTasks(tasks.filter(t => t.id !== taskId));
+    const newTasks = tasks.filter(t => t.id !== taskId);
+    setTasks(newTasks);
+    if (task) syncProgress(task.project_id, newTasks);
   };
 
   // ── MESSAGES ──
   const handleSendMessage = async (projectId) => {
     if (!newMessage.trim()) return;
-    await supabase.from("messages").insert({
+    const text = newMessage;
+    setNewMessage(""); // optimistic clear
+    const { data } = await supabase.from("messages").insert({
       project_id: projectId, from_user: authUser.id,
-      from_initials: myInitials, from_name: profile.name, text: newMessage,
-    });
-    detectAndNotifyMentions(newMessage, projectId);
-    setNewMessage("");
+      from_initials: myInitials, from_name: profile.name, text,
+    }).select().single();
+    if (data) {
+      setMessages(prev => prev.find(m => m.id === data.id) ? prev : [...prev, data]);
+      setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
+      detectAndNotifyMentions(text, projectId);
+    }
   };
 
   const handlePostUpdate = async (projectId) => {
@@ -1240,13 +1275,15 @@ export default function CoLab() {
       project_id: proj?.id || null,
       project_title: proj?.title || null,
       media_url: newPostMediaUrl || null,
+      media_type: newPostMediaType || null,
     }).select().single();
-    if (error) { console.error("Post error:", error); showToast("Error posting. Try again."); return; }
+    if (error) { showToast("Error posting. Try again."); return; }
     if (data) {
       setPosts([data, ...posts]);
       setNewPostContent("");
       setNewPostProject("");
       setNewPostMediaUrl("");
+      setNewPostMediaType("");
       showToast("Posted.");
     }
   };
@@ -1352,17 +1389,25 @@ export default function CoLab() {
           <div style={{ fontSize: 14, color: text, lineHeight: 1.7, marginBottom: 10, paddingLeft: 46 }}>{post.content}</div>
           {post.media_url && (
             <div style={{ paddingLeft: 46, marginBottom: 10 }}>
-              {post.media_url.includes("youtube.com") || post.media_url.includes("youtu.be") ? (
-                <iframe src={`https://www.youtube.com/embed/${post.media_url.split("v=")[1]?.split("&")[0] || post.media_url.split("/").pop()}`} style={{ width: "100%", height: 240, borderRadius: 8, border: "none" }} allowFullScreen />
-              ) : post.media_url.match(/\.(mp4|mov|webm)$/i) ? (
-                <video src={post.media_url} controls style={{ width: "100%", maxHeight: 300, borderRadius: 8, border: `1px solid ${border}` }} />
-              ) : post.media_url.match(/\.(mp3|wav|ogg|m4a|aac)$/i) ? (
-                <audio src={post.media_url} controls style={{ width: "100%", marginTop: 4 }} />
-              ) : post.media_url.match(/\.pdf$/i) ? (
-                <a href={post.media_url} target="_blank" rel="noreferrer" style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, color: text, border: `1px solid ${border}`, borderRadius: 6, padding: "6px 12px", textDecoration: "none" }}>↗ view PDF</a>
-              ) : (
-                <img src={post.media_url} alt="" style={{ width: "100%", maxHeight: 300, objectFit: "cover", borderRadius: 8, border: `1px solid ${border}` }} onError={e => e.target.style.display = "none"} />
-              )}
+              {(() => {
+                const t = post.media_type || (
+                  post.media_url.includes("youtube.com") || post.media_url.includes("youtu.be") ? "youtube"
+                  : post.media_url.match(/\.(mp4|mov|webm)$/i) ? "video"
+                  : post.media_url.match(/\.(mp3|wav|ogg|m4a|aac|flac)$/i) ? "audio"
+                  : post.media_url.match(/\.pdf$/i) ? "pdf"
+                  : "image"
+                );
+                if (t === "youtube") return <iframe src={`https://www.youtube.com/embed/${post.media_url.split("v=")[1]?.split("&")[0] || post.media_url.split("/").pop()}`} style={{ width: "100%", height: 240, borderRadius: 8, border: "none" }} allowFullScreen />;
+                if (t === "video") return <video src={post.media_url} controls style={{ width: "100%", maxHeight: 300, borderRadius: 8, border: `1px solid ${border}` }} />;
+                if (t === "audio") return (
+                  <div style={{ background: bg2, border: `1px solid ${border}`, borderRadius: 10, padding: "12px 16px" }}>
+                    <div style={{ fontSize: 11, color: textMuted, marginBottom: 8 }}>♪ {post.media_url.split("/").pop().split("?")[0]}</div>
+                    <audio src={post.media_url} controls style={{ width: "100%" }} />
+                  </div>
+                );
+                if (t === "pdf") return <a href={post.media_url} target="_blank" rel="noreferrer" style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, color: text, border: `1px solid ${border}`, borderRadius: 6, padding: "6px 12px", textDecoration: "none" }}>↗ view PDF</a>;
+                return <img src={post.media_url} alt="" style={{ width: "100%", maxHeight: 300, objectFit: "cover", borderRadius: 8, border: `1px solid ${border}` }} onError={e => e.target.style.display = "none"} />;
+              })()}
             </div>
           )}
           {post.project_title && (
@@ -1459,22 +1504,24 @@ export default function CoLab() {
                     <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 10 }}>
                       {/* Media preview */}
                       {newPostMediaUrl && (
-                        <div style={{ position: "relative", display: "inline-block" }}>
-                          {newPostMediaUrl.match(/\.(jpg|jpeg|png|gif|webp)$/i) ? (
+                        <div style={{ position: "relative", display: "inline-block", maxWidth: "100%" }}>
+                          {newPostMediaType === "audio" ? (
+                            <div style={{ fontSize: 11, color: text, padding: "8px 12px", background: bg3, borderRadius: 8, display: "flex", gap: 6, alignItems: "center" }}>
+                              ♪ {newPostMediaUrl.split("/").pop().split("?")[0]}
+                            </div>
+                          ) : newPostMediaUrl.match(/\.(jpg|jpeg|png|gif|webp)$/i) ? (
                             <img src={newPostMediaUrl} alt="" style={{ maxWidth: "100%", maxHeight: 200, borderRadius: 8, border: `1px solid ${border}` }} />
                           ) : (
                             <div style={{ fontSize: 11, color: textMuted, padding: "6px 10px", background: bg3, borderRadius: 6 }}>file: {newPostMediaUrl.split("/").pop()}</div>
                           )}
-                          <button onClick={() => setNewPostMediaUrl("")} style={{ position: "absolute", top: 4, right: 4, background: bg, border: `1px solid ${border}`, borderRadius: "50%", width: 20, height: 20, cursor: "pointer", fontSize: 10, display: "flex", alignItems: "center", justifyContent: "center", color: text, fontFamily: "inherit" }}>✕</button>
+                          <button onClick={() => { setNewPostMediaUrl(""); setNewPostMediaType(""); }} style={{ position: "absolute", top: 4, right: 4, background: bg, border: `1px solid ${border}`, borderRadius: "50%", width: 20, height: 20, cursor: "pointer", fontSize: 10, display: "flex", alignItems: "center", justifyContent: "center", color: text, fontFamily: "inherit" }}>✕</button>
                         </div>
                       )}
-                      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                        {/* File upload button */}
+                      <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                        {/* Image/video upload */}
                         <label style={{ cursor: "pointer", flexShrink: 0 }}>
-                          <div style={{ ...btnG, padding: "6px 12px", fontSize: 11, display: "inline-flex", alignItems: "center", gap: 5 }}>
-                            ↑ upload
-                          </div>
-                          <input type="file" accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.mp3,.wav" style={{ display: "none" }} onChange={async (e) => {
+                          <div style={{ ...btnG, padding: "6px 12px", fontSize: 11, display: "inline-flex", alignItems: "center", gap: 5 }}>↑ photo/video</div>
+                          <input type="file" accept="image/*,video/*" style={{ display: "none" }} onChange={async (e) => {
                             const file = e.target.files[0];
                             if (!file) return;
                             showToast("Uploading...");
@@ -1483,10 +1530,27 @@ export default function CoLab() {
                             if (error) { showToast("Upload failed."); return; }
                             const { data: { publicUrl } } = supabase.storage.from("user-uploads").getPublicUrl(path);
                             setNewPostMediaUrl(publicUrl);
-                            showToast("File ready.");
+                            setNewPostMediaType(file.type.startsWith("video") ? "video" : "image");
+                            showToast("Ready.");
                           }} />
                         </label>
-                        <input placeholder="or paste a YouTube / image URL..." value={newPostMediaUrl} onChange={e => setNewPostMediaUrl(e.target.value)} style={{ ...inputStyle, fontSize: 11, padding: "6px 10px", flex: 1 }} />
+                        {/* Audio upload */}
+                        <label style={{ cursor: "pointer", flexShrink: 0 }}>
+                          <div style={{ ...btnG, padding: "6px 12px", fontSize: 11, display: "inline-flex", alignItems: "center", gap: 5 }}>♪ audio</div>
+                          <input type="file" accept="audio/*,.mp3,.wav,.ogg,.m4a,.aac,.flac" style={{ display: "none" }} onChange={async (e) => {
+                            const file = e.target.files[0];
+                            if (!file) return;
+                            showToast("Uploading audio...");
+                            const path = `posts/${authUser.id}/${Date.now()}-${file.name}`;
+                            const { error } = await supabase.storage.from("user-uploads").upload(path, file, { contentType: file.type });
+                            if (error) { showToast("Upload failed."); return; }
+                            const { data: { publicUrl } } = supabase.storage.from("user-uploads").getPublicUrl(path);
+                            setNewPostMediaUrl(publicUrl);
+                            setNewPostMediaType("audio");
+                            showToast("Audio ready.");
+                          }} />
+                        </label>
+                        <input placeholder="or paste a YouTube URL..." value={newPostMediaUrl.includes("youtube") || newPostMediaUrl.includes("youtu.be") ? newPostMediaUrl : ""} onChange={e => { setNewPostMediaUrl(e.target.value); setNewPostMediaType("youtube"); }} style={{ ...inputStyle, fontSize: 11, padding: "6px 10px", flex: 1 }} />
                       </div>
                       <div style={{ display: "flex", gap: 8 }}>
                         <select value={newPostProject} onChange={e => setNewPostProject(e.target.value)} style={{ ...inputStyle, fontSize: 11, padding: "6px 10px", flex: 1 }}>
@@ -2044,6 +2108,22 @@ export default function CoLab() {
           </div>
           <h2 style={{ fontSize: "clamp(16px, 4vw, 20px)", fontWeight: 400, letterSpacing: "-0.8px", marginBottom: 10, color: text }}>{activeProject.title}</h2>
           <p style={{ fontSize: 13, color: textMuted, lineHeight: 1.75, marginBottom: 22 }}>{activeProject.description}</p>
+          {(activeProject.goals || activeProject.timeline) && (
+            <div style={{ marginBottom: 22, padding: "14px 16px", background: bg2, border: `1px solid ${border}`, borderRadius: 8, display: "flex", flexDirection: "column", gap: 8 }}>
+              {activeProject.goals && (
+                <div>
+                  <div style={{ fontSize: 10, color: textMuted, letterSpacing: "1px", marginBottom: 4 }}>GOALS</div>
+                  <div style={{ fontSize: 13, color: text, lineHeight: 1.65 }}>{activeProject.goals}</div>
+                </div>
+              )}
+              {activeProject.timeline && (
+                <div>
+                  <div style={{ fontSize: 10, color: textMuted, letterSpacing: "1px", marginBottom: 4 }}>TIMELINE</div>
+                  <div style={{ fontSize: 13, color: text }}>{activeProject.timeline}</div>
+                </div>
+              )}
+            </div>
+          )}
           <div style={{ marginBottom: 22 }}>
             <div style={labelStyle}>SKILLS NEEDED</div>
             <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
@@ -2208,19 +2288,20 @@ export default function CoLab() {
                             </div>
                             {pendingApps > 0 && <button className="hb" onClick={e => { e.stopPropagation(); setReviewingApplicants(p); }} style={{ fontSize: 10, padding: "2px 8px", border: `1px solid ${border}`, borderRadius: 4, background: "none", color: text, cursor: "pointer", fontFamily: "inherit", flexShrink: 0 }}>review</button>}
                           </div>
-                          {/* Editable progress */}
-                          {editingProgress === p.id ? (
-                            <div style={{ display: "flex", gap: 8, alignItems: "center" }} onClick={e => e.stopPropagation()}>
-                              <input type="range" min="0" max="100" defaultValue={p.progress || 0} style={{ flex: 1, accentColor: text }} onMouseUp={e => handleUpdateProgress(p.id, e.target.value)} onTouchEnd={e => handleUpdateProgress(p.id, e.target.value)} />
-                              <span style={{ fontSize: 11, color: text, minWidth: 30 }}>{p.progress || 0}%</span>
-                              <button onClick={() => setEditingProgress(null)} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontSize: 11, fontFamily: "inherit" }}>done</button>
-                            </div>
-                          ) : (
-                            <div onClick={e => { e.stopPropagation(); setEditingProgress(p.id); }}>
-                              <ProgressBar value={p.progress || 0} dark={dark} />
-                              <div style={{ fontSize: 10, color: textMuted, marginTop: 4 }}>{p.progress || 0}% · <span style={{ textDecoration: "underline", cursor: "pointer" }}>edit</span></div>
-                            </div>
-                          )}
+                          {/* Task-based progress */}
+                          {(() => {
+                            const projTasks = tasks.filter(t => t.project_id === p.id);
+                            const done = projTasks.filter(t => t.done).length;
+                            const prog = projTasks.length > 0 ? Math.round((done / projTasks.length) * 100) : (p.progress || 0);
+                            return (
+                              <div>
+                                <ProgressBar value={prog} dark={dark} />
+                                <div style={{ fontSize: 10, color: textMuted, marginTop: 4 }}>
+                                  {projTasks.length > 0 ? `${done}/${projTasks.length} tasks · ${prog}%` : `${prog}%`}
+                                </div>
+                              </div>
+                            );
+                          })()}
                         </div>
                       );
                     })}
@@ -2282,19 +2363,18 @@ export default function CoLab() {
               <div style={{ fontSize: 11, color: textMuted }}>{activeProject.category}</div>
             </div>
             <div style={{ display: "flex", gap: 8, alignItems: "center", flexShrink: 0 }}>
-              <span style={{ fontSize: 10, color: textMuted }}>{activeProject.progress || 0}%</span>
-              {activeProject.owner_id === authUser?.id && (
-                <button onClick={() => setEditingProgress(editingProgress === activeProject.id ? null : activeProject.id)} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontFamily: "inherit", fontSize: 10, textDecoration: "underline" }}>
-                  {editingProgress === activeProject.id ? "done" : "edit progress"}
-                </button>
-              )}
+              {(() => {
+                const projTasks = tasks.filter(t => t.project_id === activeProject.id);
+                const doneTasks = projTasks.filter(t => t.done).length;
+                const prog = projTasks.length > 0 ? Math.round((doneTasks / projTasks.length) * 100) : (activeProject.progress || 0);
+                return (
+                  <span style={{ fontSize: 10, color: textMuted }}>
+                    {projTasks.length > 0 ? `${doneTasks}/${projTasks.length} tasks · ${prog}%` : `${prog}%`}
+                  </span>
+                );
+              })()}
             </div>
           </div>
-          {editingProgress === activeProject.id && (
-            <div className="pad" style={{ padding: "8px 28px", borderBottom: `1px solid ${border}`, flexShrink: 0 }}>
-              <input type="range" min="0" max="100" defaultValue={activeProject.progress || 0} style={{ width: "100%", accentColor: text }} onMouseUp={e => handleUpdateProgress(activeProject.id, e.target.value)} onTouchEnd={e => handleUpdateProgress(activeProject.id, e.target.value)} />
-            </div>
-          )}
 
           {/* Tab bar */}
           <div className="pad proj-tabs" style={{ padding: "0 28px", borderBottom: `1px solid ${border}`, display: "flex", flexShrink: 0, overflowX: "auto" }}>
@@ -2313,6 +2393,12 @@ export default function CoLab() {
             {/* KANBAN BOARD */}
             {projectTab === "kanban" && (
               <div>
+                {(activeProject.goals || activeProject.timeline) && (
+                  <div style={{ marginBottom: 16, padding: "12px 16px", background: bg2, border: `1px solid ${border}`, borderRadius: 8 }}>
+                    {activeProject.goals && <div style={{ fontSize: 12, color: textMuted, marginBottom: activeProject.timeline ? 4 : 0 }}><span style={{ color: text, fontWeight: 500 }}>Goals: </span>{activeProject.goals}</div>}
+                    {activeProject.timeline && <div style={{ fontSize: 12, color: textMuted }}><span style={{ color: text, fontWeight: 500 }}>Timeline: </span>{activeProject.timeline}</div>}
+                  </div>
+                )}
                 <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
                   <input placeholder="add a task..." value={newTaskText} onChange={e => setNewTaskText(e.target.value)} onKeyDown={e => e.key === "Enter" && handleAddTask(activeProject.id)} style={{ ...inputStyle, fontSize: 12 }} />
                   <input type="date" value={taskDueDate || ""} onChange={e => setTaskDueDate(e.target.value)} style={{ ...inputStyle, fontSize: 11, width: "auto", flexShrink: 0 }} title="due date" />
@@ -2324,9 +2410,9 @@ export default function CoLab() {
                 </div>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
                   {[
-                    { id: "todo", label: "TO DO", tasks: tasks.filter(t => !t.done && !t.in_progress) },
-                    { id: "inprogress", label: "IN PROGRESS", tasks: tasks.filter(t => t.in_progress && !t.done) },
-                    { id: "done", label: "DONE", tasks: tasks.filter(t => t.done) },
+                    { id: "todo", label: "TO DO", tasks: tasks.filter(t => t.project_id === activeProject.id && !t.done && !t.in_progress) },
+                    { id: "inprogress", label: "IN PROGRESS", tasks: tasks.filter(t => t.project_id === activeProject.id && t.in_progress && !t.done) },
+                    { id: "done", label: "DONE", tasks: tasks.filter(t => t.project_id === activeProject.id && t.done) },
                   ].map(col => (
                     <div key={col.id} style={{ background: bg2, borderRadius: 10, border: `1px solid ${border}`, padding: "14px", minHeight: 200 }}>
                       <div style={{ fontSize: 10, color: textMuted, letterSpacing: "1.5px", marginBottom: 12, display: "flex", justifyContent: "space-between" }}>
@@ -2964,6 +3050,8 @@ export default function CoLab() {
               </div>
               <div><label style={labelStyle}>COLLABORATORS NEEDED</label><select style={inputStyle} value={newProject.maxCollaborators} onChange={e => setNewProject({ ...newProject, maxCollaborators: parseInt(e.target.value) })}>{[1,2,3,4,5,6,7,8,9,10].map(n => <option key={n} value={n}>{n}</option>)}</select></div>
               <div><label style={labelStyle}>LOCATION (optional)</label><input style={inputStyle} placeholder="City, remote, or global" value={newProject.location} onChange={e => setNewProject({ ...newProject, location: e.target.value })} /></div>
+              <div><label style={labelStyle}>GOALS / CHECKPOINTS (optional)</label><textarea style={{ ...inputStyle, resize: "none" }} rows={3} placeholder="What does done look like? List key milestones or deliverables..." value={newProject.goals} onChange={e => setNewProject({ ...newProject, goals: e.target.value })} /></div>
+              <div><label style={labelStyle}>TIMELINE (optional)</label><input style={inputStyle} placeholder="e.g. 8 weeks, by end of Q2, 3 months..." value={newProject.timeline} onChange={e => setNewProject({ ...newProject, timeline: e.target.value })} /></div>
             </div>
             <div style={{ display: "flex", gap: 10, marginTop: 18 }}>
               <button className="hb" onClick={() => setShowCreate(false)} style={btnG}>cancel</button>
