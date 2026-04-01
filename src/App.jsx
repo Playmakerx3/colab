@@ -3109,7 +3109,10 @@ function CoLab() {
                     <Avatar initials={myInitials} size={52} dark={dark} />
                     <div>
                       <div style={{ fontSize: 20, fontWeight: 400, color: text, letterSpacing: "-0.5px" }}>{profile?.name || "Anonymous"}</div>
-                      {profile?.username && <div style={{ fontSize: 11, color: textMuted, marginTop: 1 }}>@{profile.username}</div>}
+                      {profile?.username
+                        ? <div style={{ fontSize: 11, color: textMuted, marginTop: 1, cursor: "pointer" }} onClick={() => { navigator.clipboard.writeText(`${window.location.origin}/u/${profile.username}`); showToast("Profile link copied!"); }} title="click to copy profile link">@{profile.username} ↗</div>
+                        : <div style={{ fontSize: 11, color: textMuted, marginTop: 1, cursor: "pointer", textDecoration: "underline" }} onClick={() => setEditProfile(true)}>set a username →</div>
+                      }
                       <div style={{ fontSize: 12, color: textMuted, marginTop: 2 }}>{profile?.role}</div>
                       {profile?.location && <div style={{ fontSize: 11, color: textMuted, marginTop: 1 }}>{profile.location}</div>}
                       <div style={{ fontSize: 11, color: textMuted, marginTop: 3, display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
@@ -3222,7 +3225,7 @@ function CoLab() {
 
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                 <button className="hb" onClick={() => setEditProfile(true)} style={btnG}>edit profile</button>
-                {profile?.username && <button className="hb" onClick={() => { navigator.clipboard.writeText(`${window.location.origin}/u/${profile.username}`); showToast("Profile link copied!"); }} style={btnG}>share profile ↗</button>}
+                <button className="hb" onClick={() => { if (profile?.username) { navigator.clipboard.writeText(`${window.location.origin}/u/${profile.username}`); showToast("Profile link copied!"); } else { setEditProfile(true); showToast("Set a username first →"); } }} style={btnG}>share profile ↗</button>
                 <button className="hb" onClick={handleSignOut} style={{ ...btnG, color: textMuted }}>sign out</button>
               </div>
             </div>
