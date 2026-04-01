@@ -1266,7 +1266,7 @@ export default function CoLab() {
   const handleCreatePost = async () => {
     if (!newPostContent.trim()) return;
     const proj = myProjects.find(p => p.id === newPostProject);
-    const { data, error } = await supabase.from("posts").insert({
+    const insertPayload = {
       user_id: authUser.id,
       user_name: profile.name,
       user_initials: myInitials,
@@ -1276,10 +1276,17 @@ export default function CoLab() {
       project_title: proj?.title || null,
       media_url: newPostMediaUrl || null,
       media_type: newPostMediaType || null,
-    }).select().single();
-    if (error) { showToast("Error posting. Try again."); return; }
+    };
+    let { data, error } = await supabase.from("posts").insert(insertPayload).select().single();
+    // If media_type column doesn't exist yet, retry without it
+    if (error && error.message?.includes("media_type")) {
+      delete insertPayload.media_type;
+      ({ data, error } = await supabase.from("posts").insert(insertPayload).select().single());
+    }
+    if (error) { showToast(`Post failed: ${error.message}`); return; }
     if (data) {
-      setPosts([data, ...posts]);
+      // Attach media_type locally even if not in DB yet
+      setPosts([{ ...data, media_type: newPostMediaType || null }, ...posts]);
       setNewPostContent("");
       setNewPostProject("");
       setNewPostMediaUrl("");
