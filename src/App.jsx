@@ -13,10 +13,205 @@ const PLUGINS = [
   { id: "figma", name: "Figma", icon: "◐", desc: "Design files" },
 ];
 
-function Avatar({ initials, size = 32, dark }) {
+// ── MODULE-LEVEL HELPERS ──
+const initials = (name, fallback = "?") =>
+  name ? name.split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase() : fallback;
+
+const relativeTime = (dateStr) => {
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const m = Math.floor(diff / 60000);
+  const h = Math.floor(m / 60);
+  const d = Math.floor(h / 24);
+  if (m < 1) return "just now";
+  if (m < 60) return `${m}m ago`;
+  if (h < 24) return `${h}h ago`;
+  if (d < 7) return `${d}d ago`;
+  return new Date(dateStr).toLocaleDateString();
+};
+
+const matchesRegion = (locationStr, regionFilter, myLocation) => {
+  if (!regionFilter) return true;
+  const loc = (locationStr || "").toLowerCase();
+  const myLoc = (myLocation || "").toLowerCase();
+  const myCity = myLoc.split(",")[0].trim();
+  if (regionFilter === "local" || regionFilter === "city") return myCity.length > 0 && loc.includes(myCity);
+  if (regionFilter === "national") return loc.includes("us") || loc.includes("usa") || loc.includes("united states") || (myLoc && loc.split(",").pop().trim() === myLoc.split(",").pop().trim());
+  if (regionFilter === "international") return myLoc.length > 0 && !loc.includes(myLoc.split(",").pop().trim().toLowerCase());
+  return true;
+};
+
+function PostCard({ post, ctx }) {
+  const {
+    postLikes, expandedComments, postComments, authUser, users,
+    handleDeletePost, dark, border, text, textMuted, bg, bg2, btnP, inputStyle,
+    setViewingProfile, handleLike, setExpandedComments, loadComments,
+    myInitials, setPostComments, profile, supabase,
+  } = ctx;
+  const isLiked = (postLikes.myLikes || []).includes(post.id);
+  const isOpen = expandedComments[post.id];
+  const comments = postComments[post.id] || [];
+  const isOwner = post.user_id === authUser?.id;
+  const postUser = users.find(u => u.id === post.user_id);
+  const [localComment, setLocalComment] = React.useState("");
+  const [hovered, setHovered] = React.useState(false);
+
+  const submitComment = async () => {
+    if (!localComment.trim()) return;
+    const content = localComment;
+    setLocalComment("");
+    const { data } = await supabase.from("comments").insert({
+      post_id: post.id, user_id: authUser.id,
+      user_name: profile.name, user_initials: myInitials, content,
+    }).select().single();
+    if (data) setPostComments(prev => ({ ...prev, [post.id]: [...(prev[post.id] || []), data] }));
+  };
+
+  const handleDeleteComment = async (commentId) => {
+    await supabase.from("comments").delete().eq("id", commentId);
+    setPostComments(prev => ({ ...prev, [post.id]: (prev[post.id] || []).filter(c => c.id !== commentId) }));
+  };
+
+  return (
+    <div
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{ borderBottom: `1px solid ${border}`, padding: "24px 0", transition: "background 0.15s" }}
+    >
+      {/* Header */}
+      <div style={{ display: "flex", gap: 12, alignItems: "flex-start", marginBottom: 14 }}>
+        <button onClick={() => postUser && setViewingProfile(postUser)} style={{ background: "none", border: "none", cursor: "pointer", padding: 0, flexShrink: 0 }}>
+          <Avatar initials={post.user_initials} size={40} dark={dark} />
+        </button>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+            <div>
+              <button onClick={() => postUser && setViewingProfile(postUser)} style={{ background: "none", border: "none", cursor: "pointer", padding: 0 }}>
+                <span style={{ fontSize: 13, fontWeight: 500, color: text }}>{post.user_name}</span>
+              </button>
+              {post.user_role && <span style={{ fontSize: 11, color: textMuted, marginLeft: 8 }}>{post.user_role}</span>}
+              <div style={{ fontSize: 10, color: textMuted, marginTop: 3 }}>{relativeTime(post.created_at)}</div>
+            </div>
+            {isOwner && hovered && (
+              <button className="hb" onClick={() => handleDeletePost(post.id)} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontSize: 11, fontFamily: "inherit", opacity: 0.6 }}>✕</button>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Content */}
+      <div style={{ fontSize: 14, color: text, lineHeight: 1.75, marginBottom: 14, paddingLeft: 52, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{post.content}</div>
+
+      {/* Media */}
+      {post.media_url && (
+        <div style={{ paddingLeft: 52, marginBottom: 14 }}>
+          {(() => {
+            const t = post.media_type || (
+              post.media_url.includes("youtube.com") || post.media_url.includes("youtu.be") ? "youtube"
+              : post.media_url.match(/\.(mp4|mov|webm)$/i) ? "video"
+              : post.media_url.match(/\.(mp3|wav|ogg|m4a|aac|flac)$/i) ? "audio"
+              : post.media_url.match(/\.pdf$/i) ? "pdf"
+              : "image"
+            );
+            if (t === "youtube") {
+              const ytId = post.media_url.includes("youtu.be/")
+                ? post.media_url.split("youtu.be/")[1]?.split("?")[0]
+                : post.media_url.split("v=")[1]?.split("&")[0];
+              return <iframe src={`https://www.youtube.com/embed/${ytId || ""}`} style={{ width: "100%", height: 260, borderRadius: 10, border: "none" }} allowFullScreen />;
+            }
+            if (t === "video") return <video src={post.media_url} controls style={{ width: "100%", maxHeight: 320, borderRadius: 10, border: `1px solid ${border}` }} />;
+            if (t === "audio") return (
+              <div style={{ background: bg2, border: `1px solid ${border}`, borderRadius: 10, padding: "14px 18px" }}>
+                <div style={{ fontSize: 11, color: textMuted, marginBottom: 10, display: "flex", gap: 6, alignItems: "center" }}>
+                  <span style={{ fontSize: 14 }}>♪</span>
+                  <span>{decodeURIComponent(post.media_url.split("/").pop().split("?")[0]).replace(/^\d+-/, "")}</span>
+                </div>
+                <audio src={post.media_url} controls style={{ width: "100%", height: 36 }} />
+              </div>
+            );
+            if (t === "pdf") return (
+              <a href={post.media_url} target="_blank" rel="noreferrer" style={{ display: "inline-flex", alignItems: "center", gap: 8, fontSize: 12, color: text, background: bg2, border: `1px solid ${border}`, borderRadius: 8, padding: "10px 16px", textDecoration: "none" }}>
+                <span style={{ fontSize: 16 }}>↗</span> view PDF
+              </a>
+            );
+            return <img src={post.media_url} alt="" style={{ width: "100%", maxHeight: 400, objectFit: "cover", borderRadius: 10, border: `1px solid ${border}`, display: "block" }} onError={e => e.target.style.display = "none"} />;
+          })()}
+        </div>
+      )}
+
+      {/* Project tag */}
+      {post.project_title && (
+        <div style={{ paddingLeft: 52, marginBottom: 12 }}>
+          <span style={{ fontSize: 11, color: textMuted, background: bg2, border: `1px solid ${border}`, borderRadius: 20, padding: "3px 10px", display: "inline-flex", alignItems: "center", gap: 4 }}>
+            <span style={{ fontSize: 9, opacity: 0.6 }}>↗</span> {post.project_title}
+          </span>
+        </div>
+      )}
+
+      {/* Actions */}
+      <div style={{ paddingLeft: 52, display: "flex", gap: 20, alignItems: "center" }}>
+        <button
+          className="hb"
+          onClick={() => handleLike(post.id)}
+          style={{ background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: 13, color: isLiked ? text : textMuted, display: "flex", gap: 6, alignItems: "center", transition: "color 0.15s", fontWeight: isLiked ? 500 : 400 }}
+        >
+          {isLiked ? "♥" : "♡"}
+          {(post.like_count || 0) > 0 && <span style={{ fontSize: 12 }}>{post.like_count}</span>}
+        </button>
+        <button
+          className="hb"
+          onClick={() => { setExpandedComments(prev => ({ ...prev, [post.id]: !prev[post.id] })); if (!postComments[post.id]) loadComments(post.id); }}
+          style={{ background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: 12, color: isOpen ? text : textMuted, display: "flex", gap: 6, alignItems: "center", transition: "color 0.15s" }}
+        >
+          ◎ {comments.length > 0 ? <span>{comments.length}</span> : <span>{isOpen ? "hide" : "comment"}</span>}
+        </button>
+      </div>
+
+      {/* Comments */}
+      {isOpen && (
+        <div style={{ paddingLeft: 52, marginTop: 16 }}>
+          {comments.length > 0 && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 14 }}>
+              {comments.map((c) => {
+                const cUser = users.find(u => u.id === c.user_id);
+                const isMyComment = c.user_id === authUser?.id;
+                return (
+                  <div key={c.id} style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+                    <Avatar initials={c.user_initials} size={26} dark={dark} />
+                    <div style={{ background: bg2, border: `1px solid ${border}`, borderRadius: 10, padding: "8px 13px", flex: 1, minWidth: 0 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 3 }}>
+                        <button onClick={() => cUser && setViewingProfile(cUser)} style={{ background: "none", border: "none", cursor: "pointer", padding: 0, fontSize: 11, fontWeight: 500, color: text, fontFamily: "inherit" }}>{c.user_name}</button>
+                        {isMyComment && <button className="hb" onClick={() => handleDeleteComment(c.id)} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontSize: 10, fontFamily: "inherit", opacity: 0.6 }}>✕</button>}
+                      </div>
+                      <div style={{ fontSize: 13, color: textMuted, lineHeight: 1.6 }}>{c.content}</div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <Avatar initials={myInitials} size={26} dark={dark} />
+            <input
+              placeholder="write a comment..."
+              value={localComment}
+              onChange={e => setLocalComment(e.target.value)}
+              onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); submitComment(); } }}
+              style={{ ...inputStyle, fontSize: 12, padding: "8px 13px", flex: 1, borderRadius: 20 }}
+            />
+            {localComment.trim() && (
+              <button className="hb" onClick={submitComment} style={{ ...btnP, padding: "8px 14px", fontSize: 11, flexShrink: 0, borderRadius: 20 }}>post</button>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Avatar({ initials: i, size = 32, dark }) {
   return (
     <div style={{ width: size, height: size, borderRadius: "50%", background: dark ? "#fff" : "#000", display: "flex", alignItems: "center", justifyContent: "center", fontSize: size * 0.32, fontWeight: 700, color: dark ? "#000" : "#fff", flexShrink: 0, fontFamily: "inherit" }}>
-      {(initials || "?").slice(0, 2).toUpperCase()}
+      {(i || "?").slice(0, 2).toUpperCase()}
     </div>
   );
 }
@@ -78,7 +273,7 @@ function MentionInput({ value, onChange, onKeyDown, placeholder, users, style, r
           {suggestions.map(u => (
             <button key={u.id} onClick={() => selectUser(u)} style={{ width: "100%", padding: "8px 12px", background: "none", border: "none", color: dark ? "#fff" : "#000", cursor: "pointer", textAlign: "left", fontSize: 12, fontFamily: "inherit", display: "flex", gap: 8, alignItems: "center" }}
               onMouseEnter={e => e.currentTarget.style.background = dark ? "#1a1a1a" : "#f0f0f0"} onMouseLeave={e => e.currentTarget.style.background = "none"}>
-              <Avatar initials={u.name.split(" ").map(n => n[0]).join("").slice(0, 2)} size={24} dark={dark} />
+              <Avatar initials={initials(u.name)} size={24} dark={dark} />
               <div><div style={{ fontSize: 12, color: dark ? "#fff" : "#000" }}>{u.name}</div><div style={{ fontSize: 10, color: dark ? "#555" : "#aaa" }}>{u.role}</div></div>
             </button>
           ))}
@@ -359,7 +554,7 @@ function PublicProjectPage({ projectId }) {
     </div>
   );
 
-  const ownerInitials = owner?.name ? owner.name.split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase() : "?";
+  const ownerInitials = initials(owner?.name, "?");
 
   return (
     <div style={{ minHeight: "100vh", background: bg, color: text, fontFamily: "'DM Mono', monospace" }}>
@@ -508,7 +703,6 @@ function CoLab() {
   const [newPostMediaType, setNewPostMediaType] = useState(""); // image|video|audio|youtube|pdf
   const [expandedComments, setExpandedComments] = useState({});
   const [newCommentText, setNewCommentText] = useState({});
-  const [projectMembers, setProjectMembers] = useState([]);
   const [projectFiles, setProjectFiles] = useState([]);
   const [projectDocs, setProjectDocs] = useState([]);
   const [activeDoc, setActiveDoc] = useState(null);
@@ -542,7 +736,6 @@ function CoLab() {
   const [newDmSearch, setNewDmSearch] = useState("");
   const [applicationForm, setApplicationForm] = useState({ skills: [], availability: "", motivation: "", portfolio_url: "" });
   const [reviewingApplicants, setReviewingApplicants] = useState(null);
-  const [editingProgress, setEditingProgress] = useState(null);
   const [showAddPortfolio, setShowAddPortfolio] = useState(false);
   const [newPortfolioItem, setNewPortfolioItem] = useState({ title: "", description: "", url: "" });
   const messagesEndRef = useRef(null);
@@ -562,7 +755,7 @@ function CoLab() {
   const btnG = { background: "none", color: textMuted, border: `1px solid ${border}`, borderRadius: 8, padding: "10px 20px", fontSize: 12, cursor: "pointer", fontFamily: "inherit" };
 
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(null), 3000); };
-  const myInitials = profile?.name ? profile.name.split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase() : "ME";
+  const myInitials = initials(profile?.name, "ME");
   const getMatchScore = (p) => (profile?.skills || []).filter(s => (p.skills || []).includes(s)).length;
   const unreadDms = dmThreads.filter(t => t.unread && t.id !== activeDmThread?.id).length;
   const unreadNotifs = notifications.filter(n => !n.read).length + mentionNotifications.length;
@@ -933,7 +1126,6 @@ function CoLab() {
     await supabase.from("projects").update({ progress: val }).eq("id", projectId);
     setProjects(projects.map(p => p.id === projectId ? { ...p, progress: val } : p));
     if (activeProject?.id === projectId) setActiveProject({ ...activeProject, progress: val });
-    setEditingProgress(null);
     showToast("Progress updated.");
   };
 
@@ -1213,7 +1405,7 @@ function CoLab() {
       <div onClick={() => setViewFullProfile(u)} style={{ background: bg2, border: `1px solid ${border}`, borderRadius: 12, padding: "20px", cursor: "pointer", transition: "border 0.2s" }}
         onMouseEnter={e => e.currentTarget.style.borderColor = text} onMouseLeave={e => e.currentTarget.style.borderColor = border}>
         <div style={{ display: "flex", gap: 12, alignItems: "flex-start", marginBottom: 12 }}>
-          <Avatar initials={u.name?.split(" ").map(n => n[0]).join("").slice(0, 2)} size={44} dark={dark} />
+          <Avatar initials={initials(u.name)} size={44} dark={dark} />
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: 14, fontWeight: 500, color: text }}>{u.name}</div>
             <div style={{ fontSize: 11, color: textMuted, marginTop: 2 }}>{u.role}</div>
@@ -1234,7 +1426,7 @@ function CoLab() {
     const isFollowing = following.includes(u.id);
     const userProjects = projects.filter(p => p.owner_id === u.id);
     const sharedSkills = (profile?.skills || []).filter(s => (u.skills || []).includes(s));
-    const uInitials = u.name?.split(" ").map(n => n[0]).join("").slice(0, 2) || "?";
+    const uInitials = initials(u.name, "?");
     const [userPortfolio, setUserPortfolio] = useState([]);
     useEffect(() => {
       supabase.from("portfolio_items").select("*").eq("user_id", u.id).then(({ data }) => setUserPortfolio(data || []));
@@ -1608,185 +1800,16 @@ function CoLab() {
     showToast("Post deleted.");
   };
 
-  const PostCard = ({ post }) => {
-      const isLiked = (postLikes.myLikes || []).includes(post.id);
-      const isOpen = expandedComments[post.id];
-      const comments = postComments[post.id] || [];
-      const isOwner = post.user_id === authUser?.id;
-      const postUser = users.find(u => u.id === post.user_id);
-      const [localComment, setLocalComment] = useState("");
-      const [hovered, setHovered] = useState(false);
-
-      // Relative timestamp
-      const relativeTime = (dateStr) => {
-        const diff = Date.now() - new Date(dateStr).getTime();
-        const m = Math.floor(diff / 60000);
-        const h = Math.floor(m / 60);
-        const d = Math.floor(h / 24);
-        if (m < 1) return "just now";
-        if (m < 60) return `${m}m ago`;
-        if (h < 24) return `${h}h ago`;
-        if (d < 7) return `${d}d ago`;
-        return new Date(dateStr).toLocaleDateString();
-      };
-
-      const submitComment = async () => {
-        if (!localComment.trim()) return;
-        const content = localComment;
-        setLocalComment("");
-        const { data } = await supabase.from("comments").insert({
-          post_id: post.id, user_id: authUser.id,
-          user_name: profile.name, user_initials: myInitials, content,
-        }).select().single();
-        if (data) setPostComments(prev => ({ ...prev, [post.id]: [...(prev[post.id] || []), data] }));
-      };
-
-      const handleDeleteComment = async (commentId) => {
-        await supabase.from("comments").delete().eq("id", commentId);
-        setPostComments(prev => ({ ...prev, [post.id]: (prev[post.id] || []).filter(c => c.id !== commentId) }));
-      };
-
-      return (
-        <div
-          onMouseEnter={() => setHovered(true)}
-          onMouseLeave={() => setHovered(false)}
-          style={{ borderBottom: `1px solid ${border}`, padding: "24px 0", transition: "background 0.15s" }}
-        >
-          {/* Header */}
-          <div style={{ display: "flex", gap: 12, alignItems: "flex-start", marginBottom: 14 }}>
-            <button onClick={() => postUser && setViewingProfile(postUser)} style={{ background: "none", border: "none", cursor: "pointer", padding: 0, flexShrink: 0 }}>
-              <Avatar initials={post.user_initials} size={40} dark={dark} />
-            </button>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                <div>
-                  <button onClick={() => postUser && setViewingProfile(postUser)} style={{ background: "none", border: "none", cursor: "pointer", padding: 0 }}>
-                    <span style={{ fontSize: 13, fontWeight: 500, color: text }}>{post.user_name}</span>
-                  </button>
-                  {post.user_role && <span style={{ fontSize: 11, color: textMuted, marginLeft: 8 }}>{post.user_role}</span>}
-                  <div style={{ fontSize: 10, color: textMuted, marginTop: 3 }}>{relativeTime(post.created_at)}</div>
-                </div>
-                {isOwner && hovered && (
-                  <button className="hb" onClick={() => handleDeletePost(post.id)} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontSize: 11, fontFamily: "inherit", opacity: 0.6 }}>✕</button>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* Content */}
-          <div style={{ fontSize: 14, color: text, lineHeight: 1.75, marginBottom: 14, paddingLeft: 52, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{post.content}</div>
-
-          {/* Media */}
-          {post.media_url && (
-            <div style={{ paddingLeft: 52, marginBottom: 14 }}>
-              {(() => {
-                const t = post.media_type || (
-                  post.media_url.includes("youtube.com") || post.media_url.includes("youtu.be") ? "youtube"
-                  : post.media_url.match(/\.(mp4|mov|webm)$/i) ? "video"
-                  : post.media_url.match(/\.(mp3|wav|ogg|m4a|aac|flac)$/i) ? "audio"
-                  : post.media_url.match(/\.pdf$/i) ? "pdf"
-                  : "image"
-                );
-                if (t === "youtube") {
-                  const ytId = post.media_url.includes("youtu.be/")
-                    ? post.media_url.split("youtu.be/")[1]?.split("?")[0]
-                    : post.media_url.split("v=")[1]?.split("&")[0];
-                  return <iframe src={`https://www.youtube.com/embed/${ytId || ""}`} style={{ width: "100%", height: 260, borderRadius: 10, border: "none" }} allowFullScreen />;
-                }
-                if (t === "video") return <video src={post.media_url} controls style={{ width: "100%", maxHeight: 320, borderRadius: 10, border: `1px solid ${border}` }} />;
-                if (t === "audio") return (
-                  <div style={{ background: bg2, border: `1px solid ${border}`, borderRadius: 10, padding: "14px 18px" }}>
-                    <div style={{ fontSize: 11, color: textMuted, marginBottom: 10, display: "flex", gap: 6, alignItems: "center" }}>
-                      <span style={{ fontSize: 14 }}>♪</span>
-                      <span>{decodeURIComponent(post.media_url.split("/").pop().split("?")[0]).replace(/^\d+-/, "")}</span>
-                    </div>
-                    <audio src={post.media_url} controls style={{ width: "100%", height: 36 }} />
-                  </div>
-                );
-                if (t === "pdf") return (
-                  <a href={post.media_url} target="_blank" rel="noreferrer" style={{ display: "inline-flex", alignItems: "center", gap: 8, fontSize: 12, color: text, background: bg2, border: `1px solid ${border}`, borderRadius: 8, padding: "10px 16px", textDecoration: "none" }}>
-                    <span style={{ fontSize: 16 }}>↗</span> view PDF
-                  </a>
-                );
-                return <img src={post.media_url} alt="" style={{ width: "100%", maxHeight: 400, objectFit: "cover", borderRadius: 10, border: `1px solid ${border}`, display: "block" }} onError={e => e.target.style.display = "none"} />;
-              })()}
-            </div>
-          )}
-
-          {/* Project tag */}
-          {post.project_title && (
-            <div style={{ paddingLeft: 52, marginBottom: 12 }}>
-              <span style={{ fontSize: 11, color: textMuted, background: bg2, border: `1px solid ${border}`, borderRadius: 20, padding: "3px 10px", display: "inline-flex", alignItems: "center", gap: 4 }}>
-                <span style={{ fontSize: 9, opacity: 0.6 }}>↗</span> {post.project_title}
-              </span>
-            </div>
-          )}
-
-          {/* Actions */}
-          <div style={{ paddingLeft: 52, display: "flex", gap: 20, alignItems: "center" }}>
-            <button
-              className="hb"
-              onClick={() => handleLike(post.id)}
-              style={{ background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: 13, color: isLiked ? text : textMuted, display: "flex", gap: 6, alignItems: "center", transition: "color 0.15s", fontWeight: isLiked ? 500 : 400 }}
-            >
-              {isLiked ? "♥" : "♡"}
-              {(post.like_count || 0) > 0 && <span style={{ fontSize: 12 }}>{post.like_count}</span>}
-            </button>
-            <button
-              className="hb"
-              onClick={() => { setExpandedComments(prev => ({ ...prev, [post.id]: !prev[post.id] })); if (!postComments[post.id]) loadComments(post.id); }}
-              style={{ background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: 12, color: isOpen ? text : textMuted, display: "flex", gap: 6, alignItems: "center", transition: "color 0.15s" }}
-            >
-              ◎ {comments.length > 0 ? <span>{comments.length}</span> : <span>{isOpen ? "hide" : "comment"}</span>}
-            </button>
-          </div>
-
-          {/* Comments */}
-          {isOpen && (
-            <div style={{ paddingLeft: 52, marginTop: 16 }}>
-              {comments.length > 0 && (
-                <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 14 }}>
-                  {comments.map((c) => {
-                    const cUser = users.find(u => u.id === c.user_id);
-                    const isMyComment = c.user_id === authUser?.id;
-                    return (
-                      <div key={c.id} style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
-                        <Avatar initials={c.user_initials} size={26} dark={dark} />
-                        <div style={{ background: bg2, border: `1px solid ${border}`, borderRadius: 10, padding: "8px 13px", flex: 1, minWidth: 0 }}>
-                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 3 }}>
-                            <button onClick={() => cUser && setViewingProfile(cUser)} style={{ background: "none", border: "none", cursor: "pointer", padding: 0, fontSize: 11, fontWeight: 500, color: text, fontFamily: "inherit" }}>{c.user_name}</button>
-                            {isMyComment && <button className="hb" onClick={() => handleDeleteComment(c.id)} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontSize: 10, fontFamily: "inherit", opacity: 0.6 }}>✕</button>}
-                          </div>
-                          <div style={{ fontSize: 13, color: textMuted, lineHeight: 1.6 }}>{c.content}</div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                <Avatar initials={myInitials} size={26} dark={dark} />
-                <input
-                  placeholder="write a comment..."
-                  value={localComment}
-                  onChange={e => setLocalComment(e.target.value)}
-                  onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); submitComment(); } }}
-                  style={{ ...inputStyle, fontSize: 12, padding: "8px 13px", flex: 1, borderRadius: 20 }}
-                />
-                {localComment.trim() && (
-                  <button className="hb" onClick={submitComment} style={{ ...btnP, padding: "8px 14px", fontSize: 11, flexShrink: 0, borderRadius: 20 }}>post</button>
-                )}
-              </div>
-            </div>
-          )}
-        </div>
-      );
-  };
-
   const renderNetwork = () => {
     const followingFeed = posts.filter(p => following.includes(p.user_id));
     const allFeed = posts;
     const feedToShow = networkTab === "feed-following" ? followingFeed : allFeed;
+    const postCtx = {
+      postLikes, expandedComments, postComments, authUser, users,
+      handleDeletePost, dark, border, text, textMuted, bg, bg2, btnP, inputStyle,
+      setViewingProfile, handleLike, setExpandedComments, loadComments,
+      myInitials, setPostComments, profile, supabase,
+    };
 
     return (
       <div className="pad fu" style={{ width: "100%", padding: "48px 32px" }}>
@@ -1899,34 +1922,16 @@ function CoLab() {
             </div>
 
             {/* Feed */}
-            {feedToShow.filter(post => {
-              if (!regionFilter) return true;
-              const poster = users.find(u => u.id === post.user_id);
-              const loc = (poster?.location || "").toLowerCase();
-              const myLoc = (profile?.location || "").toLowerCase();
-              const myCity = myLoc.split(",")[0].trim();
-              if (regionFilter === "local" || regionFilter === "city") return myCity && loc.includes(myCity);
-              if (regionFilter === "national") return loc.includes("us") || loc.includes("usa") || loc.includes("united states") || (myLoc && loc.split(",").pop().trim() === myLoc.split(",").pop().trim());
-              if (regionFilter === "international") return myLoc && !loc.includes(myLoc.split(",").pop().trim().toLowerCase());
-              return true;
-            }).length === 0
-              ? <div style={{ fontSize: 13, color: textMuted, padding: "24px 0" }}>
-                  {regionFilter ? `no posts from ${regionFilter} builders yet.` : networkTab === "feed-following"
-                    ? <>nothing yet from people you follow. <button className="hb" onClick={() => setNetworkTab("people")} style={{ background: "none", border: "none", color: text, cursor: "pointer", fontFamily: "inherit", fontSize: 13, textDecoration: "underline" }}>find people →</button></>
-                    : "no posts yet. be the first."}
-                </div>
-              : feedToShow.filter(post => {
-                  if (!regionFilter) return true;
-                  const poster = users.find(u => u.id === post.user_id);
-                  const loc = (poster?.location || "").toLowerCase();
-                  const myLoc = (profile?.location || "").toLowerCase();
-                  const myCity = myLoc.split(",")[0].trim();
-                  if (regionFilter === "local" || regionFilter === "city") return myCity && loc.includes(myCity);
-                  if (regionFilter === "national") return loc.includes("us") || loc.includes("usa") || loc.includes("united states") || (myLoc && loc.split(",").pop().trim() === myLoc.split(",").pop().trim());
-                  if (regionFilter === "international") return myLoc && !loc.includes(myLoc.split(",").pop().trim().toLowerCase());
-                  return true;
-                }).map(post => <PostCard key={post.id} post={post} />)
-            }
+            {(() => {
+              const visibleFeed = feedToShow.filter(post => matchesRegion((users.find(u => u.id === post.user_id)?.location), regionFilter, profile?.location));
+              return visibleFeed.length === 0
+                ? <div style={{ fontSize: 13, color: textMuted, padding: "24px 0" }}>
+                    {regionFilter ? `no posts from ${regionFilter} builders yet.` : networkTab === "feed-following"
+                      ? <>nothing yet from people you follow. <button className="hb" onClick={() => setNetworkTab("people")} style={{ background: "none", border: "none", color: text, cursor: "pointer", fontFamily: "inherit", fontSize: 13, textDecoration: "underline" }}>find people →</button></>
+                      : "no posts yet. be the first."}
+                  </div>
+                : visibleFeed.map(post => <PostCard key={post.id} post={post} ctx={postCtx} />);
+            })()}
           </div>
         )}
 
@@ -2190,7 +2195,7 @@ function CoLab() {
                 {globalSearch.length > 0 && users.filter(u => u.id !== authUser?.id && u.name?.toLowerCase().includes(globalSearch.toLowerCase())).slice(0, 5).map(u => (
                   <button key={u.id} onClick={() => { setViewFullProfile(u); setGlobalSearch(""); setShowGlobalSearch(false); }} style={{ width: "100%", padding: "10px 12px", background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", display: "flex", gap: 10, alignItems: "center", textAlign: "left", borderTop: `1px solid ${border}` }}
                     onMouseEnter={e => e.currentTarget.style.background = bg2} onMouseLeave={e => e.currentTarget.style.background = "none"}>
-                    <Avatar initials={u.name?.split(" ").map(n => n[0]).join("").slice(0, 2)} size={28} dark={dark} />
+                    <Avatar initials={initials(u.name)} size={28} dark={dark} />
                     <div>
                       <div style={{ fontSize: 13, color: text }}>{u.name}</div>
                       <div style={{ fontSize: 11, color: textMuted }}>{u.role}</div>
@@ -2319,7 +2324,7 @@ function CoLab() {
                 .map(u => (
                   <button key={u.id} onClick={() => { openDm(u); setShowNewDm(false); setNewDmSearch(""); }} style={{ display: "flex", gap: 12, alignItems: "center", padding: "10px 12px", background: "none", border: "none", borderRadius: 8, cursor: "pointer", textAlign: "left", fontFamily: "inherit", width: "100%" }}
                     onMouseEnter={e => e.currentTarget.style.background = bg2} onMouseLeave={e => e.currentTarget.style.background = "none"}>
-                    <Avatar initials={u.name?.split(" ").map(n => n[0]).join("").slice(0, 2)} size={36} dark={dark} />
+                    <Avatar initials={initials(u.name)} size={36} dark={dark} />
                     <div style={{ minWidth: 0 }}>
                       <div style={{ fontSize: 13, color: text }}>{u.name}</div>
                       <div style={{ fontSize: 11, color: textMuted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{u.role}{u.username ? ` · @${u.username}` : ""}</div>
@@ -2361,7 +2366,7 @@ function CoLab() {
                   {collabs.map((c, i) => (
                     <div key={c.user.id} onClick={() => { setShowCollaborators(null); setViewFullProfile(c.user); }} style={{ display: "flex", gap: 14, alignItems: "center", padding: "14px 16px", background: bg2, borderRadius: i === 0 && collabs.length === 1 ? 10 : i === 0 ? "10px 10px 0 0" : i === collabs.length - 1 ? "0 0 10px 10px" : 0, border: `1px solid ${border}`, borderBottom: i < collabs.length - 1 ? "none" : `1px solid ${border}`, cursor: "pointer", transition: "opacity 0.15s" }}
                       onMouseEnter={e => e.currentTarget.style.opacity = "0.7"} onMouseLeave={e => e.currentTarget.style.opacity = "1"}>
-                      <Avatar initials={c.user.name?.split(" ").map(n => n[0]).join("").slice(0, 2)} size={40} dark={dark} />
+                      <Avatar initials={initials(c.user.name)} size={40} dark={dark} />
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ fontSize: 14, color: text, fontWeight: 400, marginBottom: 2 }}>{c.user.name}</div>
                         {c.user.username && <div style={{ fontSize: 11, color: textMuted, marginBottom: 3 }}>@{c.user.username}</div>}
@@ -2537,7 +2542,7 @@ function CoLab() {
                       onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = bg2; }}
                       onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = "none"; }}>
                       <div style={{ position: "relative", flexShrink: 0 }}>
-                        <Avatar initials={other.name?.split(" ").map(n => n[0]).join("").slice(0, 2)} size={36} dark={dark} />
+                        <Avatar initials={initials(other.name)} size={36} dark={dark} />
                         {thread.unread && <span style={{ position: "absolute", top: 0, right: 0, width: 8, height: 8, borderRadius: "50%", background: text, border: `2px solid ${bg}` }} />}
                       </div>
                       <div style={{ minWidth: 0, flex: 1 }}>
@@ -2558,7 +2563,7 @@ function CoLab() {
             {activeDmThread ? (
               <>
                 <div style={{ padding: "16px 20px", borderBottom: `1px solid ${border}`, display: "flex", gap: 12, alignItems: "center" }}>
-                  <Avatar initials={activeDmThread.otherUser?.name?.split(" ").map(n => n[0]).join("").slice(0, 2) || "?"} size={32} dark={dark} />
+                  <Avatar initials={initials(activeDmThread.otherUser?.name)} size={32} dark={dark} />
                   <div style={{ flex: 1 }}>
                     <div style={{ fontSize: 14, color: text, fontWeight: 500 }}>{activeDmThread.otherUser?.name}</div>
                     <div style={{ fontSize: 11, color: textMuted }}>{activeDmThread.otherUser?.role}</div>
@@ -3099,7 +3104,7 @@ function CoLab() {
           <div style={{ display: "flex", gap: 24, alignItems: "flex-start", marginBottom: 20 }}>
             <div style={{ flexShrink: 0 }}>
               <div style={{ display: "flex", gap: 16, alignItems: "center", marginBottom: 12 }}>
-                <Avatar initials={viewFullProfile.name?.split(" ").map(n => n[0]).join("").slice(0, 2)} size={52} dark={dark} />
+                <Avatar initials={initials(viewFullProfile.name)} size={52} dark={dark} />
                 <div>
                   <div style={{ fontSize: 20, fontWeight: 400, color: text, letterSpacing: "-0.5px" }}>{viewFullProfile.name}</div>
                   {viewFullProfile.username && <div style={{ fontSize: 11, color: textMuted, marginTop: 1 }}>@{viewFullProfile.username}</div>}
@@ -3535,7 +3540,6 @@ function PublicProfilePage({ username }) {
     </div>
   );
 
-  const initials = user.name ? user.name.split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase() : "?";
   const bannerPixels = (() => { try { return user.banner_pixels ? JSON.parse(user.banner_pixels) : null; } catch { return null; } })();
 
   return (
@@ -3568,7 +3572,7 @@ function PublicProfilePage({ username }) {
 
         {/* Header */}
         <div style={{ display: "flex", gap: 16, alignItems: "flex-start", marginBottom: 28 }}>
-          <div style={{ width: 56, height: 56, borderRadius: "50%", background: text, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, fontWeight: 700, color: bg, flexShrink: 0 }}>{initials}</div>
+          <div style={{ width: 56, height: 56, borderRadius: "50%", background: text, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, fontWeight: 700, color: bg, flexShrink: 0 }}>{initials(user.name)}</div>
           <div style={{ flex: 1, minWidth: 0 }}>
             <h1 style={{ fontSize: "clamp(20px, 4vw, 28px)", fontWeight: 400, letterSpacing: "-1px", color: text, marginBottom: 4 }}>{user.name}</h1>
             {user.username && <div style={{ fontSize: 11, color: textMuted, marginBottom: 4 }}>@{user.username}</div>}
