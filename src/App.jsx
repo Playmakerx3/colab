@@ -718,6 +718,10 @@ function CoLab() {
   };
 
   // ── REALTIME ──
+  // Ref so realtime callbacks always see current projects without re-subscribing
+  const projectsRef = useRef([]);
+  useEffect(() => { projectsRef.current = projects; }, [projects]);
+
   useEffect(() => {
     if (!authUser) return;
     const channel = supabase.channel("realtime-colab")
@@ -743,7 +747,7 @@ function CoLab() {
           setTimeout(() => dmEndRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
         }
         // Show notification dot if message is from someone else and we're not on messages tab
-        if (payload.new.sender_id !== authUser.id) {
+        if (payload.new.sender_id !== authUser?.id) {
           setDmThreads(prev => prev.map(t =>
             t.id === payload.new.thread_id ? { ...t, unread: true } : t
           ));
@@ -754,9 +758,9 @@ function CoLab() {
           if (prev.find(a => a.id === payload.new.id)) return prev;
           return [...prev, payload.new];
         });
-        const myProjectIds = projects.filter(p => p.owner_id === authUser.id).map(p => p.id);
+        const myProjectIds = projectsRef.current.filter(p => p.owner_id === authUser?.id).map(p => p.id);
         if (myProjectIds.includes(payload.new.project_id)) {
-          const proj = projects.find(p => p.id === payload.new.project_id);
+          const proj = projectsRef.current.find(p => p.id === payload.new.project_id);
           setNotifications(prev => {
             if (prev.find(n => n.id === payload.new.id)) return prev;
             return [{
@@ -776,7 +780,7 @@ function CoLab() {
         });
       })
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "posts" }, (payload) => {
-        if (payload.new.user_id !== authUser.id) {
+        if (payload.new.user_id !== authUser?.id) {
           setPosts(prev => {
             if (prev.find(p => p.id === payload.new.id)) return prev;
             return [payload.new, ...prev];
@@ -790,7 +794,7 @@ function CoLab() {
       })
       .subscribe();
     return () => supabase.removeChannel(channel);
-  }, [authUser, activeProject, activeDmThread, projects]);
+  }, [authUser, activeProject, activeDmThread]);
 
   const loadProjectData = async (projectId) => {
     const [{ data: t }, { data: m }, { data: u }, { data: f }, { data: d }] = await Promise.all([
@@ -902,6 +906,8 @@ function CoLab() {
       setProjects([data, ...projects]);
       setNewProject({ title: "", description: "", category: CATEGORIES[0], skills: [], maxCollaborators: 2, location: "", goals: "", timeline: "" });
       setShowCreate(false); showToast("Project posted.");
+    } else {
+      showToast("Failed to post project. Try again.");
     }
   };
 
@@ -1021,16 +1027,17 @@ function CoLab() {
   const handleSendDm = async () => {
     if (!dmInput.trim() || !activeDmThread) return;
     const text = dmInput;
-    setDmInput("");
+    const threadId = activeDmThread.id; // capture before async — avoids stale closure
     const { data } = await supabase.from("dm_messages").insert({
-      thread_id: activeDmThread.id, sender_id: authUser.id,
+      thread_id: threadId, sender_id: authUser.id,
       sender_name: profile.name, sender_initials: myInitials, text,
     }).select().single();
     if (data) {
+      setDmInput(""); // clear only after successful insert
       setDmMessages(prev => {
-        const existing = prev[activeDmThread.id] || [];
+        const existing = prev[threadId] || [];
         if (existing.find(m => m.id === data.id)) return prev;
-        return { ...prev, [activeDmThread.id]: [...existing, data] };
+        return { ...prev, [threadId]: [...existing, data] };
       });
       setTimeout(() => dmEndRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
     }
@@ -1045,7 +1052,7 @@ function CoLab() {
       if (existing.status === "pending") { showToast("Already applied."); return; }
       if (existing.status === "accepted") { showToast("You're already on this project."); return; }
       if (existing.status === "declined") {
-        const hoursSince = (Date.now() - new Date(existing.created_at).getTime()) / 3600000;
+        const hoursSince = (Date.now() - new Date(existing.updated_at || existing.created_at).getTime()) / 3600000;
         if (hoursSince < 24) { showToast(`You can reapply in ${Math.ceil(24 - hoursSince)}h`); return; }
         await supabase.from("applications").delete().eq("id", existing.id);
         setApplications(prev => prev.filter(a => a.id !== existing.id));
@@ -1377,9 +1384,15 @@ function CoLab() {
                     {(selected.applicant_skills || []).length > 0 && <div><div style={labelStyle}>SKILLS</div><div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>{selected.applicant_skills.map(s => <span key={s} style={{ fontSize: 11, padding: "3px 10px", border: `1px solid ${border}`, borderRadius: 3, color: textMuted }}>{s}</span>)}</div></div>}
                   </div>
                   <div style={{ display: "flex", gap: 10 }}>
-                    <button className="hb" onClick={async () => { await supabase.from("applications").update({ status: "declined" }).eq("id", selected.id); setApplications(applications.filter(a => a.id !== selected.id)); setSelected(null); showToast("Declined."); }} style={{ ...btnG, flex: 1 }}>decline</button>
                     <button className="hb" onClick={async () => {
-                      await supabase.from("applications").update({ status: "accepted" }).eq("id", selected.id);
+                      const { error } = await supabase.from("applications").update({ status: "declined" }).eq("id", selected.id);
+                      if (error) { showToast("Failed to decline. Try again."); return; }
+                      setApplications(applications.filter(a => a.id !== selected.id));
+                      setSelected(null); showToast("Declined.");
+                    }} style={{ ...btnG, flex: 1 }}>decline</button>
+                    <button className="hb" onClick={async () => {
+                      const { error } = await supabase.from("applications").update({ status: "accepted" }).eq("id", selected.id);
+                      if (error) { showToast("Failed to accept. Try again."); return; }
                       setApplications(applications.filter(a => a.id !== selected.id));
                       const u = users.find(u => u.id === selected.applicant_id);
                       if (u) openDm(u);
@@ -1631,7 +1644,12 @@ function CoLab() {
                   : post.media_url.match(/\.pdf$/i) ? "pdf"
                   : "image"
                 );
-                if (t === "youtube") return <iframe src={`https://www.youtube.com/embed/${post.media_url.split("v=")[1]?.split("&")[0] || post.media_url.split("/").pop()}`} style={{ width: "100%", height: 260, borderRadius: 10, border: "none" }} allowFullScreen />;
+                if (t === "youtube") {
+                  const ytId = post.media_url.includes("youtu.be/")
+                    ? post.media_url.split("youtu.be/")[1]?.split("?")[0]
+                    : post.media_url.split("v=")[1]?.split("&")[0];
+                  return <iframe src={`https://www.youtube.com/embed/${ytId || ""}`} style={{ width: "100%", height: 260, borderRadius: 10, border: "none" }} allowFullScreen />;
+                }
                 if (t === "video") return <video src={post.media_url} controls style={{ width: "100%", maxHeight: 320, borderRadius: 10, border: `1px solid ${border}` }} />;
                 if (t === "audio") return (
                   <div style={{ background: bg2, border: `1px solid ${border}`, borderRadius: 10, padding: "14px 18px" }}>
@@ -2362,7 +2380,7 @@ function CoLab() {
         <div className="pad fu" style={{ width: "100%", maxWidth: 700, margin: "0 auto", padding: "36px 24px" }}>
           <div style={{ display: "flex", gap: 8, marginBottom: 22 }}>
             <button className="hb" onClick={() => setActiveProject(null)} style={{ ...btnG, padding: "6px 14px", fontSize: 11 }}>← back</button>
-            <button className="hb" onClick={() => { navigator.clipboard.writeText(`${window.location.origin}/p/${activeProject.id}`); showToast("Link copied!"); }} style={{ ...btnG, padding: "6px 14px", fontSize: 11, marginLeft: "auto" }}>share ↗</button>
+            <button className="hb" onClick={() => { navigator.clipboard.writeText(`${window.location.origin}/p/${activeProject.id}`).catch(() => {}); showToast("Link copied!"); }} style={{ ...btnG, padding: "6px 14px", fontSize: 11, marginLeft: "auto" }}>share ↗</button>
           </div>
           <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 18 }}>
             <button onClick={() => { const u = users.find(u => u.id === activeProject.owner_id); if (u) setViewingProfile(u); }} style={{ background: "none", border: "none", cursor: "pointer", padding: 0 }}>
@@ -3110,7 +3128,7 @@ function CoLab() {
                     <div>
                       <div style={{ fontSize: 20, fontWeight: 400, color: text, letterSpacing: "-0.5px" }}>{profile?.name || "Anonymous"}</div>
                       {profile?.username
-                        ? <div style={{ fontSize: 11, color: textMuted, marginTop: 1, cursor: "pointer" }} onClick={() => { navigator.clipboard.writeText(`${window.location.origin}/u/${profile.username}`); showToast("Profile link copied!"); }} title="click to copy profile link">@{profile.username} ↗</div>
+                        ? <div style={{ fontSize: 11, color: textMuted, marginTop: 1, cursor: "pointer" }} onClick={() => { navigator.clipboard.writeText(`${window.location.origin}/u/${profile.username}`).catch(() => {}); showToast("Profile link copied!"); }} title="click to copy profile link">@{profile.username} ↗</div>
                         : <div style={{ fontSize: 11, color: textMuted, marginTop: 1, cursor: "pointer", textDecoration: "underline" }} onClick={() => setEditProfile(true)}>set a username →</div>
                       }
                       <div style={{ fontSize: 12, color: textMuted, marginTop: 2 }}>{profile?.role}</div>
@@ -3225,7 +3243,7 @@ function CoLab() {
 
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                 <button className="hb" onClick={() => setEditProfile(true)} style={btnG}>edit profile</button>
-                <button className="hb" onClick={() => { if (profile?.username) { navigator.clipboard.writeText(`${window.location.origin}/u/${profile.username}`); showToast("Profile link copied!"); } else { setEditProfile(true); showToast("Set a username first →"); } }} style={btnG}>share profile ↗</button>
+                <button className="hb" onClick={() => { if (profile?.username) { navigator.clipboard.writeText(`${window.location.origin}/u/${profile.username}`).catch(() => {}); showToast("Profile link copied!"); } else { setEditProfile(true); showToast("Set a username first →"); } }} style={btnG}>share profile ↗</button>
                 <button className="hb" onClick={handleSignOut} style={{ ...btnG, color: textMuted }}>sign out</button>
               </div>
             </div>
@@ -3327,7 +3345,7 @@ function CoLab() {
               <div><label style={labelStyle}>TIMELINE (optional)</label><input style={inputStyle} placeholder="e.g. 8 weeks, by end of Q2, 3 months..." value={newProject.timeline} onChange={e => setNewProject({ ...newProject, timeline: e.target.value })} /></div>
             </div>
             <div style={{ display: "flex", gap: 10, marginTop: 18 }}>
-              <button className="hb" onClick={() => setShowCreate(false)} style={btnG}>cancel</button>
+              <button className="hb" onClick={() => { setShowCreate(false); setNewProject({ title: "", description: "", category: CATEGORIES[0], skills: [], maxCollaborators: 2, location: "", goals: "", timeline: "" }); }} style={btnG}>cancel</button>
               <button className="hb" onClick={handlePostProject} style={{ ...btnP, flex: 1 }}>post →</button>
             </div>
           </div>
