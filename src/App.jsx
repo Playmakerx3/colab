@@ -1348,8 +1348,21 @@ export default function CoLab() {
       const comments = postComments[post.id] || [];
       const isOwner = post.user_id === authUser?.id;
       const postUser = users.find(u => u.id === post.user_id);
-      // Local state — prevents parent re-renders from killing focus mid-typing
       const [localComment, setLocalComment] = useState("");
+      const [hovered, setHovered] = useState(false);
+
+      // Relative timestamp
+      const relativeTime = (dateStr) => {
+        const diff = Date.now() - new Date(dateStr).getTime();
+        const m = Math.floor(diff / 60000);
+        const h = Math.floor(m / 60);
+        const d = Math.floor(h / 24);
+        if (m < 1) return "just now";
+        if (m < 60) return `${m}m ago`;
+        if (h < 24) return `${h}h ago`;
+        if (d < 7) return `${d}d ago`;
+        return new Date(dateStr).toLocaleDateString();
+      };
 
       const submitComment = async () => {
         if (!localComment.trim()) return;
@@ -1368,10 +1381,15 @@ export default function CoLab() {
       };
 
       return (
-        <div style={{ borderBottom: `1px solid ${border}`, padding: "20px 0" }}>
-          <div style={{ display: "flex", gap: 10, alignItems: "flex-start", marginBottom: 12 }}>
+        <div
+          onMouseEnter={() => setHovered(true)}
+          onMouseLeave={() => setHovered(false)}
+          style={{ borderBottom: `1px solid ${border}`, padding: "24px 0", transition: "background 0.15s" }}
+        >
+          {/* Header */}
+          <div style={{ display: "flex", gap: 12, alignItems: "flex-start", marginBottom: 14 }}>
             <button onClick={() => postUser && setViewingProfile(postUser)} style={{ background: "none", border: "none", cursor: "pointer", padding: 0, flexShrink: 0 }}>
-              <Avatar initials={post.user_initials} size={36} dark={dark} />
+              <Avatar initials={post.user_initials} size={40} dark={dark} />
             </button>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
@@ -1379,16 +1397,22 @@ export default function CoLab() {
                   <button onClick={() => postUser && setViewingProfile(postUser)} style={{ background: "none", border: "none", cursor: "pointer", padding: 0 }}>
                     <span style={{ fontSize: 13, fontWeight: 500, color: text }}>{post.user_name}</span>
                   </button>
-                  <span style={{ fontSize: 11, color: textMuted, marginLeft: 8 }}>{post.user_role}</span>
-                  <div style={{ fontSize: 10, color: textMuted, marginTop: 2 }}>{new Date(post.created_at).toLocaleDateString()}</div>
+                  {post.user_role && <span style={{ fontSize: 11, color: textMuted, marginLeft: 8 }}>{post.user_role}</span>}
+                  <div style={{ fontSize: 10, color: textMuted, marginTop: 3 }}>{relativeTime(post.created_at)}</div>
                 </div>
-                {isOwner && <button className="hb" onClick={() => handleDeletePost(post.id)} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontSize: 11, fontFamily: "inherit" }}>✕</button>}
+                {isOwner && hovered && (
+                  <button className="hb" onClick={() => handleDeletePost(post.id)} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontSize: 11, fontFamily: "inherit", opacity: 0.6 }}>✕</button>
+                )}
               </div>
             </div>
           </div>
-          <div style={{ fontSize: 14, color: text, lineHeight: 1.7, marginBottom: 10, paddingLeft: 46 }}>{post.content}</div>
+
+          {/* Content */}
+          <div style={{ fontSize: 14, color: text, lineHeight: 1.75, marginBottom: 14, paddingLeft: 52, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{post.content}</div>
+
+          {/* Media */}
           {post.media_url && (
-            <div style={{ paddingLeft: 46, marginBottom: 10 }}>
+            <div style={{ paddingLeft: 52, marginBottom: 14 }}>
               {(() => {
                 const t = post.media_type || (
                   post.media_url.includes("youtube.com") || post.media_url.includes("youtu.be") ? "youtube"
@@ -1397,48 +1421,72 @@ export default function CoLab() {
                   : post.media_url.match(/\.pdf$/i) ? "pdf"
                   : "image"
                 );
-                if (t === "youtube") return <iframe src={`https://www.youtube.com/embed/${post.media_url.split("v=")[1]?.split("&")[0] || post.media_url.split("/").pop()}`} style={{ width: "100%", height: 240, borderRadius: 8, border: "none" }} allowFullScreen />;
-                if (t === "video") return <video src={post.media_url} controls style={{ width: "100%", maxHeight: 300, borderRadius: 8, border: `1px solid ${border}` }} />;
+                if (t === "youtube") return <iframe src={`https://www.youtube.com/embed/${post.media_url.split("v=")[1]?.split("&")[0] || post.media_url.split("/").pop()}`} style={{ width: "100%", height: 260, borderRadius: 10, border: "none" }} allowFullScreen />;
+                if (t === "video") return <video src={post.media_url} controls style={{ width: "100%", maxHeight: 320, borderRadius: 10, border: `1px solid ${border}` }} />;
                 if (t === "audio") return (
-                  <div style={{ background: bg2, border: `1px solid ${border}`, borderRadius: 10, padding: "12px 16px" }}>
-                    <div style={{ fontSize: 11, color: textMuted, marginBottom: 8 }}>♪ {post.media_url.split("/").pop().split("?")[0]}</div>
-                    <audio src={post.media_url} controls style={{ width: "100%" }} />
+                  <div style={{ background: bg2, border: `1px solid ${border}`, borderRadius: 10, padding: "14px 18px" }}>
+                    <div style={{ fontSize: 11, color: textMuted, marginBottom: 10, display: "flex", gap: 6, alignItems: "center" }}>
+                      <span style={{ fontSize: 14 }}>♪</span>
+                      <span>{decodeURIComponent(post.media_url.split("/").pop().split("?")[0]).replace(/^\d+-/, "")}</span>
+                    </div>
+                    <audio src={post.media_url} controls style={{ width: "100%", height: 36 }} />
                   </div>
                 );
-                if (t === "pdf") return <a href={post.media_url} target="_blank" rel="noreferrer" style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, color: text, border: `1px solid ${border}`, borderRadius: 6, padding: "6px 12px", textDecoration: "none" }}>↗ view PDF</a>;
-                return <img src={post.media_url} alt="" style={{ width: "100%", maxHeight: 300, objectFit: "cover", borderRadius: 8, border: `1px solid ${border}` }} onError={e => e.target.style.display = "none"} />;
+                if (t === "pdf") return (
+                  <a href={post.media_url} target="_blank" rel="noreferrer" style={{ display: "inline-flex", alignItems: "center", gap: 8, fontSize: 12, color: text, background: bg2, border: `1px solid ${border}`, borderRadius: 8, padding: "10px 16px", textDecoration: "none" }}>
+                    <span style={{ fontSize: 16 }}>↗</span> view PDF
+                  </a>
+                );
+                return <img src={post.media_url} alt="" style={{ width: "100%", maxHeight: 400, objectFit: "cover", borderRadius: 10, border: `1px solid ${border}`, display: "block" }} onError={e => e.target.style.display = "none"} />;
               })()}
             </div>
           )}
+
+          {/* Project tag */}
           {post.project_title && (
-            <div style={{ paddingLeft: 46, marginBottom: 10 }}>
-              <span style={{ fontSize: 11, color: textMuted, border: `1px solid ${border}`, borderRadius: 4, padding: "2px 8px" }}>↗ {post.project_title}</span>
+            <div style={{ paddingLeft: 52, marginBottom: 12 }}>
+              <span style={{ fontSize: 11, color: textMuted, background: bg2, border: `1px solid ${border}`, borderRadius: 20, padding: "3px 10px", display: "inline-flex", alignItems: "center", gap: 4 }}>
+                <span style={{ fontSize: 9, opacity: 0.6 }}>↗</span> {post.project_title}
+              </span>
             </div>
           )}
-          <div style={{ paddingLeft: 46, display: "flex", gap: 16, alignItems: "center" }}>
-            <button className="hb" onClick={() => handleLike(post.id)} style={{ background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: 12, color: isLiked ? text : textMuted, display: "flex", gap: 5, alignItems: "center" }}>
-              {isLiked ? "♥" : "♡"} {post.like_count || 0}
+
+          {/* Actions */}
+          <div style={{ paddingLeft: 52, display: "flex", gap: 20, alignItems: "center" }}>
+            <button
+              className="hb"
+              onClick={() => handleLike(post.id)}
+              style={{ background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: 13, color: isLiked ? text : textMuted, display: "flex", gap: 6, alignItems: "center", transition: "color 0.15s", fontWeight: isLiked ? 500 : 400 }}
+            >
+              {isLiked ? "♥" : "♡"}
+              {(post.like_count || 0) > 0 && <span style={{ fontSize: 12 }}>{post.like_count}</span>}
             </button>
-            <button className="hb" onClick={() => { setExpandedComments(prev => ({ ...prev, [post.id]: !prev[post.id] })); if (!postComments[post.id]) loadComments(post.id); }} style={{ background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: 12, color: textMuted, display: "flex", gap: 5, alignItems: "center" }}>
-              ◎ {comments.length > 0 ? comments.length : isOpen ? "hide" : "comment"}
+            <button
+              className="hb"
+              onClick={() => { setExpandedComments(prev => ({ ...prev, [post.id]: !prev[post.id] })); if (!postComments[post.id]) loadComments(post.id); }}
+              style={{ background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: 12, color: isOpen ? text : textMuted, display: "flex", gap: 6, alignItems: "center", transition: "color 0.15s" }}
+            >
+              ◎ {comments.length > 0 ? <span>{comments.length}</span> : <span>{isOpen ? "hide" : "comment"}</span>}
             </button>
           </div>
+
+          {/* Comments */}
           {isOpen && (
-            <div style={{ paddingLeft: 46, marginTop: 14 }}>
+            <div style={{ paddingLeft: 52, marginTop: 16 }}>
               {comments.length > 0 && (
-                <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 12 }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 14 }}>
                   {comments.map((c) => {
                     const cUser = users.find(u => u.id === c.user_id);
                     const isMyComment = c.user_id === authUser?.id;
                     return (
                       <div key={c.id} style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
-                        <Avatar initials={c.user_initials} size={24} dark={dark} />
-                        <div style={{ background: bg2, border: `1px solid ${border}`, borderRadius: 8, padding: "7px 12px", flex: 1 }}>
-                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 2 }}>
+                        <Avatar initials={c.user_initials} size={26} dark={dark} />
+                        <div style={{ background: bg2, border: `1px solid ${border}`, borderRadius: 10, padding: "8px 13px", flex: 1, minWidth: 0 }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 3 }}>
                             <button onClick={() => cUser && setViewingProfile(cUser)} style={{ background: "none", border: "none", cursor: "pointer", padding: 0, fontSize: 11, fontWeight: 500, color: text, fontFamily: "inherit" }}>{c.user_name}</button>
-                            {isMyComment && <button className="hb" onClick={() => handleDeleteComment(c.id)} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontSize: 10, fontFamily: "inherit" }}>✕</button>}
+                            {isMyComment && <button className="hb" onClick={() => handleDeleteComment(c.id)} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontSize: 10, fontFamily: "inherit", opacity: 0.6 }}>✕</button>}
                           </div>
-                          <div style={{ fontSize: 12, color: textMuted, lineHeight: 1.55 }}>{c.content}</div>
+                          <div style={{ fontSize: 13, color: textMuted, lineHeight: 1.6 }}>{c.content}</div>
                         </div>
                       </div>
                     );
@@ -1446,16 +1494,16 @@ export default function CoLab() {
                 </div>
               )}
               <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                <Avatar initials={myInitials} size={24} dark={dark} />
+                <Avatar initials={myInitials} size={26} dark={dark} />
                 <input
                   placeholder="write a comment..."
                   value={localComment}
                   onChange={e => setLocalComment(e.target.value)}
                   onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); submitComment(); } }}
-                  style={{ ...inputStyle, fontSize: 12, padding: "7px 12px", flex: 1 }}
+                  style={{ ...inputStyle, fontSize: 12, padding: "8px 13px", flex: 1, borderRadius: 20 }}
                 />
                 {localComment.trim() && (
-                  <button className="hb" onClick={submitComment} style={{ ...btnP, padding: "7px 12px", fontSize: 11, flexShrink: 0 }}>post</button>
+                  <button className="hb" onClick={submitComment} style={{ ...btnP, padding: "8px 14px", fontSize: 11, flexShrink: 0, borderRadius: 20 }}>post</button>
                 )}
               </div>
             </div>
@@ -1495,11 +1543,17 @@ export default function CoLab() {
         {(networkTab === "feed" || networkTab === "feed-following") && (
           <div>
             {/* Compose */}
-            <div style={{ background: bg2, border: `1px solid ${border}`, borderRadius: 12, padding: "16px", marginBottom: 28 }}>
+            <div style={{ background: bg2, border: `1px solid ${border}`, borderRadius: 14, padding: "18px", marginBottom: 32 }}>
               <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
-                <Avatar initials={myInitials} size={36} dark={dark} />
+                <Avatar initials={myInitials} size={40} dark={dark} />
                 <div style={{ flex: 1 }}>
-                  <textarea placeholder="share what you're working on..." value={newPostContent} onChange={e => setNewPostContent(e.target.value)} rows={3} style={{ ...inputStyle, resize: "none", fontSize: 13, padding: "10px 12px", background: bg3, borderColor: "transparent" }} />
+                  <textarea
+                    placeholder="what are you building? share an update..."
+                    value={newPostContent}
+                    onChange={e => setNewPostContent(e.target.value)}
+                    rows={newPostContent ? 4 : 2}
+                    style={{ ...inputStyle, resize: "none", fontSize: 13, padding: "10px 14px", background: bg3, borderColor: "transparent", lineHeight: 1.65, transition: "height 0.15s" }}
+                  />
                   {newPostContent.trim() && (
                     <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 10 }}>
                       {/* Media preview */}
@@ -1525,9 +1579,10 @@ export default function CoLab() {
                             const file = e.target.files[0];
                             if (!file) return;
                             showToast("Uploading...");
-                            const path = `posts/${authUser.id}/${Date.now()}-${file.name}`;
+                            const safeName = file.name.replace(/[^a-zA-Z0-9.\-_]/g, "_");
+                            const path = `posts/${authUser.id}/${Date.now()}-${safeName}`;
                             const { error } = await supabase.storage.from("user-uploads").upload(path, file);
-                            if (error) { showToast("Upload failed."); return; }
+                            if (error) { showToast(`Upload failed: ${error.message}`); return; }
                             const { data: { publicUrl } } = supabase.storage.from("user-uploads").getPublicUrl(path);
                             setNewPostMediaUrl(publicUrl);
                             setNewPostMediaType(file.type.startsWith("video") ? "video" : "image");
@@ -1541,9 +1596,10 @@ export default function CoLab() {
                             const file = e.target.files[0];
                             if (!file) return;
                             showToast("Uploading audio...");
-                            const path = `posts/${authUser.id}/${Date.now()}-${file.name}`;
-                            const { error } = await supabase.storage.from("user-uploads").upload(path, file, { contentType: file.type });
-                            if (error) { showToast("Upload failed."); return; }
+                            const safeName = file.name.replace(/[^a-zA-Z0-9.\-_]/g, "_");
+                            const path = `posts/${authUser.id}/${Date.now()}-${safeName}`;
+                            const { data: uploadData, error } = await supabase.storage.from("user-uploads").upload(path, file);
+                            if (error) { showToast(`Upload failed: ${error.message}`); return; }
                             const { data: { publicUrl } } = supabase.storage.from("user-uploads").getPublicUrl(path);
                             setNewPostMediaUrl(publicUrl);
                             setNewPostMediaType("audio");
