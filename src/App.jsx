@@ -347,7 +347,6 @@ export default function CoLab() {
   const [editingProgress, setEditingProgress] = useState(null);
   const [showAddPortfolio, setShowAddPortfolio] = useState(false);
   const [newPortfolioItem, setNewPortfolioItem] = useState({ title: "", description: "", url: "" });
-  const [showCollaborators, setShowCollaborators] = useState(null); // userId whose collaborators to show
   const messagesEndRef = useRef(null);
   const dmEndRef = useRef(null);
 
@@ -764,11 +763,7 @@ export default function CoLab() {
         .or(`and(user_a.eq.${authUser.id},user_b.eq.${user.id}),and(user_a.eq.${user.id},user_b.eq.${authUser.id})`);
       if (existing && existing.length > 0) {
         thread = existing[0];
-        // Merge any duplicate threads: keep first, ignore rest
-        setDmThreads(prev => {
-          const exists = prev.find(t => t.id === thread.id);
-          return exists ? prev : [...prev, thread];
-        });
+        setDmThreads(prev => prev.find(t => t.id === thread.id) ? prev : [...prev, thread]);
       } else {
         const { data } = await supabase.from("dm_threads").insert({ user_a: authUser.id, user_b: user.id }).select().single();
         if (data) { thread = data; setDmThreads(prev => [...prev, data]); }
@@ -788,12 +783,11 @@ export default function CoLab() {
   const handleSendDm = async () => {
     if (!dmInput.trim() || !activeDmThread) return;
     const text = dmInput;
-    setDmInput(""); // optimistic clear so it feels instant
+    setDmInput(""); // optimistic clear
     const { data } = await supabase.from("dm_messages").insert({
       thread_id: activeDmThread.id, sender_id: authUser.id,
       sender_name: profile.name, sender_initials: myInitials, text,
     }).select().single();
-    // Optimistically add to local state (realtime will also fire but we dedupe by id)
     if (data) {
       setDmMessages(prev => {
         const existing = prev[activeDmThread.id] || [];
@@ -815,7 +809,6 @@ export default function CoLab() {
       if (existing.status === "declined") {
         const hoursSince = (Date.now() - new Date(existing.created_at).getTime()) / 3600000;
         if (hoursSince < 24) { showToast(`You can reapply in ${Math.ceil(24 - hoursSince)}h`); return; }
-        // Delete old declined app so we can submit fresh
         await supabase.from("applications").delete().eq("id", existing.id);
         setApplications(prev => prev.filter(a => a.id !== existing.id));
       }
@@ -905,6 +898,7 @@ export default function CoLab() {
   };
 
   const myCollaborators = getCollaborators(authUser?.id);
+  const [showCollaborators, setShowCollaborators] = useState(null); // userId whose collaborators to show
   const appliedProjectIds = applications.filter(a => a.applicant_id === authUser?.id).map(a => a.project_id);
   const browseBase = projects.filter(p => p.owner_id !== authUser?.id);
   const forYou = browseBase.map(p => ({ ...p, _s: getMatchScore(p) })).filter(p => p._s > 0).sort((a, b) => b._s - a._s);
@@ -1167,6 +1161,16 @@ export default function CoLab() {
     setDmMessages(prev => ({ ...prev, [activeDmThread.id]: (prev[activeDmThread.id] || []).filter(m => m.id !== msgId) }));
   };
 
+  const handleDeleteThread = async (threadId) => {
+    // Delete all messages then the thread itself
+    await supabase.from("dm_messages").delete().eq("thread_id", threadId);
+    await supabase.from("dm_threads").delete().eq("id", threadId);
+    setDmMessages(prev => { const n = { ...prev }; delete n[threadId]; return n; });
+    setDmThreads(prev => prev.filter(t => t.id !== threadId));
+    if (activeDmThread?.id === threadId) setActiveDmThread(null);
+    showToast("Conversation deleted.");
+  };
+
   const handleEditDm = async (msgId, newText) => {
     const { data } = await supabase.from("dm_messages").update({ text: newText, edited: true }).eq("id", msgId).select().single();
     if (data) {
@@ -1294,7 +1298,6 @@ export default function CoLab() {
     // Clean up storage file if the post has one
     if (post?.media_url && post.media_url.includes("user-uploads")) {
       try {
-        // Extract the path after the bucket name
         const pathMatch = post.media_url.match(/user-uploads\/(.+)$/);
         if (pathMatch) await supabase.storage.from("user-uploads").remove([pathMatch[1]]);
       } catch (e) { console.warn("Storage cleanup failed:", e); }
@@ -1311,6 +1314,27 @@ export default function CoLab() {
       const comments = postComments[post.id] || [];
       const isOwner = post.user_id === authUser?.id;
       const postUser = users.find(u => u.id === post.user_id);
+      // Local comment input state — keeps typing stable regardless of parent re-renders
+      const [localComment, setLocalComment] = useState("");
+
+      const submitComment = async () => {
+        if (!localComment.trim()) return;
+        const content = localComment;
+        setLocalComment(""); // clear immediately for seamless typing feel
+        const { data } = await supabase.from("comments").insert({
+          post_id: post.id, user_id: authUser.id,
+          user_name: profile.name, user_initials: myInitials, content,
+        }).select().single();
+        if (data) {
+          setPostComments(prev => ({ ...prev, [post.id]: [...(prev[post.id] || []), data] }));
+        }
+      };
+
+      const handleDeleteComment = async (commentId) => {
+        await supabase.from("comments").delete().eq("id", commentId);
+        setPostComments(prev => ({ ...prev, [post.id]: (prev[post.id] || []).filter(c => c.id !== commentId) }));
+      };
+
       return (
         <div style={{ borderBottom: `1px solid ${border}`, padding: "20px 0" }}>
           <div style={{ display: "flex", gap: 10, alignItems: "flex-start", marginBottom: 12 }}>
@@ -1352,31 +1376,43 @@ export default function CoLab() {
               {isLiked ? "♥" : "♡"} {post.like_count || 0}
             </button>
             <button className="hb" onClick={() => { setExpandedComments(prev => ({ ...prev, [post.id]: !prev[post.id] })); if (!postComments[post.id]) loadComments(post.id); }} style={{ background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: 12, color: textMuted, display: "flex", gap: 5, alignItems: "center" }}>
-              ◎ {isOpen ? "hide" : "comment"}
+              ◎ {comments.length > 0 ? comments.length : isOpen ? "hide" : "comment"}
             </button>
           </div>
           {isOpen && (
             <div style={{ paddingLeft: 46, marginTop: 14 }}>
               {comments.length > 0 && (
                 <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 12 }}>
-                  {comments.map((c, i) => {
+                  {comments.map((c) => {
                     const cUser = users.find(u => u.id === c.user_id);
+                    const isMyComment = c.user_id === authUser?.id;
                     return (
-                      <div key={i} style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+                      <div key={c.id} style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
                         <Avatar initials={c.user_initials} size={24} dark={dark} />
                         <div style={{ background: bg2, border: `1px solid ${border}`, borderRadius: 8, padding: "7px 12px", flex: 1 }}>
-                          <button onClick={() => cUser && setViewingProfile(cUser)} style={{ background: "none", border: "none", cursor: "pointer", padding: 0, fontSize: 11, fontWeight: 500, color: text, fontFamily: "inherit" }}>{c.user_name}</button>
-                          <div style={{ fontSize: 12, color: textMuted, marginTop: 2, lineHeight: 1.55 }}>{c.content}</div>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 2 }}>
+                            <button onClick={() => cUser && setViewingProfile(cUser)} style={{ background: "none", border: "none", cursor: "pointer", padding: 0, fontSize: 11, fontWeight: 500, color: text, fontFamily: "inherit" }}>{c.user_name}</button>
+                            {isMyComment && <button className="hb" onClick={() => handleDeleteComment(c.id)} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontSize: 10, fontFamily: "inherit", lineHeight: 1 }}>✕</button>}
+                          </div>
+                          <div style={{ fontSize: 12, color: textMuted, lineHeight: 1.55 }}>{c.content}</div>
                         </div>
                       </div>
                     );
                   })}
                 </div>
               )}
-              <div style={{ display: "flex", gap: 8 }}>
+              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                 <Avatar initials={myInitials} size={24} dark={dark} />
-                <input placeholder="write a comment..." value={newCommentText[post.id] || ""} onChange={e => setNewCommentText(prev => ({ ...prev, [post.id]: e.target.value }))} onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); handleComment(post.id); } }} style={{ ...inputStyle, fontSize: 12, padding: "7px 12px", flex: 1 }} />
-                <button className="hb" onClick={() => handleComment(post.id)} style={{ ...btnP, padding: "7px 12px", fontSize: 11, flexShrink: 0 }}>post</button>
+                <input
+                  placeholder="write a comment..."
+                  value={localComment}
+                  onChange={e => setLocalComment(e.target.value)}
+                  onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); submitComment(); } }}
+                  style={{ ...inputStyle, fontSize: 12, padding: "7px 12px", flex: 1 }}
+                />
+                {localComment.trim() && (
+                  <button className="hb" onClick={submitComment} style={{ ...btnP, padding: "7px 12px", fontSize: 11, flexShrink: 0 }}>post</button>
+                )}
               </div>
             </div>
           )}
@@ -1390,7 +1426,7 @@ export default function CoLab() {
     const feedToShow = networkTab === "feed-following" ? followingFeed : allFeed;
 
     return (
-      <div className="pad fu" style={{ width: "100%", padding: "48px 32px" }}>
+      <div className="pad fu" style={{ width: "100%", maxWidth: 680, margin: "0 auto", padding: "40px 24px" }}>
         <div style={{ marginBottom: 28 }}>
           <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px", marginBottom: 10 }}>NETWORK</div>
           <h2 style={{ fontSize: "clamp(24px, 4vw, 36px)", fontWeight: 400, letterSpacing: "-1.5px", color: text, marginBottom: 8 }}>Your network.</h2>
@@ -2031,7 +2067,7 @@ export default function CoLab() {
       {/* MESSAGES */}
       {appScreen === "messages" && (
         <div style={{ width: "100%", padding: "0" }}>
-          <div className="msg-layout" style={{ display: "grid", gridTemplateColumns: dmThreads.length > 0 ? "260px 1fr" : "1fr", height: "calc(100vh - 50px)" }}>
+          <div className="msg-layout" style={{ display: "grid", gridTemplateColumns: "260px 1fr", height: "calc(100vh - 50px)" }}>
             <div style={{ borderRight: `1px solid ${border}`, overflowY: "auto" }}>
               <div style={{ padding: "18px 20px 12px", borderBottom: `1px solid ${border}` }}>
                 <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px" }}>MESSAGES</div>
@@ -2065,6 +2101,7 @@ export default function CoLab() {
                     <div style={{ fontSize: 11, color: textMuted }}>{activeDmThread.otherUser?.role}</div>
                   </div>
                   <button className="hb" onClick={() => setViewingProfile(activeDmThread.otherUser)} style={{ marginLeft: "auto", background: "none", border: `1px solid ${border}`, borderRadius: 6, padding: "5px 10px", fontSize: 11, cursor: "pointer", color: textMuted, fontFamily: "inherit" }}>view profile</button>
+                  <button className="hb" onClick={() => { if (window.confirm("Delete this entire conversation? This cannot be undone.")) handleDeleteThread(activeDmThread.id); }} style={{ background: "none", border: `1px solid ${border}`, borderRadius: 6, padding: "5px 10px", fontSize: 11, cursor: "pointer", color: textMuted, fontFamily: "inherit" }}>delete chat</button>
                 </div>
                 <div style={{ flex: 1, overflowY: "auto", padding: "20px", display: "flex", flexDirection: "column", gap: 14 }}>
                   {(dmMessages[activeDmThread.id] || []).length === 0
@@ -2105,7 +2142,7 @@ export default function CoLab() {
               </div>
             ) : (
               <div style={{ display: "flex", alignItems: "center", justifyContent: "center", color: textMuted, fontSize: 13 }}>
-                {dmThreads.length > 0 ? "select a conversation" : ""}
+                {dmThreads.length > 0 ? "select a conversation" : "message someone from their profile to get started"}
               </div>
             )}
           </div>
@@ -2128,7 +2165,7 @@ export default function CoLab() {
             {[
               ["projects", myProjects.length],
               ["applied to", appliedProjectIds.length],
-              ["following", following.length],
+              ["followers", following.length],
               ["notifications", unreadNotifs],
             ].map(([label,val],i) => (
               <div key={i} style={{ padding: "16px 18px", background: bg2, borderRight: i < 3 ? `1px solid ${border}` : "none" }}>
@@ -2717,7 +2754,7 @@ export default function CoLab() {
                         <span style={{ opacity: 0.4 }}>·</span>
                         <span>{myProjects.length} project{myProjects.length !== 1 ? "s" : ""}</span>
                       </div>
-                      <div style={{ fontSize: 10, color: textMuted, marginTop: 4 }}>{following.length} following</div>
+                      <div style={{ fontSize: 10, color: textMuted, marginTop: 4 }}>{following.length} followers</div>
                     </div>
                   </div>
                 </div>
