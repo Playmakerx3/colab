@@ -1,44 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { supabase } from "./supabase";
-
-const SKILLS = ["Design", "Engineering", "Marketing", "Finance", "Legal", "Writing", "Video", "Music", "Photography", "Data", "AI/ML", "Product", "Sales", "Operations", "3D/CAD", "Architecture"];
-const CATEGORIES = ["Tech / Software", "Creative / Art", "Music", "Film / Video", "Physical / Hardware", "Business / Startup", "Social Impact", "Research", "Other"];
-const AVAILABILITY = ["Full-time", "Part-time", "Weekends only", "Evenings only", "Flexible"];
-const PLUGINS = [
-  { id: "slack", name: "Slack", icon: "#", desc: "Team messaging" },
-  { id: "discord", name: "Discord", icon: "◈", desc: "Voice & chat" },
-  { id: "drive", name: "Google Drive", icon: "△", desc: "File sharing" },
-  { id: "notion", name: "Notion", icon: "□", desc: "Docs & tasks" },
-  { id: "github", name: "GitHub", icon: "◎", desc: "Code & repos" },
-  { id: "figma", name: "Figma", icon: "◐", desc: "Design files" },
-];
-
-// ── MODULE-LEVEL HELPERS ──
-const initials = (name, fallback = "?") =>
-  name ? name.split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase() : fallback;
-
-const relativeTime = (dateStr) => {
-  const diff = Date.now() - new Date(dateStr).getTime();
-  const m = Math.floor(diff / 60000);
-  const h = Math.floor(m / 60);
-  const d = Math.floor(h / 24);
-  if (m < 1) return "just now";
-  if (m < 60) return `${m}m ago`;
-  if (h < 24) return `${h}h ago`;
-  if (d < 7) return `${d}d ago`;
-  return new Date(dateStr).toLocaleDateString();
-};
-
-const matchesRegion = (locationStr, regionFilter, myLocation) => {
-  if (!regionFilter) return true;
-  const loc = (locationStr || "").toLowerCase();
-  const myLoc = (myLocation || "").toLowerCase();
-  const myCity = myLoc.split(",")[0].trim();
-  if (regionFilter === "local" || regionFilter === "city") return myCity.length > 0 && loc.includes(myCity);
-  if (regionFilter === "national") return loc.includes("us") || loc.includes("usa") || loc.includes("united states") || (myLoc && loc.split(",").pop().trim() === myLoc.split(",").pop().trim());
-  if (regionFilter === "international") return myLoc.length > 0 && !loc.includes(myLoc.split(",").pop().trim().toLowerCase());
-  return true;
-};
+import { AVAILABILITY, CATEGORIES, COLS, PLUGINS, PRESETS, ROWS, SKILLS } from "./constants/appConstants";
+import { initials, matchesRegion, relativeTime } from "./utils/appHelpers";
 
 function PostCard({ post, ctx }) {
   const {
@@ -282,64 +245,6 @@ function MentionInput({ value, onChange, onKeyDown, placeholder, users, style, r
     </div>
   );
 }
-
-// ── PIXEL BANNER PRESETS ──
-const COLS = 48, ROWS = 12;
-const PRESETS = {
-  empty: new Array(COLS * ROWS).fill(0),
-  wave: (() => {
-    const p = new Array(COLS * ROWS).fill(0);
-    for (let c = 0; c < COLS; c++) {
-      const h = Math.round(ROWS / 2 + Math.sin(c / 4) * 3);
-      for (let r = h; r < ROWS; r++) p[r * COLS + c] = 1;
-    }
-    return p;
-  })(),
-  checkerboard: (() => {
-    const p = new Array(COLS * ROWS).fill(0);
-    for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) if ((r + c) % 2 === 0) p[r * COLS + c] = 1;
-    return p;
-  })(),
-  diagonal: (() => {
-    const p = new Array(COLS * ROWS).fill(0);
-    for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) if ((c - r * 2 + 96) % 8 < 4) p[r * COLS + c] = 1;
-    return p;
-  })(),
-  mountains: (() => {
-    const p = new Array(COLS * ROWS).fill(0);
-    const heights = Array.from({ length: COLS }, (_, c) => {
-      const m1 = Math.max(0, ROWS - Math.abs(c - 12) * 0.7);
-      const m2 = Math.max(0, ROWS - Math.abs(c - 32) * 0.5);
-      const m3 = Math.max(0, ROWS * 0.6 - Math.abs(c - 22) * 0.9);
-      return Math.min(ROWS, Math.round(Math.max(m1, m2, m3)));
-    });
-    for (let c = 0; c < COLS; c++) for (let r = ROWS - heights[c]; r < ROWS; r++) p[r * COLS + c] = 1;
-    return p;
-  })(),
-  city: (() => {
-    const p = new Array(COLS * ROWS).fill(0);
-    const buildings = [
-      { x: 1, w: 5, h: 8 }, { x: 7, w: 4, h: 6 }, { x: 12, w: 6, h: 10 },
-      { x: 19, w: 3, h: 7 }, { x: 23, w: 7, h: 9 }, { x: 31, w: 4, h: 6 },
-      { x: 36, w: 5, h: 11 }, { x: 42, w: 5, h: 7 },
-    ];
-    buildings.forEach(({ x, w, h }) => {
-      for (let c = x; c < x + w && c < COLS; c++)
-        for (let r = ROWS - h; r < ROWS; r++) p[r * COLS + c] = 1;
-    });
-    return p;
-  })(),
-  dots: (() => {
-    const p = new Array(COLS * ROWS).fill(0);
-    for (let r = 1; r < ROWS; r += 3) for (let c = 1; c < COLS; c += 3) p[r * COLS + c] = 1;
-    return p;
-  })(),
-  grid: (() => {
-    const p = new Array(COLS * ROWS).fill(0);
-    for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) if (r % 3 === 0 || c % 4 === 0) p[r * COLS + c] = 1;
-    return p;
-  })(),
-};
 
 function PixelBannerDisplay({ pixels, dark, height = 80 }) {
   if (!pixels || pixels.every(v => v === 0)) return null;
@@ -1487,16 +1392,6 @@ function CoLab() {
       setFollowing(prev => [...prev, userId]);
       showToast("Following!");
     }
-  };
-
-  const handleAddPlugin = async (plugId, project) => {
-    const newPlugins = (project.plugins || []).includes(plugId)
-      ? project.plugins.filter(x => x !== plugId)
-      : [...(project.plugins || []), plugId];
-    await supabase.from("projects").update({ plugins: newPlugins }).eq("id", project.id);
-    setProjects(projects.map(p => p.id === project.id ? { ...p, plugins: newPlugins } : p));
-    if (activeProject?.id === project.id) setActiveProject({ ...activeProject, plugins: newPlugins });
-    showToast("Plugin updated.");
   };
 
   const myProjects = projects.filter(p => p.owner_id === authUser?.id && !p.archived);
