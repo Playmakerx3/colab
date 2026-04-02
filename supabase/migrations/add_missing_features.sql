@@ -27,3 +27,6 @@ create table if not exists project_activity (
 alter table project_activity enable row level security;
 create policy "members can view activity" on project_activity for select using (true);
 create policy "members can insert activity" on project_activity for insert with check (auth.uid() = user_id);
+
+-- GitHub repo per project
+alter table projects add column if not exists github_repo text;

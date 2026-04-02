@@ -744,6 +744,10 @@ function CoLab() {
   const [inviteLink, setInviteLink] = useState(null);
   const [showShipModal, setShowShipModal] = useState(false);
   const [shipPostContent, setShipPostContent] = useState("");
+  const [githubCommits, setGithubCommits] = useState([]);
+  const [githubRepoInput, setGithubRepoInput] = useState("");
+  const [githubLoading, setGithubLoading] = useState(false);
+  const [githubError, setGithubError] = useState(null);
   const [editProfile, setEditProfile] = useState(false);
   const [showBannerEditor, setShowBannerEditor] = useState(false);
   const [bannerPixels, setBannerPixels] = useState(new Array(48 * 12).fill(0));
@@ -1193,6 +1197,54 @@ function CoLab() {
     setProjects(prev => prev.map(p => p.id === projectId ? { ...p, featured } : p));
     if (activeProject?.id === projectId) setActiveProject(prev => ({ ...prev, featured }));
     showToast(featured ? "Project featured on Explore." : "Removed from featured.");
+  };
+
+  const parseGithubRepo = (input) => {
+    if (!input) return null;
+    // Accept: "owner/repo", "https://github.com/owner/repo", "github.com/owner/repo"
+    const cleaned = input.trim().replace(/\.git$/, "").replace(/\/$/, "");
+    const match = cleaned.match(/(?:github\.com\/)?([^/\s]+\/[^/\s]+)$/);
+    return match ? match[1] : null;
+  };
+
+  const loadGithubCommits = async (repoSlug) => {
+    if (!repoSlug) return;
+    setGithubLoading(true);
+    setGithubError(null);
+    try {
+      const res = await fetch(`https://api.github.com/repos/${repoSlug}/commits?per_page=8`, {
+        headers: { Accept: "application/vnd.github+json" },
+      });
+      if (!res.ok) {
+        if (res.status === 404) setGithubError("Repo not found. Make sure it's public.");
+        else if (res.status === 403) setGithubError("Rate limited by GitHub. Try again in a minute.");
+        else setGithubError(`GitHub error: ${res.status}`);
+        setGithubCommits([]);
+      } else {
+        const data = await res.json();
+        setGithubCommits(data);
+      }
+    } catch {
+      setGithubError("Failed to reach GitHub.");
+    }
+    setGithubLoading(false);
+  };
+
+  const handleSaveGithubRepo = async (repoInput) => {
+    const slug = parseGithubRepo(repoInput);
+    if (!slug) { showToast("Enter a valid GitHub repo (e.g. owner/repo)"); return; }
+    await supabase.from("projects").update({ github_repo: slug }).eq("id", activeProject.id);
+    setProjects(prev => prev.map(p => p.id === activeProject.id ? { ...p, github_repo: slug } : p));
+    setActiveProject(prev => ({ ...prev, github_repo: slug }));
+    // Connect plugin if not already
+    if (!(activeProject.plugins || []).includes("github")) {
+      const newPlugins = [...(activeProject.plugins || []), "github"];
+      await supabase.from("projects").update({ plugins: newPlugins }).eq("id", activeProject.id);
+      setProjects(prev => prev.map(p => p.id === activeProject.id ? { ...p, plugins: newPlugins } : p));
+      setActiveProject(prev => ({ ...prev, plugins: newPlugins }));
+    }
+    showToast("Repo connected.");
+    loadGithubCommits(slug);
   };
 
   const handleLeaveProject = async (applicationId) => {
@@ -3026,7 +3078,7 @@ function CoLab() {
             <TabBtn id="docs" label="docs" count={0} setter={setProjectTab} current={projectTab} />
             <TabBtn id="updates" label="updates" count={projectUpdates.length} setter={setProjectTab} current={projectTab} />
             <TabBtn id="team" label="team" count={0} setter={setProjectTab} current={projectTab} />
-            <TabBtn id="plugins" label="plugins" count={(activeProject.plugins || []).length} setter={setProjectTab} current={projectTab} />
+            <TabBtn id="plugins" label="plugins" count={(activeProject.plugins || []).length} setter={(id) => { setProjectTab(id); if (id === "plugins" && activeProject.github_repo) { setGithubRepoInput(activeProject.github_repo); loadGithubCommits(activeProject.github_repo); } }} current={projectTab} />
             <TabBtn id="activity" label="activity" count={0} setter={setProjectTab} current={projectTab} />
           </div>
 
@@ -3395,35 +3447,92 @@ function CoLab() {
             {/* PLUGINS */}
             {projectTab === "plugins" && (
               <div>
-                {(activeProject.plugins || []).length > 0 && (
-                  <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 20 }}>
-                    <div style={{ fontSize: 10, color: textMuted, letterSpacing: "1px", marginBottom: 4 }}>CONNECTED</div>
-                    {PLUGINS.filter(p => (activeProject.plugins || []).includes(p.id)).map(plug => (
-                      <div key={plug.id} style={{ display: "flex", gap: 12, alignItems: "center", padding: "12px 16px", background: bg2, borderRadius: 8, border: `1px solid ${border}` }}>
-                        <span style={{ fontSize: 16, color: text, width: 20, textAlign: "center", flexShrink: 0 }}>{plug.icon}</span>
-                        <div style={{ flex: 1 }}>
-                          <div style={{ fontSize: 13, color: text }}>{plug.name}</div>
-                          <div style={{ fontSize: 11, color: textMuted }}>{plug.desc}</div>
-                        </div>
-                        <button className="hb" onClick={() => handleAddPlugin(plug.id, activeProject)} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontSize: 11, fontFamily: "inherit" }}>remove</button>
+                {/* GitHub — real integration */}
+                <div style={{ marginBottom: 24 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                    <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                      <span style={{ fontSize: 15 }}>◎</span>
+                      <div>
+                        <div style={{ fontSize: 13, color: text }}>GitHub</div>
+                        <div style={{ fontSize: 11, color: textMuted }}>Connect a repo to see recent commits</div>
                       </div>
-                    ))}
+                    </div>
+                    {activeProject.github_repo && (
+                      <a href={`https://github.com/${activeProject.github_repo}`} target="_blank" rel="noreferrer"
+                        style={{ fontSize: 10, color: textMuted, textDecoration: "none", border: `1px solid ${border}`, borderRadius: 4, padding: "2px 8px" }}>
+                        {activeProject.github_repo} ↗
+                      </a>
+                    )}
                   </div>
-                )}
-                <div>
-                  <div style={{ fontSize: 10, color: textMuted, letterSpacing: "1px", marginBottom: 10 }}>ADD PLUGIN</div>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                    {PLUGINS.filter(p => !(activeProject.plugins || []).includes(p.id)).map(plug => (
-                      <button key={plug.id} className="hb" onClick={() => handleAddPlugin(plug.id, activeProject)} style={{ background: "none", border: `1px solid ${border}`, borderRadius: 8, padding: "12px 16px", fontSize: 12, cursor: "pointer", fontFamily: "inherit", color: textMuted, display: "flex", gap: 12, alignItems: "center", textAlign: "left", transition: "border 0.15s" }}
-                        onMouseEnter={e => e.currentTarget.style.borderColor = text} onMouseLeave={e => e.currentTarget.style.borderColor = border}>
-                        <span style={{ fontSize: 16, width: 20, textAlign: "center", flexShrink: 0 }}>{plug.icon}</span>
-                        <div>
-                          <div style={{ color: text, marginBottom: 2 }}>{plug.name}</div>
-                          <div style={{ fontSize: 11 }}>{plug.desc}</div>
-                        </div>
-                        <span style={{ marginLeft: "auto", fontSize: 11 }}>+ connect</span>
+
+                  {/* Repo input */}
+                  <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+                    <input
+                      placeholder="owner/repo or paste GitHub URL"
+                      value={githubRepoInput}
+                      onChange={e => setGithubRepoInput(e.target.value)}
+                      onKeyDown={e => e.key === "Enter" && handleSaveGithubRepo(githubRepoInput)}
+                      style={{ ...inputStyle, fontSize: 12, flex: 1 }}
+                    />
+                    <button className="hb" onClick={() => handleSaveGithubRepo(githubRepoInput)}
+                      style={{ ...btnP, padding: "8px 14px", fontSize: 11, flexShrink: 0 }}>
+                      connect
+                    </button>
+                    {activeProject.github_repo && (
+                      <button className="hb" onClick={() => loadGithubCommits(activeProject.github_repo)}
+                        style={{ background: "none", border: `1px solid ${border}`, borderRadius: 6, padding: "8px 12px", fontSize: 11, cursor: "pointer", color: textMuted, fontFamily: "inherit", flexShrink: 0 }}>
+                        ↻
                       </button>
-                    ))}
+                    )}
+                  </div>
+
+                  {/* Commits feed */}
+                  {githubLoading && <div style={{ fontSize: 12, color: textMuted, padding: "12px 0" }}>loading commits...</div>}
+                  {githubError && <div style={{ fontSize: 12, color: "#ef4444", padding: "8px 12px", background: dark ? "#1a000088" : "#fff5f5", borderRadius: 6, border: "1px solid #ef444440" }}>{githubError}</div>}
+                  {!githubLoading && !githubError && githubCommits.length > 0 && (
+                    <div>
+                      <div style={{ fontSize: 10, color: textMuted, letterSpacing: "1px", marginBottom: 8 }}>RECENT COMMITS</div>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
+                        {githubCommits.map((c, i) => {
+                          const msg = c.commit?.message?.split("\n")[0] || "";
+                          const author = c.commit?.author?.name || "";
+                          const dateStr = c.commit?.author?.date;
+                          const sha = c.sha?.slice(0, 7);
+                          return (
+                            <a key={c.sha} href={c.html_url} target="_blank" rel="noreferrer" style={{ display: "flex", gap: 12, alignItems: "flex-start", padding: "10px 14px", background: bg2, borderRadius: i === 0 && githubCommits.length === 1 ? 8 : i === 0 ? "8px 8px 0 0" : i === githubCommits.length - 1 ? "0 0 8px 8px" : 0, border: `1px solid ${border}`, borderBottom: i < githubCommits.length - 1 ? "none" : `1px solid ${border}`, textDecoration: "none", transition: "opacity 0.15s" }}
+                              onMouseEnter={e => e.currentTarget.style.opacity = "0.7"} onMouseLeave={e => e.currentTarget.style.opacity = "1"}>
+                              <code style={{ fontSize: 10, color: textMuted, flexShrink: 0, marginTop: 2, fontFamily: "inherit" }}>{sha}</code>
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ fontSize: 12, color: text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{msg}</div>
+                                <div style={{ fontSize: 10, color: textMuted, marginTop: 2 }}>{author}{dateStr ? ` · ${relativeTime(dateStr)}` : ""}</div>
+                              </div>
+                            </a>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                  {!githubLoading && !githubError && githubCommits.length === 0 && activeProject.github_repo && (
+                    <div style={{ fontSize: 12, color: textMuted }}>no commits found.</div>
+                  )}
+                </div>
+
+                <div style={{ borderTop: `1px solid ${border}`, paddingTop: 20 }}>
+                  <div style={{ fontSize: 10, color: textMuted, letterSpacing: "1px", marginBottom: 10 }}>OTHER INTEGRATIONS</div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                    {PLUGINS.filter(p => p.id !== "github").map(plug => {
+                      const connected = (activeProject.plugins || []).includes(plug.id);
+                      return (
+                        <div key={plug.id} style={{ display: "flex", gap: 12, alignItems: "center", padding: "12px 16px", background: connected ? bg2 : "none", borderRadius: 8, border: `1px solid ${connected ? border : border}`, opacity: connected ? 1 : 0.5 }}>
+                          <span style={{ fontSize: 16, color: text, width: 20, textAlign: "center", flexShrink: 0 }}>{plug.icon}</span>
+                          <div style={{ flex: 1 }}>
+                            <div style={{ fontSize: 13, color: text }}>{plug.name}</div>
+                            <div style={{ fontSize: 11, color: textMuted }}>{plug.desc}</div>
+                          </div>
+                          <span style={{ fontSize: 10, color: textMuted }}>{connected ? "connected" : "coming soon"}</span>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               </div>
