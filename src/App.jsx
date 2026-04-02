@@ -637,10 +637,18 @@ function PublicProjectPage({ projectId }) {
         <div style={{ borderTop: `1px solid ${border}`, marginBottom: 28 }} />
 
         {/* CTA */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          <button className="hb" onClick={() => { sessionStorage.setItem("pendingApply", JSON.stringify({ projectId: project.id, projectTitle: project.title })); window.location.href = "/"; }} style={{ background: text, color: bg, border: "none", borderRadius: 8, padding: "14px", fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}>Apply to collaborate →</button>
-          <button className="hb" onClick={handleCopy} style={{ background: "none", border: `1px solid ${border}`, borderRadius: 8, padding: "11px", fontSize: 12, cursor: "pointer", fontFamily: "inherit", color: textMuted }}>{copied ? "link copied ✓" : "copy link"}</button>
-        </div>
+        {project.shipped ? (
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            <div style={{ padding: "12px 16px", background: dark ? "#0a1a0a" : "#f0fdf0", border: "1px solid #22c55e40", borderRadius: 8, fontSize: 12, color: "#22c55e", textAlign: "center" }}>this project has shipped</div>
+            <a href={`/p/${project.id}/shipped`} style={{ display: "block", background: "none", border: `1px solid ${border}`, borderRadius: 8, padding: "11px", fontSize: 12, cursor: "pointer", fontFamily: "inherit", color: textMuted, textDecoration: "none", textAlign: "center" }}>view shipped page →</a>
+            <button className="hb" onClick={handleCopy} style={{ background: "none", border: `1px solid ${border}`, borderRadius: 8, padding: "11px", fontSize: 12, cursor: "pointer", fontFamily: "inherit", color: textMuted }}>{copied ? "link copied ✓" : "copy link"}</button>
+          </div>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            <button className="hb" onClick={() => { sessionStorage.setItem("pendingApply", JSON.stringify({ projectId: project.id, projectTitle: project.title })); window.location.href = "/"; }} style={{ background: text, color: bg, border: "none", borderRadius: 8, padding: "14px", fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}>Apply to collaborate →</button>
+            <button className="hb" onClick={handleCopy} style={{ background: "none", border: `1px solid ${border}`, borderRadius: 8, padding: "11px", fontSize: 12, cursor: "pointer", fontFamily: "inherit", color: textMuted }}>{copied ? "link copied ✓" : "copy link"}</button>
+          </div>
+        )}
 
         {/* Footer note */}
         <div style={{ marginTop: 32, fontSize: 11, color: textMuted, lineHeight: 1.7, borderTop: `1px solid ${border}`, paddingTop: 24 }}>
@@ -734,6 +742,8 @@ function CoLab() {
   const [projectActivity, setProjectActivity] = useState([]);
   const [docPreviewMode, setDocPreviewMode] = useState(false);
   const [inviteLink, setInviteLink] = useState(null);
+  const [showShipModal, setShowShipModal] = useState(false);
+  const [shipPostContent, setShipPostContent] = useState("");
   const [editProfile, setEditProfile] = useState(false);
   const [showBannerEditor, setShowBannerEditor] = useState(false);
   const [bannerPixels, setBannerPixels] = useState(new Array(48 * 12).fill(0));
@@ -1157,6 +1167,34 @@ function CoLab() {
     showToast("Project restored.");
   };
 
+  const handleShipProject = async (projectId, content) => {
+    if (!content.trim()) return;
+    const proj = projects.find(p => p.id === projectId) || activeProject;
+    if (!proj) return;
+    const now = new Date().toISOString();
+    await supabase.from("projects").update({ shipped: true, shipped_at: now }).eq("id", projectId);
+    setProjects(prev => prev.map(p => p.id === projectId ? { ...p, shipped: true, shipped_at: now } : p));
+    if (activeProject?.id === projectId) setActiveProject(prev => ({ ...prev, shipped: true, shipped_at: now }));
+    const insertPayload = {
+      user_id: authUser.id, user_name: profile.name, user_initials: myInitials,
+      user_role: profile.role || "", content,
+      project_id: projectId, project_title: proj.title,
+    };
+    const { data: postData } = await supabase.from("posts").insert(insertPayload).select().single();
+    if (postData) setPosts(prev => [postData, ...prev]);
+    logActivity(projectId, "project_shipped", `${proj.title} shipped`);
+    setShowShipModal(false);
+    setShipPostContent("");
+    showToast("Shipped! Post added to your feed.");
+  };
+
+  const handleToggleFeatured = async (projectId, featured) => {
+    await supabase.from("projects").update({ featured }).eq("id", projectId);
+    setProjects(prev => prev.map(p => p.id === projectId ? { ...p, featured } : p));
+    if (activeProject?.id === projectId) setActiveProject(prev => ({ ...prev, featured }));
+    showToast(featured ? "Project featured on Explore." : "Removed from featured.");
+  };
+
   const handleLeaveProject = async (applicationId) => {
     if (!window.confirm("Leave this project? You'll need to re-apply to rejoin.")) return;
     await supabase.from("applications").update({ status: "left" }).eq("id", applicationId);
@@ -1212,6 +1250,15 @@ function CoLab() {
     await supabase.from("projects").update({ progress: prog }).eq("id", projectId);
     setProjects(prev => prev.map(p => p.id === projectId ? { ...p, progress: prog } : p));
     if (activeProject?.id === projectId) setActiveProject(prev => ({ ...prev, progress: prog }));
+    if (prog === 100) {
+      const proj = projectsRef.current.find(p => p.id === projectId);
+      if (proj && !proj.shipped && proj.owner_id === authUser?.id) {
+        setTimeout(() => {
+          setShipPostContent(`just shipped: ${proj.title}. built it with the team on CoLab.`);
+          setShowShipModal(true);
+        }, 600);
+      }
+    }
   };
 
   // ── TASKS ──
@@ -1461,7 +1508,8 @@ function CoLab() {
           </div>
         </div>
         <div style={{ textAlign: "right", flexShrink: 0 }}>
-          <div style={{ fontSize: 11, color: spots > 0 ? text : textMuted, fontWeight: spots > 0 ? 500 : 300, marginBottom: 3 }}>{spots > 0 ? `${spots} open` : "full"}</div>
+          {p.shipped && <div style={{ fontSize: 10, color: "#22c55e", marginBottom: 4 }}>shipped</div>}
+          <div style={{ fontSize: 11, color: spots > 0 && !p.shipped ? text : textMuted, fontWeight: spots > 0 && !p.shipped ? 500 : 300, marginBottom: 3 }}>{p.shipped ? "complete" : spots > 0 ? `${spots} open` : "full"}</div>
           <div style={{ fontSize: 10, color: textMuted }}>{p.category}</div>
           {p.location && <div style={{ fontSize: 10, color: textMuted, marginTop: 2 }}>{p.location}</div>}
         </div>
@@ -2551,6 +2599,26 @@ function CoLab() {
               <div key={l}><div style={{ fontSize: 24, color: text, letterSpacing: "-1px" }}>{v}</div><div style={{ fontSize: 10, color: textMuted, marginTop: 2 }}>{l}</div></div>
             ))}
           </div>
+          {projects.filter(p => p.featured && !p.archived && !p.is_private).length > 0 && (
+            <div style={{ marginBottom: 28, padding: "16px 20px", background: bg2, border: `1px solid ${border}`, borderRadius: 10 }}>
+              <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px", marginBottom: 12 }}>★ FEATURED THIS WEEK</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {projects.filter(p => p.featured && !p.archived && !p.is_private).slice(0, 3).map(p => (
+                  <div key={p.id} onClick={() => { setActiveProject(p); loadProjectData(p.id); }} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer", padding: "8px 0", borderBottom: `1px solid ${border}` }}
+                    onMouseEnter={e => e.currentTarget.style.opacity = "0.6"} onMouseLeave={e => e.currentTarget.style.opacity = "1"}>
+                    <div>
+                      <div style={{ fontSize: 13, color: text }}>{p.title}</div>
+                      <div style={{ fontSize: 10, color: textMuted }}>{p.owner_name} · {p.category}</div>
+                    </div>
+                    <div style={{ display: "flex", gap: 8, alignItems: "center", flexShrink: 0 }}>
+                      {p.shipped && <span style={{ fontSize: 10, color: "#22c55e" }}>shipped</span>}
+                      <span style={{ fontSize: 10, color: textMuted }}>{(p.skills || []).slice(0, 2).join(", ")}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
           {trendingProjects.length > 0 && (
             <div style={{ marginBottom: 28, padding: "16px 20px", background: bg2, border: `1px solid ${border}`, borderRadius: 10 }}>
               <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px", marginBottom: 12 }}>TRENDING</div>
@@ -2905,6 +2973,21 @@ function CoLab() {
                   </span>
                 );
               })()}
+              {activeProject.shipped && (
+                <span style={{ fontSize: 10, padding: "2px 8px", borderRadius: 3, border: "1px solid #22c55e", color: "#22c55e" }}>shipped</span>
+              )}
+              {activeProject.owner_id === authUser?.id && !activeProject.shipped && (
+                <button className="hb" onClick={() => { setShipPostContent(`just shipped: ${activeProject.title}. built it with the team on CoLab.`); setShowShipModal(true); }}
+                  style={{ background: "none", border: `1px solid ${border}`, borderRadius: 6, padding: "4px 10px", fontSize: 10, cursor: "pointer", color: textMuted, fontFamily: "inherit" }}>
+                  ship it
+                </button>
+              )}
+              {activeProject.owner_id === authUser?.id && (
+                <button className="hb" onClick={() => handleToggleFeatured(activeProject.id, !activeProject.featured)}
+                  style={{ background: activeProject.featured ? text : "none", border: `1px solid ${border}`, borderRadius: 6, padding: "4px 10px", fontSize: 10, cursor: "pointer", color: activeProject.featured ? bg : textMuted, fontFamily: "inherit" }}>
+                  {activeProject.featured ? "★ featured" : "feature"}
+                </button>
+              )}
               {activeProject.owner_id === authUser?.id && (
                 <button className="hb" onClick={() => handleArchiveProject(activeProject.id)}
                   style={{ background: "none", border: `1px solid ${border}`, borderRadius: 6, padding: "4px 10px", fontSize: 10, cursor: "pointer", color: textMuted, fontFamily: "inherit" }}>
@@ -2913,6 +2996,27 @@ function CoLab() {
               )}
             </div>
           </div>
+
+          {/* Due this week banner */}
+          {(() => {
+            const now = new Date();
+            const weekOut = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+            const upcoming = tasks.filter(t => t.project_id === activeProject.id && !t.done && t.due_date && new Date(t.due_date) <= weekOut);
+            const overdue = upcoming.filter(t => new Date(t.due_date) < now);
+            if (upcoming.length === 0) return null;
+            const accentColor = overdue.length > 0 ? "#ef4444" : "#f97316";
+            const bannerBg = overdue.length > 0 ? (dark ? "#1a000088" : "#fff5f5") : (dark ? "#1a0e0088" : "#fffbf0");
+            return (
+              <div className="pad" style={{ padding: "7px 28px", background: bannerBg, borderBottom: `1px solid ${accentColor}40`, display: "flex", gap: 10, alignItems: "center", flexShrink: 0, flexWrap: "wrap" }}>
+                <span style={{ fontSize: 10, color: accentColor, fontWeight: 500, flexShrink: 0 }}>
+                  {overdue.length > 0 ? `${overdue.length} overdue` : ""}{overdue.length > 0 && upcoming.length > overdue.length ? " · " : ""}{upcoming.length > overdue.length ? `${upcoming.length - overdue.length} due this week` : ""}
+                </span>
+                <span style={{ fontSize: 10, color: textMuted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {upcoming.slice(0, 3).map(t => t.text).join(" · ")}{upcoming.length > 3 ? ` +${upcoming.length - 3} more` : ""}
+                </span>
+              </div>
+            );
+          })()}
 
           {/* Tab bar */}
           <div className="pad proj-tabs" style={{ padding: "0 28px", borderBottom: `1px solid ${border}`, display: "flex", flexShrink: 0, overflowX: "auto" }}>
@@ -2958,11 +3062,16 @@ function CoLab() {
                         {col.label} <span style={{ background: bg3, borderRadius: 10, padding: "1px 7px" }}>{col.tasks.length}</span>
                       </div>
                       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                        {col.tasks.map(task => (
-                          <div key={task.id} style={{ background: bg, border: `1px solid ${border}`, borderRadius: 8, padding: "10px 12px" }}>
+                        {col.tasks.map(task => {
+                          const now = new Date();
+                          const due = task.due_date ? new Date(task.due_date) : null;
+                          const isOverdue = due && !task.done && due < now;
+                          const isDueSoon = due && !task.done && !isOverdue && (due - now) < 3 * 24 * 60 * 60 * 1000;
+                          return (
+                          <div key={task.id} style={{ background: isOverdue ? (dark ? "#1a0000" : "#fff5f5") : bg, border: `1px solid ${isOverdue ? "#ef4444" : isDueSoon ? "#f97316" : border}`, borderLeft: isOverdue ? "3px solid #ef4444" : isDueSoon ? "3px solid #f97316" : `1px solid ${border}`, borderRadius: 8, padding: "10px 12px" }}>
                             <div style={{ fontSize: 12, color: text, marginBottom: 6, lineHeight: 1.4 }}>{task.text}</div>
                             {task.assigned_name && <div style={{ fontSize: 10, color: textMuted, marginBottom: 4 }}>→ {task.assigned_name}</div>}
-                            {task.due_date && <div style={{ fontSize: 10, color: new Date(task.due_date) < new Date() && !task.done ? "#ef4444" : textMuted, marginBottom: 8 }}>due {new Date(task.due_date).toLocaleDateString()}</div>}
+                            {due && <div style={{ fontSize: 10, color: isOverdue ? "#ef4444" : isDueSoon ? "#f97316" : textMuted, marginBottom: 8, fontWeight: isOverdue ? 500 : 400 }}>{isOverdue ? "overdue · " : isDueSoon ? "due soon · " : "due "}{due.toLocaleDateString()}</div>}
                             <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                               {col.id !== "todo" && <button className="hb" onClick={async () => { await supabase.from("tasks").update({ in_progress: false, done: false }).eq("id", task.id); setTasks(tasks.map(t => t.id === task.id ? { ...t, in_progress: false, done: false } : t)); }} style={{ fontSize: 9, padding: "2px 7px", border: `1px solid ${border}`, borderRadius: 3, background: "none", color: textMuted, cursor: "pointer", fontFamily: "inherit" }}>← to do</button>}
                               {col.id === "todo" && <button className="hb" onClick={async () => { await supabase.from("tasks").update({ in_progress: true, done: false }).eq("id", task.id); setTasks(tasks.map(t => t.id === task.id ? { ...t, in_progress: true, done: false } : t)); }} style={{ fontSize: 9, padding: "2px 7px", border: `1px solid ${border}`, borderRadius: 3, background: "none", color: textMuted, cursor: "pointer", fontFamily: "inherit" }}>in progress →</button>}
@@ -2970,7 +3079,8 @@ function CoLab() {
                               <button className="hb" onClick={() => handleDeleteTask(task.id)} style={{ fontSize: 9, padding: "2px 7px", border: `1px solid ${border}`, borderRadius: 3, background: "none", color: textMuted, cursor: "pointer", fontFamily: "inherit" }}>✕</button>
                             </div>
                           </div>
-                        ))}
+                          );
+                        })}
                         {col.tasks.length === 0 && <div style={{ fontSize: 11, color: textMuted, textAlign: "center", padding: "20px 0" }}>empty</div>}
                       </div>
                     </div>
@@ -3681,6 +3791,26 @@ function CoLab() {
 
       {toast && <div style={{ position: "fixed", bottom: 24, left: "50%", transform: "translateX(-50%)", background: text, color: bg, padding: "11px 20px", borderRadius: 8, fontSize: 11, zIndex: 300, animation: "tin 0.3s ease", whiteSpace: "nowrap" }}>{toast}</div>}
 
+      {showShipModal && (
+        <div onClick={() => setShowShipModal(false)} style={{ position: "fixed", inset: 0, background: dark ? "rgba(0,0,0,0.92)" : "rgba(200,200,200,0.88)", zIndex: 300, display: "flex", alignItems: "center", justifyContent: "center", backdropFilter: "blur(12px)", padding: 16 }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: bg, border: `1px solid ${border}`, borderRadius: 16, padding: "28px", width: "100%", maxWidth: 460 }}>
+            <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px", marginBottom: 8 }}>SHIP IT</div>
+            <div style={{ fontSize: 18, fontWeight: 400, letterSpacing: "-0.5px", color: text, marginBottom: 6 }}>All tasks complete.</div>
+            <div style={{ fontSize: 12, color: textMuted, marginBottom: 20 }}>Mark this project as shipped and share what you built with your network.</div>
+            <textarea
+              value={shipPostContent}
+              onChange={e => setShipPostContent(e.target.value)}
+              placeholder="What did you build? Who did you build it with?"
+              style={{ ...inputStyle, resize: "none", minHeight: 100, fontSize: 13, lineHeight: 1.7, marginBottom: 16 }}
+            />
+            <div style={{ display: "flex", gap: 8 }}>
+              <button className="hb" onClick={() => setShowShipModal(false)} style={{ ...btnG, flex: 1 }}>later</button>
+              <button className="hb" onClick={() => handleShipProject(activeProject?.id, shipPostContent)} style={{ ...btnP, flex: 2 }}>ship it →</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showSettings && (
         <div onClick={() => setShowSettings(false)} style={{ position: "fixed", inset: 0, background: dark ? "rgba(0,0,0,0.92)" : "rgba(200,200,200,0.88)", zIndex: 300, display: "flex", alignItems: "center", justifyContent: "center", backdropFilter: "blur(12px)", padding: 16 }}>
           <div onClick={e => e.stopPropagation()} style={{ background: bg, border: `1px solid ${border}`, borderRadius: 16, padding: "28px", width: "100%", maxWidth: 420 }}>
@@ -4000,13 +4130,90 @@ function JoinPage({ token }) {
   );
 }
 
+function ShippedPage({ projectId }) {
+  const [project, setProject] = React.useState(null);
+  const [owner, setOwner] = React.useState(null);
+  const [loading, setLoading] = React.useState(true);
+
+  React.useEffect(() => {
+    (async () => {
+      const { data: proj } = await supabase.from("projects").select("*").eq("id", projectId).single();
+      if (!proj) { setLoading(false); return; }
+      setProject(proj);
+      const { data: ownerData } = await supabase.from("profiles").select("name,role,username").eq("id", proj.owner_id).single();
+      setOwner(ownerData);
+      setLoading(false);
+    })();
+  }, [projectId]);
+
+  const dark = window.matchMedia?.("(prefers-color-scheme: dark)").matches;
+  const bg = dark ? "#0a0a0a" : "#fafafa";
+  const text = dark ? "#f0f0f0" : "#111";
+  const textMuted = dark ? "#555" : "#aaa";
+  const border = dark ? "#1e1e1e" : "#e5e5e5";
+
+  if (loading) return (
+    <div style={{ minHeight: "100vh", background: bg, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'DM Mono', monospace", color: textMuted }}>
+      <style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400&display=swap'); *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }`}</style>
+      loading...
+    </div>
+  );
+
+  if (!project) return (
+    <div style={{ minHeight: "100vh", background: bg, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'DM Mono', monospace", color: textMuted }}>
+      <style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400&display=swap'); *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }`}</style>
+      <div style={{ textAlign: "center" }}>
+        <div style={{ marginBottom: 16 }}>project not found.</div>
+        <a href="/" style={{ color: text, fontSize: 12 }}>← back to CoLab</a>
+      </div>
+    </div>
+  );
+
+  const shippedDate = project.shipped_at ? new Date(project.shipped_at).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }) : null;
+
+  return (
+    <div style={{ minHeight: "100vh", background: bg, color: text, fontFamily: "'DM Mono', monospace" }}>
+      <style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&display=swap'); *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; } html, body { background: ${bg}; } .hb:hover { opacity: 0.7; }`}</style>
+      <nav style={{ borderBottom: `1px solid ${border}`, padding: "0 24px", height: 52, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <a href="/" style={{ fontSize: 15, fontWeight: 500, letterSpacing: "-0.5px", color: text, textDecoration: "none" }}>[CoLab]</a>
+        <a href={`/p/${projectId}`} style={{ fontSize: 11, color: textMuted, textDecoration: "none" }}>view project →</a>
+      </nav>
+      <div style={{ maxWidth: 600, margin: "0 auto", padding: "80px 24px", textAlign: "center" }}>
+        <div style={{ fontSize: 48, marginBottom: 24 }}>🚀</div>
+        <div style={{ fontSize: 10, color: "#22c55e", letterSpacing: "3px", marginBottom: 16 }}>SHIPPED</div>
+        <h1 style={{ fontSize: "clamp(24px, 5vw, 40px)", fontWeight: 400, letterSpacing: "-1.5px", lineHeight: 1.1, marginBottom: 16, color: text }}>{project.title}</h1>
+        {owner && (
+          <div style={{ fontSize: 13, color: textMuted, marginBottom: 12 }}>
+            built by {owner.name}{owner.username ? ` · @${owner.username}` : ""}
+          </div>
+        )}
+        {shippedDate && <div style={{ fontSize: 11, color: textMuted, marginBottom: 32 }}>shipped {shippedDate}</div>}
+        {project.description && (
+          <div style={{ fontSize: 13, color: textMuted, lineHeight: 1.8, marginBottom: 40, textAlign: "left", background: dark ? "#111" : "#f5f5f5", border: `1px solid ${border}`, borderRadius: 10, padding: "20px 24px" }}>
+            {project.description}
+          </div>
+        )}
+        <div style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap" }}>
+          <a href={`/p/${projectId}`} style={{ padding: "10px 24px", background: text, color: bg, borderRadius: 8, fontSize: 12, textDecoration: "none", fontWeight: 500 }}>View project</a>
+          <a href="/" style={{ padding: "10px 24px", background: "none", color: textMuted, border: `1px solid ${border}`, borderRadius: 8, fontSize: 12, textDecoration: "none" }}>Browse CoLab →</a>
+        </div>
+        <div style={{ marginTop: 60, fontSize: 11, color: textMuted }}>
+          built on <a href="/" style={{ color: text, textDecoration: "underline" }}>CoLab</a> — find collaborators, ship together.
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── ROUTER ──
 const _publicMatch = typeof window !== "undefined" ? window.location.pathname.match(/^\/p\/([^/]+)$/) : null;
+const _shippedMatch = typeof window !== "undefined" ? window.location.pathname.match(/^\/p\/([^/]+)\/shipped$/) : null;
 const _profileMatch = typeof window !== "undefined" ? window.location.pathname.match(/^\/u\/([^/]+)$/) : null;
 const _joinMatch = typeof window !== "undefined" ? window.location.pathname.match(/^\/join\/([^/]+)$/) : null;
 
 export { CoLab };
 export default function App() {
+  if (_shippedMatch) return <ShippedPage projectId={_shippedMatch[1]} />;
   if (_publicMatch) return <PublicProjectPage projectId={_publicMatch[1]} />;
   if (_profileMatch) return <PublicProfilePage username={_profileMatch[1]} />;
   if (_joinMatch) return <JoinPage token={_joinMatch[1]} />;
