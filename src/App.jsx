@@ -720,13 +720,20 @@ function CoLab() {
   const [search, setSearch] = useState("");
   const [toast, setToast] = useState(null);
   const [showCreate, setShowCreate] = useState(false);
-  const [newProject, setNewProject] = useState({ title: "", description: "", category: CATEGORIES[0], skills: [], maxCollaborators: 2, location: "", goals: "", timeline: "" });
+  const [newProject, setNewProject] = useState({ title: "", description: "", category: CATEGORIES[0], skills: [], maxCollaborators: 2, location: "", goals: "", timeline: "", is_private: false });
   const [newTaskText, setNewTaskText] = useState("");
   const [taskAssignee, setTaskAssignee] = useState("");
   const [taskDueDate, setTaskDueDate] = useState("");
   const [newMessage, setNewMessage] = useState("");
   const [newUpdate, setNewUpdate] = useState("");
   const [dmInput, setDmInput] = useState("");
+  const [showSettings, setShowSettings] = useState(false);
+  const [settingsEmail, setSettingsEmail] = useState("");
+  const [settingsPassword, setSettingsPassword] = useState("");
+  const [settingsNewPassword, setSettingsNewPassword] = useState("");
+  const [projectActivity, setProjectActivity] = useState([]);
+  const [docPreviewMode, setDocPreviewMode] = useState(false);
+  const [inviteLink, setInviteLink] = useState(null);
   const [editProfile, setEditProfile] = useState(false);
   const [showBannerEditor, setShowBannerEditor] = useState(false);
   const [bannerPixels, setBannerPixels] = useState(new Array(48 * 12).fill(0));
@@ -1015,6 +1022,7 @@ function CoLab() {
     setProjectFiles(f || []);
     setProjectDocs(d || []);
     setActiveDoc(null);
+    loadActivity(projectId);
   };
 
   const loadDmMessages = async (threadId) => {
@@ -1106,10 +1114,11 @@ function CoLab() {
       timeline: newProject.timeline || null,
       owner_id: authUser.id, owner_name: profile.name,
       owner_initials: myInitials, status: "open", progress: 0, plugins: [], collaborators: 0,
+      is_private: newProject.is_private || false,
     }).select().single();
     if (!error && data) {
       setProjects([data, ...projects]);
-      setNewProject({ title: "", description: "", category: CATEGORIES[0], skills: [], maxCollaborators: 2, location: "", goals: "", timeline: "" });
+      setNewProject({ title: "", description: "", category: CATEGORIES[0], skills: [], maxCollaborators: 2, location: "", goals: "", timeline: "", is_private: false });
       setShowCreate(false);
       setActiveProject(data);
       loadProjectData(data.id);
@@ -1127,6 +1136,62 @@ function CoLab() {
     setProjects(projects.map(p => p.id === projectId ? { ...p, progress: val } : p));
     if (activeProject?.id === projectId) setActiveProject({ ...activeProject, progress: val });
     showToast("Progress updated.");
+  };
+
+  const handleArchiveProject = async (projectId) => {
+    if (!window.confirm("Archive this project? It will be hidden from your workspace but not deleted.")) return;
+    await supabase.from("projects").update({ archived: true }).eq("id", projectId);
+    setProjects(prev => prev.map(p => p.id === projectId ? { ...p, archived: true } : p));
+    setActiveProject(null);
+    showToast("Project archived.");
+  };
+
+  const handleUnarchiveProject = async (projectId) => {
+    await supabase.from("projects").update({ archived: false }).eq("id", projectId);
+    setProjects(prev => prev.map(p => p.id === projectId ? { ...p, archived: false } : p));
+    showToast("Project restored.");
+  };
+
+  const handleLeaveProject = async (applicationId) => {
+    if (!window.confirm("Leave this project? You'll need to re-apply to rejoin.")) return;
+    await supabase.from("applications").update({ status: "left" }).eq("id", applicationId);
+    setApplications(prev => prev.map(a => a.id === applicationId ? { ...a, status: "left" } : a));
+    setActiveProject(null);
+    showToast("You've left the project.");
+  };
+
+  const handleGenerateInvite = async (projectId) => {
+    const { data } = await supabase.from("project_invites").insert({ project_id: projectId, created_by: authUser.id }).select().single();
+    if (data) {
+      const url = `${window.location.origin}/join/${data.token}`;
+      setInviteLink(url);
+      navigator.clipboard?.writeText(url);
+      showToast("Invite link copied to clipboard.");
+    }
+  };
+
+  const handleUpdateEmail = async () => {
+    if (!settingsEmail) return;
+    const { error } = await supabase.auth.updateUser({ email: settingsEmail });
+    if (error) showToast("Error: " + error.message);
+    else { showToast("Check your new email to confirm the change."); setSettingsEmail(""); }
+  };
+
+  const handleUpdatePassword = async () => {
+    if (!settingsNewPassword || settingsNewPassword.length < 8) { showToast("Password must be at least 8 characters."); return; }
+    const { error } = await supabase.auth.updateUser({ password: settingsNewPassword });
+    if (error) showToast("Error: " + error.message);
+    else { showToast("Password updated."); setSettingsNewPassword(""); setSettingsPassword(""); }
+  };
+
+  const logActivity = async (projectId, eventType, details) => {
+    if (!authUser || !profile) return;
+    await supabase.from("project_activity").insert({ project_id: projectId, user_id: authUser.id, user_name: profile.name, event_type: eventType, details });
+  };
+
+  const loadActivity = async (projectId) => {
+    const { data } = await supabase.from("project_activity").select("*").eq("project_id", projectId).order("created_at", { ascending: false }).limit(50);
+    setProjectActivity(data || []);
   };
 
   // Auto-calculate progress from task completion
@@ -1293,6 +1358,7 @@ function CoLab() {
     await supabase.from("applications").update({ status: "accepted" }).eq("id", notif.id);
     setNotifications(prev => prev.filter(n => n.id !== notif.id));
     showToast(`${notif.applicant.name} accepted!`);
+    logActivity(notif.projectId, "member_joined", `${notif.applicant.name} joined the project`);
     loadAllData(authUser.id);
   };
 
@@ -1324,7 +1390,7 @@ function CoLab() {
     showToast("Plugin updated.");
   };
 
-  const myProjects = projects.filter(p => p.owner_id === authUser?.id);
+  const myProjects = projects.filter(p => p.owner_id === authUser?.id && !p.archived);
 
   // Derive collaborators from accepted applications (both directions)
   const getCollaborators = (userId) => {
@@ -1352,7 +1418,7 @@ function CoLab() {
   const myCollaborators = getCollaborators(authUser?.id);
   const [showCollaborators, setShowCollaborators] = useState(null); // userId whose collaborators to show
   const appliedProjectIds = applications.filter(a => a.applicant_id === authUser?.id).map(a => a.project_id);
-  const browseBase = projects.filter(p => p.owner_id !== authUser?.id);
+  const browseBase = projects.filter(p => p.owner_id !== authUser?.id && !p.archived && !p.is_private);
   const forYou = browseBase.map(p => ({ ...p, _s: getMatchScore(p) })).filter(p => p._s > 0).sort((a, b) => b._s - a._s);
   const allP = browseBase.map(p => ({ ...p, _s: getMatchScore(p) })).filter(p =>
     (!filterSkill || (p.skills || []).includes(filterSkill)) &&
@@ -2192,7 +2258,7 @@ function CoLab() {
                   autoFocus
                   style={{ ...inputStyle, fontSize: 13, marginBottom: globalSearch.length > 0 ? 8 : 0 }}
                 />
-                {globalSearch.length > 0 && users.filter(u => u.id !== authUser?.id && u.name?.toLowerCase().includes(globalSearch.toLowerCase())).slice(0, 5).map(u => (
+                {globalSearch.length > 0 && users.filter(u => u.id !== authUser?.id && u.name?.toLowerCase().includes(globalSearch.toLowerCase())).slice(0, 3).map(u => (
                   <button key={u.id} onClick={() => { setViewFullProfile(u); setGlobalSearch(""); setShowGlobalSearch(false); }} style={{ width: "100%", padding: "10px 12px", background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", display: "flex", gap: 10, alignItems: "center", textAlign: "left", borderTop: `1px solid ${border}` }}
                     onMouseEnter={e => e.currentTarget.style.background = bg2} onMouseLeave={e => e.currentTarget.style.background = "none"}>
                     <Avatar initials={initials(u.name)} size={28} dark={dark} />
@@ -2202,7 +2268,33 @@ function CoLab() {
                     </div>
                   </button>
                 ))}
-                {globalSearch.length > 0 && users.filter(u => u.id !== authUser?.id && u.name?.toLowerCase().includes(globalSearch.toLowerCase())).length === 0 && (
+                {globalSearch.length > 0 && projects.filter(p => p.title?.toLowerCase().includes(globalSearch.toLowerCase())).slice(0, 2).map(p => (
+                  <button key={p.id} onClick={() => { setActiveProject(p); loadProjectData(p.id); setAppScreen("workspace"); setProjectTab("tasks"); setGlobalSearch(""); setShowGlobalSearch(false); }} style={{ width: "100%", padding: "10px 12px", background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", display: "flex", gap: 10, alignItems: "center", textAlign: "left", borderTop: `1px solid ${border}` }}
+                    onMouseEnter={e => e.currentTarget.style.background = bg2} onMouseLeave={e => e.currentTarget.style.background = "none"}>
+                    <span style={{ fontSize: 16 }}>◈</span>
+                    <div>
+                      <div style={{ fontSize: 13, color: text }}>{p.title}</div>
+                      <div style={{ fontSize: 11, color: textMuted }}>project · {p.category}</div>
+                    </div>
+                  </button>
+                ))}
+                {globalSearch.length > 0 && posts.filter(p => p.content?.toLowerCase().includes(globalSearch.toLowerCase())).slice(0, 2).map(p => {
+                  const postUser = users.find(u => u.id === p.user_id);
+                  return (
+                    <button key={p.id} onClick={() => { setAppScreen("network"); setNetworkTab("feed"); setGlobalSearch(""); setShowGlobalSearch(false); }} style={{ width: "100%", padding: "10px 12px", background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", display: "flex", gap: 10, alignItems: "flex-start", textAlign: "left", borderTop: `1px solid ${border}` }}
+                      onMouseEnter={e => e.currentTarget.style.background = bg2} onMouseLeave={e => e.currentTarget.style.background = "none"}>
+                      <span style={{ fontSize: 16 }}>◎</span>
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ fontSize: 11, color: textMuted, marginBottom: 2 }}>{postUser?.name}</div>
+                        <div style={{ fontSize: 13, color: text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.content.slice(0, 60)}</div>
+                      </div>
+                    </button>
+                  );
+                })}
+                {globalSearch.length > 0 &&
+                  users.filter(u => u.id !== authUser?.id && u.name?.toLowerCase().includes(globalSearch.toLowerCase())).length === 0 &&
+                  projects.filter(p => p.title?.toLowerCase().includes(globalSearch.toLowerCase())).length === 0 &&
+                  posts.filter(p => p.content?.toLowerCase().includes(globalSearch.toLowerCase())).length === 0 && (
                   <div style={{ fontSize: 12, color: textMuted, padding: "8px 4px" }}>no results.</div>
                 )}
               </div>
@@ -2210,18 +2302,49 @@ function CoLab() {
           </div>
           {/* Desktop dropdown results */}
           {showGlobalSearch && globalSearch.length > 0 && (
-            <div className="search-desktop" style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, width: 180, background: bg, border: `1px solid ${border}`, borderRadius: 8, zIndex: 300, overflow: "hidden", boxShadow: dark ? "0 8px 24px rgba(0,0,0,0.6)" : "0 8px 24px rgba(0,0,0,0.1)" }}>
-              {users.filter(u => u.id !== authUser?.id && u.name?.toLowerCase().includes(globalSearch.toLowerCase())).slice(0, 5).map(u => (
-                <button key={u.id} onClick={() => { setViewFullProfile(u); setGlobalSearch(""); setShowGlobalSearch(false); }} style={{ width: "100%", padding: "10px 14px", background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", display: "flex", gap: 10, alignItems: "center", textAlign: "left" }}
+            <div className="search-desktop" style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, width: 260, background: bg, border: `1px solid ${border}`, borderRadius: 8, zIndex: 300, overflow: "hidden", boxShadow: dark ? "0 8px 24px rgba(0,0,0,0.6)" : "0 8px 24px rgba(0,0,0,0.1)" }}>
+              {/* People */}
+              {users.filter(u => u.id !== authUser?.id && u.name?.toLowerCase().includes(globalSearch.toLowerCase())).slice(0, 3).map(u => (
+                <button key={u.id} onClick={() => { setViewFullProfile(u); setGlobalSearch(""); setShowGlobalSearch(false); }}
+                  style={{ width: "100%", padding: "8px 14px", background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", display: "flex", gap: 8, alignItems: "center", textAlign: "left" }}
                   onMouseEnter={e => e.currentTarget.style.background = bg2} onMouseLeave={e => e.currentTarget.style.background = "none"}>
-                  <Avatar initials={u.name?.split(" ").map(n => n[0]).join("").slice(0, 2)} size={26} dark={dark} />
+                  <Avatar initials={initials(u.name)} size={22} dark={dark} />
                   <div>
-                    <div style={{ fontSize: 12, color: text }}>{u.name}</div>
+                    <div style={{ fontSize: 11, color: text }}>{u.name}</div>
                     <div style={{ fontSize: 10, color: textMuted }}>{u.role}</div>
                   </div>
                 </button>
               ))}
-              {users.filter(u => u.id !== authUser?.id && u.name?.toLowerCase().includes(globalSearch.toLowerCase())).length === 0 && (
+              {/* Projects */}
+              {projects.filter(p => p.title?.toLowerCase().includes(globalSearch.toLowerCase())).slice(0, 2).map(p => (
+                <button key={p.id} onClick={() => { setActiveProject(p); loadProjectData(p.id); setAppScreen("workspace"); setProjectTab("tasks"); setGlobalSearch(""); setShowGlobalSearch(false); }}
+                  style={{ width: "100%", padding: "8px 14px", background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", display: "flex", gap: 8, alignItems: "center", textAlign: "left", borderTop: `1px solid ${border}` }}
+                  onMouseEnter={e => e.currentTarget.style.background = bg2} onMouseLeave={e => e.currentTarget.style.background = "none"}>
+                  <span style={{ fontSize: 14 }}>◈</span>
+                  <div>
+                    <div style={{ fontSize: 11, color: text }}>{p.title}</div>
+                    <div style={{ fontSize: 10, color: textMuted }}>project · {p.category}</div>
+                  </div>
+                </button>
+              ))}
+              {/* Posts */}
+              {posts.filter(p => p.content?.toLowerCase().includes(globalSearch.toLowerCase())).slice(0, 2).map(p => {
+                const postUser = users.find(u => u.id === p.user_id);
+                return (
+                  <button key={p.id} onClick={() => { setAppScreen("network"); setNetworkTab("feed"); setGlobalSearch(""); setShowGlobalSearch(false); }}
+                    style={{ width: "100%", padding: "8px 14px", background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", display: "flex", gap: 8, alignItems: "flex-start", textAlign: "left", borderTop: `1px solid ${border}` }}
+                    onMouseEnter={e => e.currentTarget.style.background = bg2} onMouseLeave={e => e.currentTarget.style.background = "none"}>
+                    <span style={{ fontSize: 14 }}>◎</span>
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontSize: 10, color: textMuted, marginBottom: 2 }}>{postUser?.name}</div>
+                      <div style={{ fontSize: 11, color: text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.content.slice(0, 60)}</div>
+                    </div>
+                  </button>
+                );
+              })}
+              {users.filter(u => u.id !== authUser?.id && u.name?.toLowerCase().includes(globalSearch.toLowerCase())).length === 0 &&
+               projects.filter(p => p.title?.toLowerCase().includes(globalSearch.toLowerCase())).length === 0 &&
+               posts.filter(p => p.content?.toLowerCase().includes(globalSearch.toLowerCase())).length === 0 && (
                 <div style={{ padding: "12px 14px", fontSize: 12, color: textMuted }}>no results.</div>
               )}
             </div>
@@ -2245,6 +2368,10 @@ function CoLab() {
             ◎{unreadNotifs > 0 && <span style={{ position: "absolute", top: 3, right: 3, width: 5, height: 5, borderRadius: "50%", background: text, border: `1px solid ${bg}` }} />}
           </button>
           <button onClick={() => setDark(!dark)} style={{ background: "none", border: `1px solid ${border}`, borderRadius: 6, padding: "3px 5px", cursor: "pointer", fontSize: 10, color: textMuted, fontFamily: "inherit", flexShrink: 0, marginLeft: 2 }}>{dark ? "☀" : "☾"}</button>
+          <button onClick={() => setShowSettings(true)}
+            style={{ background: "none", border: "none", borderRadius: 6, padding: "5px 4px", cursor: "pointer", color: textMuted, fontSize: 12, fontFamily: "inherit" }}>
+            ⚙
+          </button>
         </div>
       </nav>
 
@@ -2274,7 +2401,18 @@ function CoLab() {
                     <div style={{ fontSize: 12, color: text }}>{n.text}</div>
                     <button className="hb" onClick={() => setNotifications(prev => prev.filter(x => x.id !== n.id))} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontSize: 12, fontFamily: "inherit", marginLeft: 8 }}>✕</button>
                   </div>
-                  <div style={{ fontSize: 11, color: textMuted, marginBottom: n.type === "application" ? 10 : 0 }}>{n.sub} · {n.time}</div>
+                  <div style={{ marginBottom: n.type === "application" ? 10 : 0 }}>
+                    {n.projectId && (
+                      <button className="hb" onClick={() => {
+                        const proj = projects.find(p => p.id === n.projectId);
+                        if (proj) { setActiveProject(proj); loadProjectData(proj.id); setAppScreen("workspace"); setProjectTab("tasks"); setShowNotifications(false); }
+                      }} style={{ background: "none", border: "none", padding: 0, color: textMuted, cursor: "pointer", fontFamily: "inherit", fontSize: 11, textDecoration: "underline" }}>
+                        {n.sub}
+                      </button>
+                    )}
+                    {!n.projectId && <span style={{ fontSize: 11, color: textMuted }}>{n.sub}</span>}
+                    <span style={{ fontSize: 11, color: textMuted }}> · {n.time}</span>
+                  </div>
                   {n.type === "application" && n.applicant && (
                     <div>
                       <div style={{ background: bg2, border: `1px solid ${border}`, borderRadius: 8, padding: "10px 12px", marginBottom: 8 }}>
@@ -2683,6 +2821,18 @@ function CoLab() {
                     })}
                   </div>
               }
+            {projects.filter(p => p.owner_id === authUser?.id && p.archived).length > 0 && (
+              <div style={{ marginTop: 20 }}>
+                <div style={{ fontSize: 10, color: textMuted, letterSpacing: "1.5px", marginBottom: 10 }}>ARCHIVED</div>
+                {projects.filter(p => p.owner_id === authUser?.id && p.archived).map(p => (
+                  <div key={p.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 14px", background: bg2, border: `1px solid ${border}`, borderRadius: 6, marginBottom: 4, opacity: 0.6 }}>
+                    <div style={{ fontSize: 12, color: text }}>{p.title}</div>
+                    <button className="hb" onClick={() => handleUnarchiveProject(p.id)}
+                      style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontFamily: "inherit", fontSize: 10 }}>restore</button>
+                  </div>
+                ))}
+              </div>
+            )}
             </div>
 
             {/* Applications + recent activity */}
@@ -2749,6 +2899,12 @@ function CoLab() {
                   </span>
                 );
               })()}
+              {activeProject.owner_id === authUser?.id && (
+                <button className="hb" onClick={() => handleArchiveProject(activeProject.id)}
+                  style={{ background: "none", border: `1px solid ${border}`, borderRadius: 6, padding: "4px 10px", fontSize: 10, cursor: "pointer", color: textMuted, fontFamily: "inherit" }}>
+                  archive
+                </button>
+              )}
             </div>
           </div>
 
@@ -2761,6 +2917,7 @@ function CoLab() {
             <TabBtn id="updates" label="updates" count={projectUpdates.length} setter={setProjectTab} current={projectTab} />
             <TabBtn id="team" label="team" count={0} setter={setProjectTab} current={projectTab} />
             <TabBtn id="plugins" label="plugins" count={(activeProject.plugins || []).length} setter={setProjectTab} current={projectTab} />
+            <TabBtn id="activity" label="activity" count={0} setter={setProjectTab} current={projectTab} />
           </div>
 
           {/* Tab content */}
@@ -2944,29 +3101,52 @@ function CoLab() {
                         <div style={{ fontSize: 16, color: text, fontWeight: 400, marginBottom: 4 }}>{activeDoc.title}</div>
                         <div style={{ fontSize: 10, color: textMuted }}>last edited by {activeDoc.last_edited_by}</div>
                       </div>
-                      <button className="hb" onClick={async () => {
-                        await supabase.from("project_docs").delete().eq("id", activeDoc.id);
-                        setProjectDocs(prev => prev.filter(d => d.id !== activeDoc.id));
-                        setActiveDoc(null);
-                        showToast("Document deleted.");
-                      }} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontFamily: "inherit", fontSize: 11, textDecoration: "underline" }}>delete doc</button>
+                      <div style={{ display: "flex", gap: 8 }}>
+                        <button className="hb" onClick={() => setDocPreviewMode(m => !m)}
+                          style={{ background: "none", border: `1px solid ${border}`, borderRadius: 6, padding: "5px 10px", fontSize: 11, cursor: "pointer", color: textMuted, fontFamily: "inherit" }}>
+                          {docPreviewMode ? "edit" : "preview"}
+                        </button>
+                        <button className="hb" onClick={async () => {
+                          await supabase.from("project_docs").delete().eq("id", activeDoc.id);
+                          setProjectDocs(prev => prev.filter(d => d.id !== activeDoc.id));
+                          setActiveDoc(null);
+                          showToast("Document deleted.");
+                        }} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontFamily: "inherit", fontSize: 11, textDecoration: "underline" }}>delete doc</button>
+                      </div>
                     </div>
-                    <textarea
-                      value={activeDoc.content || ""}
-                      onChange={e => setActiveDoc({ ...activeDoc, content: e.target.value })}
-                      onBlur={async () => {
-                        await supabase.from("project_docs").update({
-                          content: activeDoc.content,
-                          last_edited_by: profile.name,
-                          last_edited_initials: myInitials,
-                          updated_at: new Date().toISOString(),
-                        }).eq("id", activeDoc.id);
-                        setProjectDocs(prev => prev.map(d => d.id === activeDoc.id ? { ...activeDoc } : d));
-                        showToast("Saved.");
-                      }}
-                      placeholder="Start writing..."
-                      style={{ ...inputStyle, resize: "none", minHeight: 400, fontSize: 13, lineHeight: 1.8, fontFamily: "inherit" }}
-                    />
+                    {docPreviewMode ? (
+                      <div style={{ ...inputStyle, minHeight: 400, fontSize: 13, lineHeight: 1.8, whiteSpace: "pre-wrap", overflow: "auto", cursor: "text" }}
+                        onClick={() => setDocPreviewMode(false)}>
+                        {(activeDoc.content || "").split("\n").map((line, i) => {
+                          if (line.startsWith("# ")) return <h1 key={i} style={{ fontSize: 20, fontWeight: 400, letterSpacing: "-0.5px", marginBottom: 8 }}>{line.slice(2)}</h1>;
+                          if (line.startsWith("## ")) return <h2 key={i} style={{ fontSize: 16, fontWeight: 400, marginBottom: 6 }}>{line.slice(3)}</h2>;
+                          if (line.startsWith("### ")) return <h3 key={i} style={{ fontSize: 13, fontWeight: 500, marginBottom: 4 }}>{line.slice(4)}</h3>;
+                          if (line.startsWith("- ") || line.startsWith("* ")) return <div key={i} style={{ display: "flex", gap: 8, marginBottom: 4 }}><span>·</span><span>{line.slice(2)}</span></div>;
+                          if (line === "") return <div key={i} style={{ height: "1em" }} />;
+                          const bold = line.replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>").replace(/__(.*?)__/g, "<strong>$1</strong>");
+                          const italic = bold.replace(/\*(.*?)\*/g, "<em>$1</em>").replace(/_(.*?)_/g, "<em>$1</em>");
+                          return <div key={i} style={{ marginBottom: 4 }} dangerouslySetInnerHTML={{ __html: italic }} />;
+                        })}
+                        {!activeDoc.content && <span style={{ color: textMuted, fontStyle: "italic" }}>click to start writing...</span>}
+                      </div>
+                    ) : (
+                      <textarea
+                        value={activeDoc.content || ""}
+                        onChange={e => setActiveDoc({ ...activeDoc, content: e.target.value })}
+                        onBlur={async () => {
+                          await supabase.from("project_docs").update({
+                            content: activeDoc.content,
+                            last_edited_by: profile.name,
+                            last_edited_initials: myInitials,
+                            updated_at: new Date().toISOString(),
+                          }).eq("id", activeDoc.id);
+                          setProjectDocs(prev => prev.map(d => d.id === activeDoc.id ? { ...activeDoc } : d));
+                          showToast("Saved.");
+                        }}
+                        placeholder="Start writing... Use # for headers, **bold**, *italic*, - for bullets"
+                        style={{ ...inputStyle, resize: "none", minHeight: 400, fontSize: 13, lineHeight: 1.8, fontFamily: "inherit" }}
+                      />
+                    )}
                   </div>
                 ) : (
                   projectDocs.length === 0
@@ -3046,11 +3226,53 @@ function CoLab() {
                     ) : (
                       <span style={{ fontSize: 10, padding: "2px 8px", border: `1px solid ${border}`, borderRadius: 3, color: textMuted }}>{a.role || "contributor"}</span>
                     )}
+                    {a.applicant_id === authUser?.id && (
+                      <button className="hb" onClick={() => handleLeaveProject(a.id)}
+                        style={{ background: "none", border: `1px solid ${border}`, borderRadius: 6, padding: "4px 8px", fontSize: 10, cursor: "pointer", color: textMuted, fontFamily: "inherit", marginLeft: 4 }}>
+                        leave
+                      </button>
+                    )}
                   </div>
                 ))}
                 {applications.filter(a => a.project_id === activeProject.id && a.status === "accepted").length === 0 && (
                   <div style={{ fontSize: 12, color: textMuted, padding: "16px 0" }}>no collaborators yet.</div>
                 )}
+                {activeProject.owner_id === authUser?.id && (
+                  <div style={{ marginTop: 20, paddingTop: 16, borderTop: `1px solid ${border}` }}>
+                    <div style={{ fontSize: 10, color: textMuted, letterSpacing: "1px", marginBottom: 10 }}>INVITE</div>
+                    <button className="hb" onClick={() => handleGenerateInvite(activeProject.id)}
+                      style={{ background: "none", border: `1px solid ${border}`, borderRadius: 6, padding: "7px 14px", fontSize: 11, cursor: "pointer", color: text, fontFamily: "inherit" }}>
+                      generate invite link
+                    </button>
+                    {inviteLink && (
+                      <div style={{ marginTop: 10, background: bg2, border: `1px solid ${border}`, borderRadius: 6, padding: "8px 12px", fontSize: 10, color: textMuted, wordBreak: "break-all" }}>
+                        {inviteLink}
+                        <button className="hb" onClick={() => { navigator.clipboard?.writeText(inviteLink); showToast("Copied."); }}
+                          style={{ display: "block", marginTop: 6, background: "none", border: "none", color: text, cursor: "pointer", fontFamily: "inherit", fontSize: 10, textDecoration: "underline", padding: 0 }}>
+                          copy again
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* ACTIVITY */}
+            {projectTab === "activity" && (
+              <div>
+                <div style={{ fontSize: 10, color: textMuted, letterSpacing: "1px", marginBottom: 14 }}>ACTIVITY</div>
+                {projectActivity.length === 0
+                  ? <div style={{ fontSize: 13, color: textMuted }}>no activity yet.</div>
+                  : <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
+                      {projectActivity.map((a, i) => (
+                        <div key={a.id} style={{ padding: "10px 14px", background: bg2, borderRadius: i === 0 && projectActivity.length === 1 ? 8 : i === 0 ? "8px 8px 0 0" : i === projectActivity.length - 1 ? "0 0 8px 8px" : 0, border: `1px solid ${border}`, borderBottom: i < projectActivity.length - 1 ? "none" : `1px solid ${border}` }}>
+                          <div style={{ fontSize: 12, color: text }}>{a.details}</div>
+                          <div style={{ fontSize: 10, color: textMuted, marginTop: 3 }}>{relativeTime(a.created_at)}</div>
+                        </div>
+                      ))}
+                    </div>
+                }
               </div>
             )}
 
@@ -3432,9 +3654,19 @@ function CoLab() {
               <div><label style={labelStyle}>LOCATION (optional)</label><input style={inputStyle} placeholder="City, remote, or global" value={newProject.location} onChange={e => setNewProject({ ...newProject, location: e.target.value })} /></div>
               <div><label style={labelStyle}>GOALS / CHECKPOINTS (optional)</label><textarea style={{ ...inputStyle, resize: "none" }} rows={3} placeholder="What does done look like? List key milestones or deliverables..." value={newProject.goals} onChange={e => setNewProject({ ...newProject, goals: e.target.value })} /></div>
               <div><label style={labelStyle}>TIMELINE (optional)</label><input style={inputStyle} placeholder="e.g. 8 weeks, by end of Q2, 3 months..." value={newProject.timeline} onChange={e => setNewProject({ ...newProject, timeline: e.target.value })} /></div>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 0" }}>
+                <div>
+                  <div style={{ fontSize: 11, color: text }}>Private project</div>
+                  <div style={{ fontSize: 10, color: textMuted }}>Only visible to team members and invited people</div>
+                </div>
+                <button className="hb" onClick={() => setNewProject({ ...newProject, is_private: !newProject.is_private })}
+                  style={{ background: newProject.is_private ? text : "none", border: `1px solid ${border}`, borderRadius: 20, padding: "3px 12px", fontSize: 10, cursor: "pointer", color: newProject.is_private ? bg : textMuted, fontFamily: "inherit" }}>
+                  {newProject.is_private ? "on" : "off"}
+                </button>
+              </div>
             </div>
             <div style={{ display: "flex", gap: 10, marginTop: 18 }}>
-              <button className="hb" onClick={() => { setShowCreate(false); setNewProject({ title: "", description: "", category: CATEGORIES[0], skills: [], maxCollaborators: 2, location: "", goals: "", timeline: "" }); }} style={btnG}>cancel</button>
+              <button className="hb" onClick={() => { setShowCreate(false); setNewProject({ title: "", description: "", category: CATEGORIES[0], skills: [], maxCollaborators: 2, location: "", goals: "", timeline: "", is_private: false }); }} style={btnG}>cancel</button>
               <button className="hb" onClick={handlePostProject} style={{ ...btnP, flex: 1 }}>post →</button>
             </div>
           </div>
@@ -3442,6 +3674,41 @@ function CoLab() {
       )}
 
       {toast && <div style={{ position: "fixed", bottom: 24, left: "50%", transform: "translateX(-50%)", background: text, color: bg, padding: "11px 20px", borderRadius: 8, fontSize: 11, zIndex: 300, animation: "tin 0.3s ease", whiteSpace: "nowrap" }}>{toast}</div>}
+
+      {showSettings && (
+        <div onClick={() => setShowSettings(false)} style={{ position: "fixed", inset: 0, background: dark ? "rgba(0,0,0,0.92)" : "rgba(200,200,200,0.88)", zIndex: 300, display: "flex", alignItems: "center", justifyContent: "center", backdropFilter: "blur(12px)", padding: 16 }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: bg, border: `1px solid ${border}`, borderRadius: 16, padding: "28px", width: "100%", maxWidth: 420 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
+              <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px" }}>ACCOUNT SETTINGS</div>
+              <button onClick={() => setShowSettings(false)} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontSize: 16, fontFamily: "inherit" }}>✕</button>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+              <div>
+                <div style={{ fontSize: 11, color: textMuted, letterSpacing: "1px", marginBottom: 10 }}>CHANGE EMAIL</div>
+                <input placeholder="New email address" value={settingsEmail} onChange={e => setSettingsEmail(e.target.value)}
+                  style={{ ...inputStyle, marginBottom: 8 }} />
+                <button className="hb" onClick={handleUpdateEmail}
+                  style={{ ...btnP, width: "100%" }}>update email</button>
+                <div style={{ fontSize: 10, color: textMuted, marginTop: 6 }}>You'll receive a confirmation at your new address.</div>
+              </div>
+              <div style={{ borderTop: `1px solid ${border}`, paddingTop: 20 }}>
+                <div style={{ fontSize: 11, color: textMuted, letterSpacing: "1px", marginBottom: 10 }}>CHANGE PASSWORD</div>
+                <input type="password" placeholder="New password (min 8 chars)" value={settingsNewPassword} onChange={e => setSettingsNewPassword(e.target.value)}
+                  style={{ ...inputStyle, marginBottom: 8 }} />
+                <button className="hb" onClick={handleUpdatePassword}
+                  style={{ ...btnP, width: "100%" }}>update password</button>
+              </div>
+              <div style={{ borderTop: `1px solid ${border}`, paddingTop: 20 }}>
+                <div style={{ fontSize: 11, color: textMuted, letterSpacing: "1px", marginBottom: 10 }}>DANGER ZONE</div>
+                <button className="hb" onClick={async () => { if (window.confirm("Sign out of all devices?")) { await supabase.auth.signOut(); } }}
+                  style={{ background: "none", border: `1px solid ${border}`, borderRadius: 6, padding: "7px 14px", fontSize: 11, cursor: "pointer", color: textMuted, fontFamily: "inherit", width: "100%" }}>
+                  sign out
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -3651,13 +3918,91 @@ function PublicProfilePage({ username }) {
   );
 }
 
+function JoinPage({ token }) {
+  const [status, setStatus] = React.useState("loading");
+  const [projectTitle, setProjectTitle] = React.useState("");
+  const [projectId, setProjectId] = React.useState(null);
+
+  React.useEffect(() => {
+    (async () => {
+      const { data: invite } = await supabase.from("project_invites").select("*, projects(title)").eq("token", token).single();
+      if (!invite) { setStatus("invalid"); return; }
+      setProjectTitle(invite.projects?.title || "");
+      setProjectId(invite.project_id);
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) { setStatus("login"); return; }
+      const { data: existing } = await supabase.from("applications").select("id, status").eq("project_id", invite.project_id).eq("applicant_id", session.user.id).single();
+      if (existing?.status === "accepted") { window.location.href = "/"; return; }
+      setStatus("join");
+    })();
+  }, [token]);
+
+  const dark = window.matchMedia?.("(prefers-color-scheme: dark)").matches;
+  const bg = dark ? "#0a0a0a" : "#fafafa";
+  const text = dark ? "#f0f0f0" : "#111";
+  const textMuted = dark ? "#555" : "#aaa";
+
+  const handleAcceptInvite = async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session || !projectId) return;
+    const { data: profile } = await supabase.from("profiles").select("name, role").eq("id", session.user.id).single();
+    await supabase.from("applications").upsert({
+      project_id: projectId,
+      applicant_id: session.user.id,
+      applicant_name: profile?.name || "",
+      applicant_role: profile?.role || "",
+      status: "accepted",
+    }, { onConflict: "project_id,applicant_id" });
+    window.location.href = "/";
+  };
+
+  return (
+    <div style={{ minHeight: "100vh", background: bg, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'DM Mono', monospace", color: text }}>
+      <style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400&display=swap'); *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }`}</style>
+      <div style={{ textAlign: "center", padding: 32, maxWidth: 400 }}>
+        <div style={{ fontSize: 18, fontWeight: 500, marginBottom: 24 }}>[CoLab]</div>
+        {status === "loading" && <div style={{ fontSize: 13, color: textMuted }}>loading...</div>}
+        {status === "invalid" && (
+          <>
+            <div style={{ fontSize: 14, marginBottom: 16 }}>invite link not found or expired.</div>
+            <a href="/" style={{ fontSize: 12, color: text, textDecoration: "underline" }}>← back to CoLab</a>
+          </>
+        )}
+        {status === "login" && (
+          <>
+            <div style={{ fontSize: 14, marginBottom: 8 }}>you've been invited to join</div>
+            <div style={{ fontSize: 18, fontWeight: 400, marginBottom: 24 }}>{projectTitle}</div>
+            <div style={{ fontSize: 12, color: textMuted, marginBottom: 24 }}>sign in to accept the invite.</div>
+            <a href="/" style={{ display: "inline-block", padding: "10px 24px", background: text, color: bg, borderRadius: 8, fontSize: 13, textDecoration: "none" }}>sign in →</a>
+          </>
+        )}
+        {status === "join" && (
+          <>
+            <div style={{ fontSize: 14, marginBottom: 8 }}>you've been invited to join</div>
+            <div style={{ fontSize: 18, fontWeight: 400, marginBottom: 24 }}>{projectTitle}</div>
+            <button onClick={handleAcceptInvite}
+              style={{ display: "inline-block", padding: "10px 24px", background: text, color: bg, borderRadius: 8, fontSize: 13, border: "none", cursor: "pointer", fontFamily: "inherit" }}>
+              accept invite →
+            </button>
+            <div style={{ marginTop: 16 }}>
+              <a href="/" style={{ fontSize: 11, color: textMuted, textDecoration: "none" }}>← back to CoLab</a>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── ROUTER ──
 const _publicMatch = typeof window !== "undefined" ? window.location.pathname.match(/^\/p\/([^/]+)$/) : null;
 const _profileMatch = typeof window !== "undefined" ? window.location.pathname.match(/^\/u\/([^/]+)$/) : null;
+const _joinMatch = typeof window !== "undefined" ? window.location.pathname.match(/^\/join\/([^/]+)$/) : null;
 
 export { CoLab };
 export default function App() {
   if (_publicMatch) return <PublicProjectPage projectId={_publicMatch[1]} />;
   if (_profileMatch) return <PublicProfilePage username={_profileMatch[1]} />;
+  if (_joinMatch) return <JoinPage token={_joinMatch[1]} />;
   return <CoLab />;
 }
