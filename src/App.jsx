@@ -2,6 +2,10 @@ import React, { useState, useEffect, useRef } from "react";
 import { supabase } from "./supabase";
 import { AVAILABILITY, CATEGORIES, COLS, PLUGINS, PRESETS, ROWS, SKILLS } from "./constants/appConstants";
 import { initials, matchesRegion, relativeTime } from "./utils/appHelpers";
+import Avatar from "./components/ui/Avatar";
+import ProgressBar from "./components/ui/ProgressBar";
+import Spinner from "./components/ui/Spinner";
+import PixelBannerDisplay from "./components/ui/PixelBannerDisplay";
 
 function PostCard({ post, ctx }) {
   const {
@@ -171,29 +175,6 @@ function PostCard({ post, ctx }) {
   );
 }
 
-function Avatar({ initials: i, size = 32, dark }) {
-  return (
-    <div style={{ width: size, height: size, borderRadius: "50%", background: dark ? "#fff" : "#000", display: "flex", alignItems: "center", justifyContent: "center", fontSize: size * 0.32, fontWeight: 700, color: dark ? "#000" : "#fff", flexShrink: 0, fontFamily: "inherit" }}>
-      {(i || "?").slice(0, 2).toUpperCase()}
-    </div>
-  );
-}
-
-function ProgressBar({ value, dark }) {
-  return (
-    <div style={{ background: dark ? "#1a1a1a" : "#e8e8e8", borderRadius: 4, height: 3, width: "100%", overflow: "hidden" }}>
-      <div style={{ width: `${Math.min(value || 0, 100)}%`, height: "100%", background: dark ? "#fff" : "#000", borderRadius: 4, transition: "width 0.4s ease" }} />
-    </div>
-  );
-}
-
-function Spinner({ dark }) {
-  return (
-    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: 40 }}>
-      <div style={{ width: 20, height: 20, border: `2px solid ${dark ? "#333" : "#ddd"}`, borderTop: `2px solid ${dark ? "#fff" : "#000"}`, borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
-    </div>
-  );
-}
 
 // @mention input component
 function MentionInput({ value, onChange, onKeyDown, placeholder, users, style, rows, dark }) {
@@ -242,20 +223,6 @@ function MentionInput({ value, onChange, onKeyDown, placeholder, users, style, r
           ))}
         </div>
       )}
-    </div>
-  );
-}
-
-function PixelBannerDisplay({ pixels, dark, height = 80 }) {
-  if (!pixels || pixels.every(v => v === 0)) return null;
-  const onColor = dark ? "#ffffff" : "#000000";
-  return (
-    <div style={{ width: "100%", height, position: "relative", overflow: "hidden" }}>
-      <svg width="100%" height="100%" viewBox={`0 0 ${COLS} ${ROWS}`} preserveAspectRatio="none" style={{ display: "block" }}>
-        {pixels.map((v, i) => v ? (
-          <rect key={i} x={i % COLS} y={Math.floor(i / COLS)} width={1} height={1} fill={onColor} opacity={0.9} />
-        ) : null)}
-      </svg>
     </div>
   );
 }
