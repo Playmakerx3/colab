@@ -10,6 +10,13 @@ import PublicProjectPage from "./pages/PublicProjectPage";
 import PublicProfilePage from "./pages/PublicProfilePage";
 import JoinPage from "./pages/JoinPage";
 import ShippedPage from "./pages/ShippedPage";
+import useAuthBootstrap from "./hooks/useAuthBootstrap";
+import {
+  sendPasswordResetEmail,
+  signInWithEmailPassword,
+  signOutCurrentUser,
+  signUpWithEmailPassword,
+} from "./services/authService";
 
 function PostCard({ post, ctx }) {
   const {
@@ -600,39 +607,15 @@ function CoLab() {
     setLoading(false);
   };
 
-  useEffect(() => {
-    const loadProfile = async (userId) => {
-      const { data } = await supabase.from("profiles").select("*").eq("id", userId).single();
-      if (data) {
-        setProfile(data);
-        if (data?.banner_pixels) {
-          try {
-            setBannerPixels(JSON.parse(data.banner_pixels));
-          } catch (error) {
-            console.warn("Failed to parse banner_pixels", error);
-          }
-        }
-        setScreen("app");
-        setAuthLoading(false);
-        loadAllData(userId);
-      } else {
-        setScreen("onboard");
-        setAuthLoading(false);
-      }
-    };
-
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setAuthUser(session?.user || null);
-      if (session?.user) loadProfile(session.user.id);
-      else setAuthLoading(false);
-    });
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setAuthUser(session?.user || null);
-      if (session?.user) loadProfile(session.user.id);
-      else { setProfile(null); setAuthLoading(false); setScreen("landing"); }
-    });
-    return () => subscription.unsubscribe();
-  }, []);
+  useAuthBootstrap({
+    supabase,
+    setAuthUser,
+    setProfile,
+    setBannerPixels,
+    setScreen,
+    setAuthLoading,
+    loadAllData,
+  });
 
   // ── REALTIME ──
   // Ref so realtime callbacks always see current projects without re-subscribing
@@ -738,28 +721,26 @@ function CoLab() {
   // ── AUTH ──
   const handleSignUp = async () => {
     setAuthError("");
-    const { data, error } = await supabase.auth.signUp({ email: authEmail, password: authPassword });
+    const { data, error } = await signUpWithEmailPassword(supabase, authEmail, authPassword);
     if (error) { setAuthError(error.message); return; }
     if (data.user) { setAuthUser(data.user); setScreen("onboard"); }
   };
 
   const handleLogin = async () => {
     setAuthError("");
-    const { error } = await supabase.auth.signInWithPassword({ email: authEmail, password: authPassword });
+    const { error } = await signInWithEmailPassword(supabase, authEmail, authPassword);
     if (error) setAuthError(error.message);
   };
 
   const handlePasswordReset = async () => {
     if (!authEmail) { setAuthError("Enter your email first."); return; }
-    const { error } = await supabase.auth.resetPasswordForEmail(authEmail, {
-      redirectTo: `${window.location.origin}/reset-password`,
-    });
+    const { error } = await sendPasswordResetEmail(supabase, authEmail, `${window.location.origin}/reset-password`);
     if (error) setAuthError(error.message);
     else setResetSent(true);
   };
 
   const handleSignOut = async () => {
-    await supabase.auth.signOut();
+    await signOutCurrentUser(supabase);
     setProfile(null); setProjects([]); setUsers([]); setFollowing([]);
     setScreen("landing");
   };
@@ -3603,7 +3584,7 @@ function CoLab() {
               </div>
               <div style={{ borderTop: `1px solid ${border}`, paddingTop: 20 }}>
                 <div style={{ fontSize: 11, color: textMuted, letterSpacing: "1px", marginBottom: 10 }}>DANGER ZONE</div>
-                <button className="hb" onClick={async () => { if (window.confirm("Sign out of all devices?")) { await supabase.auth.signOut(); } }}
+                <button className="hb" onClick={async () => { if (window.confirm("Sign out of all devices?")) { await signOutCurrentUser(supabase); } }}
                   style={{ background: "none", border: `1px solid ${border}`, borderRadius: 6, padding: "7px 14px", fontSize: 11, cursor: "pointer", color: textMuted, fontFamily: "inherit", width: "100%" }}>
                   sign out
                 </button>
