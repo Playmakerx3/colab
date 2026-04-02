@@ -809,6 +809,11 @@ function CoLab() {
       .profile-layout { grid-template-columns: 1fr !important; }
       .msg-layout { grid-template-columns: 1fr !important; }
       input, select, textarea { font-size: 16px !important; }
+      .msgs-left { width: 100% !important; border-right: none !important; }
+      .msgs-right { width: 100% !important; }
+      .msgs-has-thread .msgs-left { display: none !important; }
+      .msgs-no-thread .msgs-right { display: none !important; }
+      .msgs-back { display: flex !important; }
     }
       .nav-label { font-size: 10px !important; padding: 4px 4px !important; }
       .hero-h1 { font-size: 44px !important; letter-spacing: -2px !important; }
@@ -2658,9 +2663,9 @@ function CoLab() {
 
       {/* MESSAGES */}
       {appScreen === "messages" && (
-        <div style={{ width: "100%", padding: "0", display: "flex", height: "calc(100vh - 50px)" }}>
-          {/* Left panel — always visible */}
-          <div style={{ width: 260, flexShrink: 0, borderRight: `1px solid ${border}`, overflowY: "auto", display: "flex", flexDirection: "column" }}>
+        <div className={activeDmThread ? "msgs-has-thread" : "msgs-no-thread"} style={{ width: "100%", padding: "0", display: "flex", height: "calc(100vh - 50px)" }}>
+          {/* Left panel — thread list */}
+          <div className="msgs-left" style={{ width: 260, flexShrink: 0, borderRight: `1px solid ${border}`, overflowY: "auto", display: "flex", flexDirection: "column" }}>
             <div style={{ padding: "18px 20px 12px", borderBottom: `1px solid ${border}`, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
               <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px" }}>MESSAGES</div>
               <button className="hb" onClick={() => { setShowNewDm(true); setNewDmSearch(""); }} style={{ background: "none", border: `1px solid ${border}`, borderRadius: 5, width: 22, height: 22, cursor: "pointer", fontSize: 14, color: textMuted, fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center", lineHeight: 1 }}>+</button>
@@ -2697,10 +2702,11 @@ function CoLab() {
           </div>
 
           {/* Right panel — conversation */}
-          <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
+          <div className="msgs-right" style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
             {activeDmThread ? (
               <>
                 <div style={{ padding: "16px 20px", borderBottom: `1px solid ${border}`, display: "flex", gap: 12, alignItems: "center" }}>
+                  <button className="msgs-back hb" onClick={() => setActiveDmThread(null)} style={{ display: "none", background: "none", border: "none", color: textMuted, cursor: "pointer", fontFamily: "inherit", fontSize: 18, padding: "0 8px 0 0", lineHeight: 1 }}>‹</button>
                   <Avatar initials={initials(activeDmThread.otherUser?.name)} size={32} dark={dark} />
                   <div style={{ flex: 1 }}>
                     <div style={{ fontSize: 14, color: text, fontWeight: 500 }}>{activeDmThread.otherUser?.name}</div>
