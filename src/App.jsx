@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { supabase } from "./supabase";
 
 const SKILLS = ["Design", "Engineering", "Marketing", "Finance", "Legal", "Writing", "Video", "Music", "Photography", "Data", "AI/ML", "Product", "Sales", "Operations", "3D/CAD", "Architecture"];
@@ -43,7 +43,7 @@ const matchesRegion = (locationStr, regionFilter, myLocation) => {
 function PostCard({ post, ctx }) {
   const {
     postLikes, expandedComments, postComments, authUser, users,
-    handleDeletePost, dark, border, text, textMuted, bg, bg2, btnP, inputStyle,
+    handleDeletePost, dark, border, text, textMuted, bg2, btnP, inputStyle,
     setViewingProfile, handleLike, setExpandedComments, loadComments,
     myInitials, setPostComments, profile, supabase,
   } = ctx;
@@ -343,8 +343,6 @@ const PRESETS = {
 
 function PixelBannerDisplay({ pixels, dark, height = 80 }) {
   if (!pixels || pixels.every(v => v === 0)) return null;
-  const cellW = 100 / COLS;
-  const cellH = 100 / ROWS;
   const onColor = dark ? "#ffffff" : "#000000";
   return (
     <div style={{ width: "100%", height, position: "relative", overflow: "hidden" }}>
@@ -357,7 +355,7 @@ function PixelBannerDisplay({ pixels, dark, height = 80 }) {
   );
 }
 
-function BannerEditor({ pixels, onSave, onClose, dark, bg, bg2, bg3, border, text, textMuted }) {
+function BannerEditor({ pixels, onSave, onClose, dark, bg, border, text, textMuted }) {
   const [grid, setGrid] = React.useState([...pixels]);
   const [drawing, setDrawing] = React.useState(false);
   const [drawMode, setDrawMode] = React.useState(1); // 1 = fill, 0 = erase
@@ -435,7 +433,7 @@ function BannerEditor({ pixels, onSave, onClose, dark, bg, bg2, bg3, border, tex
   );
 }
 
-function FullProfilePortfolio({ userId, dark, bg, bg2, border, text, textMuted, labelStyle }) {
+function FullProfilePortfolio({ userId, bg2, border, text, textMuted }) {
   const [items, setItems] = React.useState([]);
   const [loaded, setLoaded] = React.useState(false);
   React.useEffect(() => {
@@ -710,7 +708,6 @@ function CoLab() {
   const [newPostMediaUrl, setNewPostMediaUrl] = useState("");
   const [newPostMediaType, setNewPostMediaType] = useState(""); // image|video|audio|youtube|pdf
   const [expandedComments, setExpandedComments] = useState({});
-  const [newCommentText, setNewCommentText] = useState({});
   const [projectFiles, setProjectFiles] = useState([]);
   const [projectDocs, setProjectDocs] = useState([]);
   const [activeDoc, setActiveDoc] = useState(null);
@@ -737,7 +734,6 @@ function CoLab() {
   const [dmInput, setDmInput] = useState("");
   const [showSettings, setShowSettings] = useState(false);
   const [settingsEmail, setSettingsEmail] = useState("");
-  const [settingsPassword, setSettingsPassword] = useState("");
   const [settingsNewPassword, setSettingsNewPassword] = useState("");
   const [projectActivity, setProjectActivity] = useState([]);
   const [docPreviewMode, setDocPreviewMode] = useState(false);
@@ -848,7 +844,7 @@ function CoLab() {
       setApplicationForm({ skills: matchingSkills, availability: "", motivation: "", portfolio_url: "" });
       setApplicationSuccess(false);
     }
-  }, [showApplicationForm?.id]);
+  }, [showApplicationForm, profile?.skills]);
 
   // Force body background + mobile browser chrome color on mode switch
   useEffect(() => {
@@ -865,26 +861,6 @@ function CoLab() {
     }
     meta.content = color;
   }, [dark]);
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setAuthUser(session?.user || null);
-      if (session?.user) loadProfile(session.user.id);
-      else setAuthLoading(false);
-    });
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setAuthUser(session?.user || null);
-      if (session?.user) loadProfile(session.user.id);
-      else { setProfile(null); setAuthLoading(false); setScreen("landing"); }
-    });
-    return () => subscription.unsubscribe();
-  }, []);
-
-  const loadProfile = async (userId) => {
-    const { data } = await supabase.from("profiles").select("*").eq("id", userId).single();
-    if (data) { setProfile(data); if (data?.banner_pixels) { try { setBannerPixels(JSON.parse(data.banner_pixels)); } catch {} } setScreen("app"); setAuthLoading(false); loadAllData(userId); }
-    else { setScreen("onboard"); setAuthLoading(false); }
-  };
-
   const loadAllData = async (userId) => {
     setLoading(true);
     try {
@@ -938,11 +914,45 @@ function CoLab() {
           sessionStorage.removeItem("pendingApply");
           const proj = (projs || []).find(p => p.id === projectId);
           if (proj) setTimeout(() => setShowApplicationForm(proj), 400);
-        } catch {}
+        } catch (error) { console.warn("Failed to parse pendingApply from sessionStorage", error); }
       }
     } catch (e) { console.error(e); }
     setLoading(false);
   };
+
+  useEffect(() => {
+    const loadProfile = async (userId) => {
+      const { data } = await supabase.from("profiles").select("*").eq("id", userId).single();
+      if (data) {
+        setProfile(data);
+        if (data?.banner_pixels) {
+          try {
+            setBannerPixels(JSON.parse(data.banner_pixels));
+          } catch (error) {
+            console.warn("Failed to parse banner_pixels", error);
+          }
+        }
+        setScreen("app");
+        setAuthLoading(false);
+        loadAllData(userId);
+      } else {
+        setScreen("onboard");
+        setAuthLoading(false);
+      }
+    };
+
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setAuthUser(session?.user || null);
+      if (session?.user) loadProfile(session.user.id);
+      else setAuthLoading(false);
+    });
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setAuthUser(session?.user || null);
+      if (session?.user) loadProfile(session.user.id);
+      else { setProfile(null); setAuthLoading(false); setScreen("landing"); }
+    });
+    return () => subscription.unsubscribe();
+  }, []);
 
   // ── REALTIME ──
   // Ref so realtime callbacks always see current projects without re-subscribing
@@ -1086,7 +1096,10 @@ function CoLab() {
       }, { onConflict: "id" }).select().single();
       if (error) { showToast("Error: " + error.message); return; }
       if (data) { setProfile(data); setScreen("app"); setAppScreen("explore"); loadAllData(userId); showToast(`Welcome, ${data.name.split(" ")[0]}!`); }
-    } catch (e) { showToast("Something went wrong."); }
+    } catch (error) {
+      console.error("Finish onboard failed", error);
+      showToast("Something went wrong.");
+    }
   };
 
   const handleSaveProfile = async () => {
@@ -1143,14 +1156,6 @@ function CoLab() {
     } else {
       showToast("Failed to post project. Try again.");
     }
-  };
-
-  const handleUpdateProgress = async (projectId, progress) => {
-    const val = Math.min(100, Math.max(0, parseInt(progress) || 0));
-    await supabase.from("projects").update({ progress: val }).eq("id", projectId);
-    setProjects(projects.map(p => p.id === projectId ? { ...p, progress: val } : p));
-    if (activeProject?.id === projectId) setActiveProject({ ...activeProject, progress: val });
-    showToast("Progress updated.");
   };
 
   const handleArchiveProject = async (projectId) => {
@@ -1224,7 +1229,7 @@ function CoLab() {
     if (!settingsNewPassword || settingsNewPassword.length < 8) { showToast("Password must be at least 8 characters."); return; }
     const { error } = await supabase.auth.updateUser({ password: settingsNewPassword });
     if (error) showToast("Error: " + error.message);
-    else { showToast("Password updated."); setSettingsNewPassword(""); setSettingsPassword(""); }
+    else { showToast("Password updated."); setSettingsNewPassword(""); }
   };
 
   const logActivity = async (projectId, eventType, details) => {
@@ -1887,19 +1892,6 @@ function CoLab() {
     }
   };
 
-  const handleComment = async (postId) => {
-    const content = newCommentText[postId];
-    if (!content?.trim()) return;
-    const { data } = await supabase.from("comments").insert({
-      post_id: postId, user_id: authUser.id,
-      user_name: profile.name, user_initials: myInitials, content,
-    }).select().single();
-    if (data) {
-      setPostComments(prev => ({ ...prev, [postId]: [...(prev[postId] || []), data] }));
-      setNewCommentText(prev => ({ ...prev, [postId]: "" }));
-    }
-  };
-
   const loadComments = async (postId) => {
     if (postComments[postId]) return;
     const { data } = await supabase.from("comments").select("*").eq("post_id", postId).order("created_at");
@@ -2011,7 +2003,7 @@ function CoLab() {
                             showToast("Uploading audio...");
                             const safeName = file.name.replace(/[^a-zA-Z0-9.\-_]/g, "_");
                             const path = `posts/${authUser.id}/${Date.now()}-${safeName}`;
-                            const { data: uploadData, error } = await supabase.storage.from("user-uploads").upload(path, file);
+                            const { error } = await supabase.storage.from("user-uploads").upload(path, file);
                             if (error) { showToast(`Upload failed: ${error.message}`); return; }
                             const { data: { publicUrl } } = supabase.storage.from("user-uploads").getPublicUrl(path);
                             setNewPostMediaUrl(publicUrl);
@@ -2530,7 +2522,7 @@ function CoLab() {
           </div>
         </div>
       )}
-      {showBannerEditor && <BannerEditor pixels={bannerPixels} onSave={saveBanner} onClose={() => setShowBannerEditor(false)} dark={dark} bg={bg} bg2={bg2} bg3={bg3} border={border} text={text} textMuted={textMuted} />}
+      {showBannerEditor && <BannerEditor pixels={bannerPixels} onSave={saveBanner} onClose={() => setShowBannerEditor(false)} dark={dark} bg={bg} border={border} text={text} textMuted={textMuted} />}
 
       {/* COLLABORATORS MODAL */}
       {showCollaborators && (() => {
@@ -3144,7 +3136,7 @@ function CoLab() {
                       if (!file) return;
                       showToast("Uploading...");
                       const path = `${activeProject.id}/${Date.now()}-${file.name}`;
-                      const { data: uploadData, error } = await supabase.storage.from("project-files").upload(path, file);
+                      const { error } = await supabase.storage.from("project-files").upload(path, file);
                       if (error) { showToast("Upload failed."); return; }
                       const { data: { publicUrl } } = supabase.storage.from("project-files").getPublicUrl(path);
                       const { data: fileRecord } = await supabase.from("project_files").insert({
@@ -3488,7 +3480,7 @@ function CoLab() {
           {/* Portfolio */}
           <div style={{ marginBottom: 28, paddingBottom: 28, borderBottom: `1px solid ${border}` }}>
             <div style={{ ...labelStyle, marginBottom: 12 }}>PORTFOLIO</div>
-            <FullProfilePortfolio userId={viewFullProfile.id} dark={dark} bg={bg} bg2={bg2} border={border} text={text} textMuted={textMuted} labelStyle={labelStyle} />
+            <FullProfilePortfolio userId={viewFullProfile.id} bg2={bg2} border={border} text={text} textMuted={textMuted} />
           </div>
 
           {/* Projects */}
