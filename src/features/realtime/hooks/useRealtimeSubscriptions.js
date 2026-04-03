@@ -17,7 +17,13 @@ export function useRealtimeSubscriptions({
   setPosts,
   onIncomingPost,
   setMentionNotifications,
+  projectMessagesListRef,
+  dmListRef,
 }) {
+  const isNearBottom = (el, threshold = 80) => {
+    if (!el) return true;
+    return el.scrollHeight - el.scrollTop - el.clientHeight < threshold;
+  };
   // Ref so realtime callbacks always see current projects without re-subscribing
   const projectsRef = useRef([]);
   useEffect(() => {
@@ -31,14 +37,17 @@ export function useRealtimeSubscriptions({
       .channel("realtime-colab")
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages" }, (payload) => {
         if (activeProject && payload.new.project_id === activeProject.id) {
+          const shouldAutoScroll = isNearBottom(projectMessagesListRef?.current);
           setMessages((prev) => {
             if (prev.find((m) => m.id === payload.new.id)) return prev;
             return [...prev, payload.new];
           });
-          setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
+          if (shouldAutoScroll) setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
         }
       })
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "dm_messages" }, (payload) => {
+        const isActiveThread = activeDmThread?.id === payload.new.thread_id;
+        const shouldAutoScroll = isNearBottom(dmListRef?.current);
         // Always update DM messages — works even when not on messages tab
         setDmMessages((prev) => {
           const threadId = payload.new.thread_id;
@@ -47,14 +56,14 @@ export function useRealtimeSubscriptions({
           return { ...prev, [threadId]: [...existing, payload.new] };
         });
         // If this thread is active, scroll to bottom
-        if (activeDmThread?.id === payload.new.thread_id) {
+        if (isActiveThread && shouldAutoScroll) {
           setTimeout(() => dmEndRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
         }
         // Show notification dot if message is from someone else and we're not on messages tab
         if (payload.new.sender_id !== authUser?.id) {
           setDmThreads((prev) =>
             prev.map((t) =>
-              t.id === payload.new.thread_id ? { ...t, unread: true } : t
+              t.id === payload.new.thread_id ? { ...t, unread: !isActiveThread } : t
             )
           );
         }

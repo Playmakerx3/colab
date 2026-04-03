@@ -60,3 +60,11 @@ export const editProjectMessage = async ({ msgId, newText }) => {
 export const markDmMessageRead = async ({ msgId, readBy }) => {
   return supabase.from("dm_messages").update({ read_by: readBy }).eq("id", msgId);
 };
+
+export const uploadMessagingAttachment = async ({ path, file }) => {
+  return supabase.storage.from("user-uploads").upload(path, file, { upsert: false });
+};
+
+export const getMessagingAttachmentUrl = (path) => {
+  return supabase.storage.from("user-uploads").getPublicUrl(path);
+};
