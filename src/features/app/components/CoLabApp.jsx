@@ -15,30 +15,66 @@ import { useMessaging } from "../../messaging/hooks/useMessaging";
 import { useApplications } from "../../applications/hooks/useApplications";
 import { useProjectWorkspace } from "../../projects/hooks/useProjectWorkspace";
 
+const isFreshTimestamp = (timestamp, windowMs = 120000) => {
+  if (!timestamp) return false;
+  return Date.now() - new Date(timestamp).getTime() < windowMs;
+};
+
 function PostCard({ post, ctx }) {
   const {
     postLikes, expandedComments, postComments, authUser, users,
     handleDeletePost, dark, border, text, textMuted, bg2, btnP, inputStyle,
     setViewingProfile, handleLike, setExpandedComments, loadComments,
-    myInitials, setPostComments, profile, supabase,
+    myInitials, setPostComments, profile, supabase, pendingLikeIds,
+    commentPulseIds, pendingCommentByPost, recentActivityByPost, justInsertedPostIds,
+    markCommentPending, markRecentActivity,
   } = ctx;
   const isLiked = (postLikes.myLikes || []).includes(post.id);
   const isOpen = expandedComments[post.id];
   const comments = postComments[post.id] || [];
   const isOwner = post.user_id === authUser?.id;
   const postUser = users.find(u => u.id === post.user_id);
+  const isLikePending = pendingLikeIds.includes(post.id);
+  const isCommentPending = pendingCommentByPost[post.id] > 0;
+  const hasRecentActivity = recentActivityByPost[post.id] || isFreshTimestamp(post.created_at);
+  const isFreshInsert = justInsertedPostIds.includes(post.id);
   const [localComment, setLocalComment] = React.useState("");
   const [hovered, setHovered] = React.useState(false);
 
   const submitComment = async () => {
     if (!localComment.trim()) return;
-    const content = localComment;
+    const content = localComment.trim();
     setLocalComment("");
-    const { data } = await supabase.from("comments").insert({
+    const optimisticId = `temp-${Date.now()}`;
+    const optimisticComment = {
+      id: optimisticId,
+      post_id: post.id,
+      user_id: authUser.id,
+      user_name: profile.name,
+      user_initials: myInitials,
+      content,
+      created_at: new Date().toISOString(),
+      optimistic: true,
+    };
+    markCommentPending(post.id, 1);
+    markRecentActivity(post.id);
+    setPostComments((prev) => ({ ...prev, [post.id]: [...(prev[post.id] || []), optimisticComment] }));
+    const { data, error } = await supabase.from("comments").insert({
       post_id: post.id, user_id: authUser.id,
       user_name: profile.name, user_initials: myInitials, content,
     }).select().single();
-    if (data) setPostComments(prev => ({ ...prev, [post.id]: [...(prev[post.id] || []), data] }));
+    if (error) {
+      setPostComments((prev) => ({ ...prev, [post.id]: (prev[post.id] || []).filter((c) => c.id !== optimisticId) }));
+      markCommentPending(post.id, -1);
+      return;
+    }
+    if (data) {
+      setPostComments((prev) => ({
+        ...prev,
+        [post.id]: (prev[post.id] || []).map((c) => (c.id === optimisticId ? data : c)),
+      }));
+    }
+    markCommentPending(post.id, -1);
   };
 
   const handleDeleteComment = async (commentId) => {
@@ -50,7 +86,12 @@ function PostCard({ post, ctx }) {
     <div
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
-      style={{ borderBottom: `1px solid ${border}`, padding: "24px 0", transition: "background 0.15s" }}
+      style={{
+        borderBottom: `1px solid ${border}`,
+        padding: "24px 0",
+        transition: "background 0.15s, transform 0.25s ease, opacity 0.25s ease",
+        animation: isFreshInsert ? "feedPostAppear 320ms ease-out" : "none",
+      }}
     >
       {/* Header */}
       <div style={{ display: "flex", gap: 12, alignItems: "flex-start", marginBottom: 14 }}>
@@ -64,7 +105,14 @@ function PostCard({ post, ctx }) {
                 <span style={{ fontSize: 13, fontWeight: 500, color: text }}>{post.user_name}</span>
               </button>
               {post.user_role && <span style={{ fontSize: 11, color: textMuted, marginLeft: 8 }}>{post.user_role}</span>}
-              <div style={{ fontSize: 10, color: textMuted, marginTop: 3 }}>{relativeTime(post.created_at)}</div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 3 }}>
+                <div style={{ fontSize: 10, color: textMuted }}>{relativeTime(post.created_at)}</div>
+                {hasRecentActivity && (
+                  <span style={{ fontSize: 9, color: textMuted, border: `1px solid ${border}`, borderRadius: 20, padding: "1px 7px", background: bg2 }}>
+                    live · just now
+                  </span>
+                )}
+              </div>
             </div>
             {isOwner && hovered && (
               <button className="hb" onClick={() => handleDeletePost(post.id)} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontSize: 11, fontFamily: "inherit", opacity: 0.6 }}>✕</button>
@@ -127,7 +175,22 @@ function PostCard({ post, ctx }) {
         <button
           className="hb"
           onClick={() => handleLike(post.id)}
-          style={{ background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: 13, color: isLiked ? text : textMuted, display: "flex", gap: 6, alignItems: "center", transition: "color 0.15s", fontWeight: isLiked ? 500 : 400 }}
+          style={{
+            background: "none",
+            border: "none",
+            cursor: "pointer",
+            fontFamily: "inherit",
+            fontSize: 13,
+            color: isLiked ? text : textMuted,
+            display: "flex",
+            gap: 6,
+            alignItems: "center",
+            transition: "color 0.15s, transform 0.15s",
+            fontWeight: isLiked ? 500 : 400,
+            transform: isLiked ? "scale(1.04)" : "scale(1)",
+            opacity: isLikePending ? 0.7 : 1,
+            animation: isLikePending ? "feedPulse 260ms ease-out" : "none",
+          }}
         >
           {isLiked ? "♥" : "♡"}
           {(post.like_count || 0) > 0 && <span style={{ fontSize: 12 }}>{post.like_count}</span>}
@@ -135,7 +198,19 @@ function PostCard({ post, ctx }) {
         <button
           className="hb"
           onClick={() => { setExpandedComments(prev => ({ ...prev, [post.id]: !prev[post.id] })); if (!postComments[post.id]) loadComments(post.id); }}
-          style={{ background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: 12, color: isOpen ? text : textMuted, display: "flex", gap: 6, alignItems: "center", transition: "color 0.15s" }}
+          style={{
+            background: "none",
+            border: "none",
+            cursor: "pointer",
+            fontFamily: "inherit",
+            fontSize: 12,
+            color: isOpen ? text : textMuted,
+            display: "flex",
+            gap: 6,
+            alignItems: "center",
+            transition: "color 0.15s",
+            animation: commentPulseIds.includes(post.id) ? "feedPulse 260ms ease-out" : "none",
+          }}
         >
           ◎ {comments.length > 0 ? <span>{comments.length}</span> : <span>{isOpen ? "hide" : "comment"}</span>}
         </button>
@@ -174,7 +249,9 @@ function PostCard({ post, ctx }) {
               style={{ ...inputStyle, fontSize: 12, padding: "8px 13px", flex: 1, borderRadius: 20 }}
             />
             {localComment.trim() && (
-              <button className="hb" onClick={submitComment} style={{ ...btnP, padding: "8px 14px", fontSize: 11, flexShrink: 0, borderRadius: 20 }}>post</button>
+              <button className="hb" onClick={submitComment} style={{ ...btnP, padding: "8px 14px", fontSize: 11, flexShrink: 0, borderRadius: 20, opacity: isCommentPending ? 0.75 : 1 }}>
+                {isCommentPending ? "posting..." : "post"}
+              </button>
             )}
           </div>
         </div>
@@ -383,6 +460,12 @@ function CoLab() {
   const [posts, setPosts] = useState([]);
   const [postLikes, setPostLikes] = useState({ myLikes: [] });
   const [postComments, setPostComments] = useState({});
+  const [pendingLikeIds, setPendingLikeIds] = useState([]);
+  const [pendingCommentByPost, setPendingCommentByPost] = useState({});
+  const [commentPulseIds, setCommentPulseIds] = useState([]);
+  const [recentActivityByPost, setRecentActivityByPost] = useState({});
+  const [pendingFeedPosts, setPendingFeedPosts] = useState([]);
+  const [justInsertedPostIds, setJustInsertedPostIds] = useState([]);
   const [newPostContent, setNewPostContent] = useState("");
   const [newPostProject, setNewPostProject] = useState("");
   const [newPostMediaUrl, setNewPostMediaUrl] = useState("");
@@ -450,6 +533,33 @@ function CoLab() {
   const btnG = { background: "none", color: textMuted, border: `1px solid ${border}`, borderRadius: 8, padding: "10px 20px", fontSize: 12, cursor: "pointer", fontFamily: "inherit" };
 
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(null), 3000); };
+  const markRecentActivity = (postId) => {
+    setRecentActivityByPost((prev) => ({ ...prev, [postId]: true }));
+    setTimeout(() => {
+      setRecentActivityByPost((prev) => {
+        if (!prev[postId]) return prev;
+        const next = { ...prev };
+        delete next[postId];
+        return next;
+      });
+    }, 90000);
+  };
+  const markCommentPending = (postId, delta) => {
+    setPendingCommentByPost((prev) => {
+      const nextCount = Math.max(0, (prev[postId] || 0) + delta);
+      const next = { ...prev, [postId]: nextCount };
+      if (nextCount === 0) delete next[postId];
+      return next;
+    });
+    if (delta > 0) {
+      setCommentPulseIds((prev) => (prev.includes(postId) ? prev : [...prev, postId]));
+      setTimeout(() => setCommentPulseIds((prev) => prev.filter((id) => id !== postId)), 280);
+    }
+  };
+  const registerInsertedPost = (postId) => {
+    setJustInsertedPostIds((prev) => (prev.includes(postId) ? prev : [...prev, postId]));
+    setTimeout(() => setJustInsertedPostIds((prev) => prev.filter((id) => id !== postId)), 350);
+  };
   const myInitials = initials(profile?.name, "ME");
   const getMatchScore = (p) => (profile?.skills || []).filter(s => (p.skills || []).includes(s)).length;
   const unreadDms = dmThreads.filter(t => t.unread && t.id !== activeDmThread?.id).length;
@@ -578,6 +688,13 @@ function CoLab() {
     setNotifications,
     setProjects,
     setPosts,
+    onIncomingPost: (incomingPost) => {
+      setPendingFeedPosts((prev) => {
+        if (prev.find((p) => p.id === incomingPost.id)) return prev;
+        return [incomingPost, ...prev].slice(0, 25);
+      });
+      markRecentActivity(incomingPost.id);
+    },
     setMentionNotifications,
   });
 
@@ -1202,7 +1319,9 @@ function CoLab() {
     if (error) { showToast(`Post failed: ${error.message}`); return; }
     if (data) {
       // Attach media_type locally even if not in DB yet
-      setPosts([{ ...data, media_type: newPostMediaType || null }, ...posts]);
+      setPosts((prev) => [{ ...data, media_type: newPostMediaType || null }, ...prev]);
+      registerInsertedPost(data.id);
+      markRecentActivity(data.id);
       setNewPostContent("");
       setNewPostProject("");
       setNewPostMediaUrl("");
@@ -1220,16 +1339,36 @@ function CoLab() {
 
   const handleLike = async (postId) => {
     const myLikes = postLikes.myLikes || [];
-    if (myLikes.includes(postId)) {
-      await supabase.from("likes").delete().eq("user_id", authUser.id).eq("post_id", postId);
-      await supabase.rpc("decrement_like", { post_id: postId });
+    const isLiked = myLikes.includes(postId);
+    setPendingLikeIds((prev) => (prev.includes(postId) ? prev : [...prev, postId]));
+    markRecentActivity(postId);
+    if (isLiked) {
       setPostLikes({ myLikes: myLikes.filter(id => id !== postId) });
       setPosts(prev => prev.map(p => p.id === postId ? { ...p, like_count: Math.max(0, (p.like_count || 0) - 1) } : p));
     } else {
-      await supabase.from("likes").insert({ user_id: authUser.id, post_id: postId });
-      await supabase.rpc("increment_like", { post_id: postId });
       setPostLikes({ myLikes: [...myLikes, postId] });
       setPosts(prev => prev.map(p => p.id === postId ? { ...p, like_count: (p.like_count || 0) + 1 } : p));
+    }
+    try {
+      if (isLiked) {
+        await supabase.from("likes").delete().eq("user_id", authUser.id).eq("post_id", postId);
+        await supabase.rpc("decrement_like", { post_id: postId });
+      } else {
+        await supabase.from("likes").insert({ user_id: authUser.id, post_id: postId });
+        await supabase.rpc("increment_like", { post_id: postId });
+      }
+    } catch {
+      // rollback optimistic update
+      if (isLiked) {
+        setPostLikes({ myLikes: [...(postLikes.myLikes || []), postId] });
+        setPosts(prev => prev.map(p => p.id === postId ? { ...p, like_count: (p.like_count || 0) + 1 } : p));
+      } else {
+        setPostLikes({ myLikes: (postLikes.myLikes || []).filter(id => id !== postId) });
+        setPosts(prev => prev.map(p => p.id === postId ? { ...p, like_count: Math.max(0, (p.like_count || 0) - 1) } : p));
+      }
+      showToast("Like sync failed. Retrying may help.");
+    } finally {
+      setPendingLikeIds((prev) => prev.filter((id) => id !== postId));
     }
   };
 
@@ -1252,6 +1391,21 @@ function CoLab() {
     showToast("Post deleted.");
   };
 
+  const revealPendingPosts = () => {
+    if (pendingFeedPosts.length === 0) return;
+    const incoming = [...pendingFeedPosts];
+    setPendingFeedPosts([]);
+    setPosts((prev) => {
+      const existing = new Set(prev.map((p) => p.id));
+      const merged = [...incoming.filter((p) => !existing.has(p.id)), ...prev];
+      return merged;
+    });
+    incoming.forEach((post) => {
+      registerInsertedPost(post.id);
+      markRecentActivity(post.id);
+    });
+  };
+
   const renderNetwork = () => {
     const followingFeed = posts.filter(p => following.includes(p.user_id));
     const allFeed = posts;
@@ -1261,15 +1415,26 @@ function CoLab() {
       handleDeletePost, dark, border, text, textMuted, bg, bg2, btnP, inputStyle,
       setViewingProfile, handleLike, setExpandedComments, loadComments,
       myInitials, setPostComments, profile, supabase,
+      pendingLikeIds, commentPulseIds, pendingCommentByPost,
+      recentActivityByPost, justInsertedPostIds, markCommentPending, markRecentActivity,
     };
 
     return (
       <div className="pad fu" style={{ width: "100%", padding: "48px 32px" }}>
+        <style>{`
+          @keyframes feedPulse { 0% { transform: scale(1); } 45% { transform: scale(1.08); } 100% { transform: scale(1); } }
+          @keyframes feedPostAppear { 0% { opacity: 0; transform: translateY(-8px); } 100% { opacity: 1; transform: translateY(0); } }
+        `}</style>
         <div style={{ marginBottom: 28 }}>
           <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px", marginBottom: 10 }}>NETWORK</div>
           <h2 style={{ fontSize: "clamp(24px, 4vw, 36px)", fontWeight: 400, letterSpacing: "-1.5px", color: text, marginBottom: 8 }}>Your network.</h2>
           <p style={{ fontSize: 13, color: textMuted }}>See what people are building. Share what you're working on.</p>
         </div>
+        {pendingFeedPosts.length > 0 && (networkTab === "feed" || networkTab === "feed-following") && (
+          <button className="hb" onClick={revealPendingPosts} style={{ marginBottom: 16, background: bg2, border: `1px solid ${border}`, borderRadius: 999, padding: "8px 14px", color: text, fontSize: 11, cursor: "pointer", fontFamily: "inherit" }}>
+            {pendingFeedPosts.length} new {pendingFeedPosts.length === 1 ? "post" : "posts"} · show updates
+          </button>
+        )}
 
         {/* Tabs */}
         <div style={{ borderBottom: `1px solid ${border}`, marginBottom: 28, display: "flex" }}>
@@ -1380,7 +1545,12 @@ function CoLab() {
                 ? <div style={{ fontSize: 13, color: textMuted, padding: "24px 0" }}>
                     {regionFilter ? `no posts from ${regionFilter} builders yet.` : networkTab === "feed-following"
                       ? <>nothing yet from people you follow. <button className="hb" onClick={() => setNetworkTab("people")} style={{ background: "none", border: "none", color: text, cursor: "pointer", fontFamily: "inherit", fontSize: 13, textDecoration: "underline" }}>find people →</button></>
-                      : "no posts yet. be the first."}
+                      : <div style={{ display: "flex", flexDirection: "column", gap: 10, maxWidth: 560 }}>
+                          <div>no posts yet. be the first.</div>
+                          <div style={{ fontSize: 12, lineHeight: 1.7 }}>
+                            try sharing: <span style={{ color: text }}>“just shipped onboarding v2 — looking for feedback”</span> or <span style={{ color: text }}>“need a designer for landing page polish”</span>.
+                          </div>
+                        </div>}
                   </div>
                 : visibleFeed.map(post => <PostCard key={post.id} post={post} ctx={postCtx} />);
             })()}

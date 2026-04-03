@@ -15,6 +15,7 @@ export function useRealtimeSubscriptions({
   setNotifications,
   setProjects,
   setPosts,
+  onIncomingPost,
   setMentionNotifications,
 }) {
   // Ref so realtime callbacks always see current projects without re-subscribing
@@ -86,6 +87,10 @@ export function useRealtimeSubscriptions({
       })
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "posts" }, (payload) => {
         if (payload.new.user_id !== authUser?.id) {
+          if (onIncomingPost) {
+            onIncomingPost(payload.new);
+            return;
+          }
           setPosts((prev) => {
             if (prev.find((p) => p.id === payload.new.id)) return prev;
             return [payload.new, ...prev];
