@@ -20,6 +20,31 @@ const isFreshTimestamp = (timestamp, windowMs = 120000) => {
   return Date.now() - new Date(timestamp).getTime() < windowMs;
 };
 
+const getMediaType = (url = "") => {
+  if (!url) return "none";
+  const lower = url.toLowerCase();
+  if (/\.(jpg|jpeg|png|gif|webp)$/i.test(lower)) return "image";
+  if (lower.includes("youtube.com") || lower.includes("youtu.be")) return "youtube";
+  return "link";
+};
+
+const getYouTubeId = (url = "") => {
+  const shortMatch = url.match(/youtu\.be\/([^?&/]+)/i);
+  if (shortMatch?.[1]) return shortMatch[1];
+  const longMatch = url.match(/[?&]v=([^?&/]+)/i);
+  if (longMatch?.[1]) return longMatch[1];
+  const embedMatch = url.match(/youtube\.com\/embed\/([^?&/]+)/i);
+  return embedMatch?.[1] || null;
+};
+
+const toHost = (url = "") => {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return "external link";
+  }
+};
+
 function PostCard({ post, ctx }) {
   const {
     postLikes, expandedComments, postComments, authUser, users,
@@ -404,10 +429,17 @@ function FullProfilePortfolio({ userId, bg2, border, text, textMuted }) {
         <div key={item.id} style={{ background: bg2, borderRadius: i === 0 && items.length === 1 ? 8 : i === 0 ? "8px 8px 0 0" : i === items.length - 1 ? "0 0 8px 8px" : 0, border: `1px solid ${border}`, borderBottom: i < items.length - 1 ? "none" : `1px solid ${border}`, padding: "14px 18px" }}>
           <div style={{ fontSize: 14, color: text, marginBottom: 4 }}>{item.title}</div>
           {item.description && <div style={{ fontSize: 12, color: textMuted, lineHeight: 1.65, marginBottom: 6 }}>{item.description}</div>}
-          {item.url && (
-            item.url.match(/\.(jpg|jpeg|png|gif|webp)$/i)
-              ? <img src={item.url} alt={item.title} style={{ maxWidth: "100%", maxHeight: 200, borderRadius: 8, border: `1px solid ${border}`, marginTop: 4 }} />
-              : <a href={item.url} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: text, textDecoration: "underline", wordBreak: "break-all" }}>{item.url.includes("user-uploads") ? "view file" : item.url}</a>
+          {item.url && getMediaType(item.url) === "image" && <img src={item.url} alt={item.title} style={{ width: "100%", maxHeight: 220, objectFit: "cover", borderRadius: 8, border: `1px solid ${border}`, marginTop: 6 }} />}
+          {item.url && getMediaType(item.url) === "youtube" && (
+            <div style={{ borderRadius: 8, overflow: "hidden", border: `1px solid ${border}`, marginTop: 6 }}>
+              <iframe title={item.title} src={`https://www.youtube.com/embed/${getYouTubeId(item.url) || ""}`} style={{ width: "100%", height: 240, border: "none" }} allowFullScreen />
+            </div>
+          )}
+          {item.url && getMediaType(item.url) === "link" && (
+            <a href={item.url} target="_blank" rel="noreferrer" style={{ display: "block", textDecoration: "none", border: `1px solid ${border}`, borderRadius: 8, padding: "10px 12px", marginTop: 6 }}>
+              <div style={{ fontSize: 10, color: textMuted, marginBottom: 3 }}>{toHost(item.url)}</div>
+              <div style={{ fontSize: 11, color: text, textDecoration: "underline", wordBreak: "break-all" }}>{item.url.includes("user-uploads") ? "view file" : item.url}</div>
+            </a>
           )}
         </div>
       ))}
@@ -3083,29 +3115,40 @@ function CoLab() {
             }
           </div>
 
-          {/* Portfolio */}
-          <div style={{ marginBottom: 28, paddingBottom: 28, borderBottom: `1px solid ${border}` }}>
-            <div style={{ ...labelStyle, marginBottom: 12 }}>PORTFOLIO</div>
-            <FullProfilePortfolio userId={viewFullProfile.id} bg2={bg2} border={border} text={text} textMuted={textMuted} />
-          </div>
-
           {/* Projects */}
           <div style={{ marginBottom: 28, paddingBottom: 28, borderBottom: `1px solid ${border}` }}>
             <div style={{ ...labelStyle, marginBottom: 12 }}>PROJECTS</div>
             {projects.filter(p => p.owner_id === viewFullProfile.id).length === 0
               ? <div style={{ fontSize: 12, color: textMuted }}>no projects yet.</div>
-              : projects.filter(p => p.owner_id === viewFullProfile.id).map(p => (
+              : [...projects.filter(p => p.owner_id === viewFullProfile.id)].sort((a, b) => Number(b.featured) - Number(a.featured) || new Date(b.created_at) - new Date(a.created_at)).map(p => (
                   <div key={p.id} style={{ padding: "12px 0", borderBottom: `1px solid ${border}`, cursor: "pointer" }}
                     onMouseEnter={e => e.currentTarget.style.opacity = "0.6"} onMouseLeave={e => e.currentTarget.style.opacity = "1"}
                     onClick={() => { setActiveProject(p); loadProjectData(p.id); setViewFullProfile(null); setAppScreen("workspace"); }}>
-                    <div style={{ fontSize: 13, color: text, marginBottom: 4 }}>{p.title}</div>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+                      <div style={{ fontSize: 13, color: text, fontWeight: p.featured ? 500 : 400 }}>{p.title}</div>
+                      <div style={{ display: "flex", gap: 6 }}>
+                        {p.featured && <span style={{ fontSize: 10, border: `1px solid ${border}`, borderRadius: 3, padding: "1px 6px", color: text }}>pinned</span>}
+                        <span style={{ fontSize: 10, border: `1px solid ${p.shipped ? "#22c55e66" : border}`, borderRadius: 3, padding: "1px 6px", color: p.shipped ? "#22c55e" : textMuted }}>{p.shipped ? "shipped" : "active"}</span>
+                      </div>
+                    </div>
                     <div style={{ fontSize: 11, color: textMuted, marginBottom: 6 }}>{p.description?.slice(0, 80)}{p.description?.length > 80 ? "..." : ""}</div>
+                    {applications.filter((a) => a.project_id === p.id && a.status === "accepted").length > 0 && (
+                      <div style={{ fontSize: 10, color: textMuted, marginBottom: 6 }}>
+                        with {applications.filter((a) => a.project_id === p.id && a.status === "accepted").slice(0, 3).map((a) => users.find((u) => u.id === a.applicant_id)?.username ? `@${users.find((u) => u.id === a.applicant_id)?.username}` : users.find((u) => u.id === a.applicant_id)?.name).filter(Boolean).join(", ")}
+                      </div>
+                    )}
                     <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
                       {(p.skills || []).map(s => <span key={s} style={{ fontSize: 10, padding: "1px 7px", border: `1px solid ${border}`, borderRadius: 3, color: textMuted }}>{s}</span>)}
                     </div>
                   </div>
                 ))
             }
+          </div>
+
+          {/* Portfolio */}
+          <div style={{ marginBottom: 28, paddingBottom: 28, borderBottom: `1px solid ${border}` }}>
+            <div style={{ ...labelStyle, marginBottom: 12 }}>PORTFOLIO</div>
+            <FullProfilePortfolio userId={viewFullProfile.id} bg2={bg2} border={border} text={text} textMuted={textMuted} />
           </div>
 
           {/* Activity — applications they've sent */}
@@ -3191,6 +3234,32 @@ function CoLab() {
                   : <div>
                       <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginBottom: 8 }}>{(profile?.skills || []).map(s => <span key={s} style={{ fontSize: 11, padding: "3px 10px", border: `1px solid ${border}`, borderRadius: 3, color: textMuted }}>{s}</span>)}</div>
                       <div style={{ fontSize: 11, color: textMuted }}>★ {forYou.length} matching project{forYou.length !== 1 ? "s" : ""} <button className="hb" onClick={() => { setAppScreen("explore"); setExploreTab("for-you"); }} style={{ background: "none", border: "none", color: text, cursor: "pointer", fontFamily: "inherit", fontSize: 11, textDecoration: "underline", marginLeft: 4 }}>view →</button></div>
+                  </div>
+                }
+              </div>
+
+              {/* Projects */}
+              <div style={{ marginBottom: 28, paddingBottom: 28, borderBottom: `1px solid ${border}` }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+                  <div style={{ ...labelStyle, marginBottom: 0 }}>PROJECTS</div>
+                  <button className="hb" onClick={() => setShowCreate(true)} style={{ background: "none", border: "none", color: text, cursor: "pointer", fontFamily: "inherit", fontSize: 11, textDecoration: "underline" }}>+ create project</button>
+                </div>
+                {myProjects.length === 0
+                  ? <div style={{ fontSize: 13, color: textMuted, lineHeight: 1.75 }}>you haven’t posted any projects yet.<br />create your first project to showcase what you’re building.</div>
+                  : <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
+                      {[...myProjects].sort((a, b) => Number(b.featured) - Number(a.featured) || new Date(b.created_at) - new Date(a.created_at)).map((p, i, arr) => (
+                        <button key={p.id} className="hb" onClick={() => { setActiveProject(p); loadProjectData(p.id); setAppScreen("workspace"); }} style={{ textAlign: "left", background: bg2, borderRadius: i === 0 && arr.length === 1 ? 8 : i === 0 ? "8px 8px 0 0" : i === arr.length - 1 ? "0 0 8px 8px" : 0, border: `1px solid ${border}`, borderBottom: i < arr.length - 1 ? "none" : `1px solid ${border}`, padding: "14px 16px", cursor: "pointer", fontFamily: "inherit" }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 5, gap: 10 }}>
+                            <div style={{ fontSize: 13, color: text, fontWeight: p.featured ? 500 : 400 }}>{p.title}</div>
+                            <div style={{ display: "flex", gap: 6 }}>
+                              {p.featured && <span style={{ fontSize: 10, border: `1px solid ${border}`, borderRadius: 3, padding: "1px 6px", color: text }}>pinned</span>}
+                              <span style={{ fontSize: 10, border: `1px solid ${p.shipped ? "#22c55e66" : border}`, borderRadius: 3, padding: "1px 6px", color: p.shipped ? "#22c55e" : textMuted }}>{p.shipped ? "shipped" : "active"}</span>
+                            </div>
+                          </div>
+                          <div style={{ fontSize: 11, color: textMuted, lineHeight: 1.6, marginBottom: 6 }}>{p.description?.slice(0, 120)}{(p.description || "").length > 120 ? "..." : ""}</div>
+                          {(p.skills || []).length > 0 && <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>{(p.skills || []).slice(0, 4).map((s) => <span key={s} style={{ fontSize: 10, padding: "1px 7px", border: `1px solid ${border}`, borderRadius: 3, color: textMuted }}>{s}</span>)}</div>}
+                        </button>
+                      ))}
                     </div>
                 }
               </div>
@@ -3202,17 +3271,24 @@ function CoLab() {
                   <button className="hb" onClick={() => setShowAddPortfolio(true)} style={{ background: "none", border: "none", color: text, cursor: "pointer", fontFamily: "inherit", fontSize: 11, textDecoration: "underline" }}>+ add work</button>
                 </div>
                 {portfolioItems.length === 0
-                  ? <div style={{ fontSize: 13, color: textMuted, lineHeight: 1.75 }}>your portfolio lives here.<br />add projects, work samples, and links you're proud of.</div>
+                  ? <div style={{ fontSize: 13, color: textMuted, lineHeight: 1.75 }}>your portfolio lives here.<br />add portfolio work so collaborators can scan your best output quickly.</div>
                   : <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
                       {portfolioItems.map((item, i) => (
                         <div key={item.id} style={{ background: bg2, borderRadius: i === 0 && portfolioItems.length === 1 ? 8 : i === 0 ? "8px 8px 0 0" : i === portfolioItems.length - 1 ? "0 0 8px 8px" : 0, border: `1px solid ${border}`, borderBottom: i < portfolioItems.length - 1 ? "none" : `1px solid ${border}`, padding: "16px 18px", display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
                           <div style={{ minWidth: 0, flex: 1 }}>
                             <div style={{ fontSize: 14, color: text, marginBottom: 5, letterSpacing: "-0.3px" }}>{item.title}</div>
                             {item.description && <div style={{ fontSize: 12, color: textMuted, lineHeight: 1.65, marginBottom: 6 }}>{item.description}</div>}
-                            {item.url && (
-                                item.url.match(/\.(jpg|jpeg|png|gif|webp)$/i)
-                                  ? <img src={item.url} alt={item.title} style={{ maxWidth: "100%", maxHeight: 200, borderRadius: 8, border: `1px solid ${border}`, marginTop: 4 }} />
-                                  : <a href={item.url} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: text, textDecoration: "underline", wordBreak: "break-all" }}>{item.url.includes("user-uploads") ? "view file" : item.url}</a>
+                            {item.url && getMediaType(item.url) === "image" && <img src={item.url} alt={item.title} style={{ maxWidth: "100%", maxHeight: 200, borderRadius: 8, border: `1px solid ${border}`, marginTop: 4 }} />}
+                            {item.url && getMediaType(item.url) === "youtube" && (
+                              <div style={{ borderRadius: 8, overflow: "hidden", border: `1px solid ${border}`, marginTop: 6 }}>
+                                <iframe title={item.title} src={`https://www.youtube.com/embed/${getYouTubeId(item.url) || ""}`} style={{ width: "100%", height: 220, border: "none" }} allowFullScreen />
+                              </div>
+                            )}
+                            {item.url && getMediaType(item.url) === "link" && (
+                              <a href={item.url} target="_blank" rel="noreferrer" style={{ display: "block", textDecoration: "none", border: `1px solid ${border}`, borderRadius: 8, padding: "10px 12px", marginTop: 6 }}>
+                                <div style={{ fontSize: 10, color: textMuted, marginBottom: 3 }}>{toHost(item.url)}</div>
+                                <div style={{ fontSize: 11, color: text, textDecoration: "underline", wordBreak: "break-all" }}>{item.url.includes("user-uploads") ? "view file" : item.url}</div>
+                              </a>
                             )}
                           </div>
                           <button className="hb" onClick={() => handleDeletePortfolioItem(item.id)} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontSize: 12, fontFamily: "inherit", flexShrink: 0 }}>✕</button>
