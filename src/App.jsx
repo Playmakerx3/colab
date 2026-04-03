@@ -17,6 +17,7 @@ import { useAppDataBootstrap } from "./features/app/hooks/useAppDataBootstrap";
 import { useRealtimeSubscriptions } from "./features/realtime/hooks/useRealtimeSubscriptions";
 import { useMessaging } from "./features/messaging/hooks/useMessaging";
 import { useApplications } from "./features/applications/hooks/useApplications";
+import { useProjectWorkspace } from "./features/projects/hooks/useProjectWorkspace";
 
 function PostCard({ post, ctx }) {
   const {
@@ -566,12 +567,6 @@ function CoLab() {
   });
 
 
-  // Ref for project-derived side effects that should read latest projects
-  const projectsRef = useRef([]);
-  useEffect(() => {
-    projectsRef.current = projects;
-  }, [projects]);
-
   useRealtimeSubscriptions({
     authUser,
     activeProject,
@@ -589,23 +584,6 @@ function CoLab() {
     setMentionNotifications,
   });
 
-
-  const loadProjectData = async (projectId) => {
-    const [{ data: t }, { data: m }, { data: u }, { data: f }, { data: d }] = await Promise.all([
-      supabase.from("tasks").select("*").eq("project_id", projectId).order("created_at"),
-      supabase.from("messages").select("*").eq("project_id", projectId).order("created_at"),
-      supabase.from("updates").select("*").eq("project_id", projectId).order("created_at", { ascending: false }),
-      supabase.from("project_files").select("*").eq("project_id", projectId).order("created_at", { ascending: false }),
-      supabase.from("project_docs").select("*").eq("project_id", projectId).order("created_at"),
-    ]);
-    setTasks(t || []);
-    setMessages(m || []);
-    setProjectUpdates(u || []);
-    setProjectFiles(f || []);
-    setProjectDocs(d || []);
-    setActiveDoc(null);
-    loadActivity(projectId);
-  };
 
   // ── AUTH ──
   const handleSignUp = async () => {
@@ -671,142 +649,6 @@ function CoLab() {
     showToast,
   });
 
-  // ── PROJECTS ──
-  const handlePostProject = async () => {
-    if (!newProject.title || !newProject.description) return;
-    const { data, error } = await supabase.from("projects").insert({
-      title: newProject.title, description: newProject.description,
-      category: newProject.category, skills: newProject.skills,
-      max_collaborators: newProject.maxCollaborators,
-      location: newProject.location || profile?.location || "",
-      goals: newProject.goals || null,
-      timeline: newProject.timeline || null,
-      owner_id: authUser.id, owner_name: profile.name,
-      owner_initials: myInitials, status: "open", progress: 0, plugins: [], collaborators: 0,
-      is_private: newProject.is_private || false,
-    }).select().single();
-    if (!error && data) {
-      setProjects([data, ...projects]);
-      setNewProject({ title: "", description: "", category: CATEGORIES[0], skills: [], maxCollaborators: 2, location: "", goals: "", timeline: "", is_private: false });
-      setShowCreate(false);
-      setActiveProject(data);
-      loadProjectData(data.id);
-      setAppScreen("workspace");
-      setProjectTab("kanban");
-      showToast("Project posted — you're in your workspace.");
-    } else {
-      showToast("Failed to post project. Try again.");
-    }
-  };
-
-  const handleArchiveProject = async (projectId) => {
-    if (!window.confirm("Archive this project? It will be hidden from your workspace but not deleted.")) return;
-    await supabase.from("projects").update({ archived: true }).eq("id", projectId);
-    setProjects(prev => prev.map(p => p.id === projectId ? { ...p, archived: true } : p));
-    setActiveProject(null);
-    showToast("Project archived.");
-  };
-
-  const handleUnarchiveProject = async (projectId) => {
-    await supabase.from("projects").update({ archived: false }).eq("id", projectId);
-    setProjects(prev => prev.map(p => p.id === projectId ? { ...p, archived: false } : p));
-    showToast("Project restored.");
-  };
-
-  const handleShipProject = async (projectId, content) => {
-    if (!content.trim()) return;
-    const proj = projects.find(p => p.id === projectId) || activeProject;
-    if (!proj) return;
-    const now = new Date().toISOString();
-    await supabase.from("projects").update({ shipped: true, shipped_at: now }).eq("id", projectId);
-    setProjects(prev => prev.map(p => p.id === projectId ? { ...p, shipped: true, shipped_at: now } : p));
-    if (activeProject?.id === projectId) setActiveProject(prev => ({ ...prev, shipped: true, shipped_at: now }));
-    const insertPayload = {
-      user_id: authUser.id, user_name: profile.name, user_initials: myInitials,
-      user_role: profile.role || "", content,
-      project_id: projectId, project_title: proj.title,
-    };
-    const { data: postData } = await supabase.from("posts").insert(insertPayload).select().single();
-    if (postData) setPosts(prev => [postData, ...prev]);
-    logActivity(projectId, "project_shipped", `${proj.title} shipped`);
-    setShowShipModal(false);
-    setShipPostContent("");
-    showToast("Shipped! Post added to your feed.");
-  };
-
-  const handleToggleFeatured = async (projectId, featured) => {
-    await supabase.from("projects").update({ featured }).eq("id", projectId);
-    setProjects(prev => prev.map(p => p.id === projectId ? { ...p, featured } : p));
-    if (activeProject?.id === projectId) setActiveProject(prev => ({ ...prev, featured }));
-    showToast(featured ? "Project featured on Explore." : "Removed from featured.");
-  };
-
-  const parseGithubRepo = (input) => {
-    if (!input) return null;
-    // Accept: "owner/repo", "https://github.com/owner/repo", "github.com/owner/repo"
-    const cleaned = input.trim().replace(/\.git$/, "").replace(/\/$/, "");
-    const match = cleaned.match(/(?:github\.com\/)?([^/\s]+\/[^/\s]+)$/);
-    return match ? match[1] : null;
-  };
-
-  const loadGithubCommits = async (repoSlug) => {
-    if (!repoSlug) return;
-    setGithubLoading(true);
-    setGithubError(null);
-    try {
-      const res = await fetch(`https://api.github.com/repos/${repoSlug}/commits?per_page=8`, {
-        headers: { Accept: "application/vnd.github+json" },
-      });
-      if (!res.ok) {
-        if (res.status === 404) setGithubError("Repo not found. Make sure it's public.");
-        else if (res.status === 403) setGithubError("Rate limited by GitHub. Try again in a minute.");
-        else setGithubError(`GitHub error: ${res.status}`);
-        setGithubCommits([]);
-      } else {
-        const data = await res.json();
-        setGithubCommits(data);
-      }
-    } catch {
-      setGithubError("Failed to reach GitHub.");
-    }
-    setGithubLoading(false);
-  };
-
-  const handleSaveGithubRepo = async (repoInput) => {
-    const slug = parseGithubRepo(repoInput);
-    if (!slug) { showToast("Enter a valid GitHub repo (e.g. owner/repo)"); return; }
-    await supabase.from("projects").update({ github_repo: slug }).eq("id", activeProject.id);
-    setProjects(prev => prev.map(p => p.id === activeProject.id ? { ...p, github_repo: slug } : p));
-    setActiveProject(prev => ({ ...prev, github_repo: slug }));
-    // Connect plugin if not already
-    if (!(activeProject.plugins || []).includes("github")) {
-      const newPlugins = [...(activeProject.plugins || []), "github"];
-      await supabase.from("projects").update({ plugins: newPlugins }).eq("id", activeProject.id);
-      setProjects(prev => prev.map(p => p.id === activeProject.id ? { ...p, plugins: newPlugins } : p));
-      setActiveProject(prev => ({ ...prev, plugins: newPlugins }));
-    }
-    showToast("Repo connected.");
-    loadGithubCommits(slug);
-  };
-
-  const handleLeaveProject = async (applicationId) => {
-    if (!window.confirm("Leave this project? You'll need to re-apply to rejoin.")) return;
-    await supabase.from("applications").update({ status: "left" }).eq("id", applicationId);
-    setApplications(prev => prev.map(a => a.id === applicationId ? { ...a, status: "left" } : a));
-    setActiveProject(null);
-    showToast("You've left the project.");
-  };
-
-  const handleGenerateInvite = async (projectId) => {
-    const { data } = await supabase.from("project_invites").insert({ project_id: projectId, created_by: authUser.id }).select().single();
-    if (data) {
-      const url = `${window.location.origin}/join/${data.token}`;
-      setInviteLink(url);
-      navigator.clipboard?.writeText(url);
-      showToast("Invite link copied to clipboard.");
-    }
-  };
-
   const handleUpdateEmail = async () => {
     if (!settingsEmail) return;
     const { error } = await supabase.auth.updateUser({ email: settingsEmail });
@@ -819,83 +661,6 @@ function CoLab() {
     const { error } = await supabase.auth.updateUser({ password: settingsNewPassword });
     if (error) showToast("Error: " + error.message);
     else { showToast("Password updated."); setSettingsNewPassword(""); }
-  };
-
-  const logActivity = async (projectId, eventType, details) => {
-    if (!authUser || !profile) return;
-    await supabase.from("project_activity").insert({ project_id: projectId, user_id: authUser.id, user_name: profile.name, event_type: eventType, details });
-  };
-
-  const loadActivity = async (projectId) => {
-    const { data } = await supabase.from("project_activity").select("*").eq("project_id", projectId).order("created_at", { ascending: false }).limit(50);
-    setProjectActivity(data || []);
-  };
-
-  // Auto-calculate progress from task completion
-  const calcProgress = (projectId, taskList) => {
-    const pt = taskList.filter(t => t.project_id === projectId);
-    if (pt.length === 0) return null;
-    return Math.round((pt.filter(t => t.done).length / pt.length) * 100);
-  };
-
-  const syncProgress = async (projectId, taskList) => {
-    const prog = calcProgress(projectId, taskList);
-    if (prog === null) return;
-    await supabase.from("projects").update({ progress: prog }).eq("id", projectId);
-    setProjects(prev => prev.map(p => p.id === projectId ? { ...p, progress: prog } : p));
-    if (activeProject?.id === projectId) setActiveProject(prev => ({ ...prev, progress: prog }));
-    if (prog === 100) {
-      const proj = projectsRef.current.find(p => p.id === projectId);
-      if (proj && !proj.shipped && proj.owner_id === authUser?.id) {
-        setTimeout(() => {
-          setShipPostContent(`just shipped: ${proj.title}. built it with the team on CoLab.`);
-          setShowShipModal(true);
-        }, 600);
-      }
-    }
-  };
-
-  // ── TASKS ──
-  const handleAddTask = async (projectId) => {
-    if (!newTaskText.trim()) return;
-    const assignedUser = users.find(u => u.name === taskAssignee);
-    const { data } = await supabase.from("tasks").insert({
-      project_id: projectId, text: newTaskText, done: false,
-      assigned_to: assignedUser?.id || null, assigned_name: taskAssignee || null,
-      due_date: taskDueDate || null,
-    }).select().single();
-    if (data) {
-      const newTasks = [...tasks, data];
-      setTasks(newTasks);
-      setNewTaskText(""); setTaskAssignee(""); setTaskDueDate("");
-      syncProgress(projectId, newTasks);
-    }
-  };
-
-  const handleToggleTask = async (task) => {
-    const { data } = await supabase.from("tasks").update({ done: !task.done }).eq("id", task.id).select().single();
-    if (data) {
-      const newTasks = tasks.map(t => t.id === task.id ? data : t);
-      setTasks(newTasks);
-      syncProgress(task.project_id, newTasks);
-    }
-  };
-
-  const handleDeleteTask = async (taskId) => {
-    const task = tasks.find(t => t.id === taskId);
-    await supabase.from("tasks").delete().eq("id", taskId);
-    const newTasks = tasks.filter(t => t.id !== taskId);
-    setTasks(newTasks);
-    if (task) syncProgress(task.project_id, newTasks);
-  };
-
-  const handlePostUpdate = async (projectId) => {
-    if (!newUpdate.trim()) return;
-    const { data } = await supabase.from("updates").insert({
-      project_id: projectId, author_id: authUser.id,
-      author: profile.name, initials: myInitials, text: newUpdate,
-    }).select().single();
-    if (data) { setProjectUpdates([data, ...projectUpdates]); setNewUpdate(""); detectAndNotifyMentions(newUpdate, projectId); showToast("Update posted."); }
   };
 
   const handleFollow = async (userId) => {
@@ -1231,6 +996,70 @@ function CoLab() {
       }
     }
   };
+
+  const {
+    loadProjectData,
+    handlePostProject,
+    handleArchiveProject,
+    handleUnarchiveProject,
+    handleShipProject,
+    handleToggleFeatured,
+    loadGithubCommits,
+    handleSaveGithubRepo,
+    handleLeaveProject,
+    handleGenerateInvite,
+    logActivity,
+    handleAddTask,
+    handleToggleTask,
+    handleDeleteTask,
+    handlePostUpdate,
+    handleUploadProjectFile,
+    handleDeleteProjectFile,
+    handleCreateProjectDoc,
+    handleDeleteProjectDoc,
+    handleSaveProjectDoc,
+  } = useProjectWorkspace({
+    authUser,
+    profile,
+    myInitials,
+    projects,
+    setProjects,
+    activeProject,
+    setActiveProject,
+    setTasks,
+    tasks,
+    users,
+    setMessages,
+    setProjectUpdates,
+    projectUpdates,
+    setProjectFiles,
+    setProjectDocs,
+    setActiveDoc,
+    setProjectActivity,
+    setApplications,
+    setPosts,
+    newProject,
+    setNewProject,
+    setShowCreate,
+    setAppScreen,
+    setProjectTab,
+    newTaskText,
+    setNewTaskText,
+    taskAssignee,
+    setTaskAssignee,
+    taskDueDate,
+    setTaskDueDate,
+    newUpdate,
+    setNewUpdate,
+    detectAndNotifyMentions,
+    showToast,
+    setShowShipModal,
+    setShipPostContent,
+    setInviteLink,
+    setGithubLoading,
+    setGithubError,
+    setGithubCommits,
+  });
 
   const {
     openDmThread,
@@ -2596,21 +2425,7 @@ function CoLab() {
                     </div>
                     <input type="file" style={{ display: "none" }} onChange={async (e) => {
                       const file = e.target.files[0];
-                      if (!file) return;
-                      showToast("Uploading...");
-                      const path = `${activeProject.id}/${Date.now()}-${file.name}`;
-                      const { error } = await supabase.storage.from("project-files").upload(path, file);
-                      if (error) { showToast("Upload failed."); return; }
-                      const { data: { publicUrl } } = supabase.storage.from("project-files").getPublicUrl(path);
-                      const { data: fileRecord } = await supabase.from("project_files").insert({
-                        project_id: activeProject.id, user_id: authUser.id,
-                        user_name: profile.name, user_initials: myInitials,
-                        name: file.name, size: file.size, type: file.type, url: publicUrl,
-                      }).select().single();
-                      if (fileRecord) {
-                        setProjectFiles(prev => [...prev, fileRecord]);
-                        showToast("File uploaded.");
-                      }
+                      await handleUploadProjectFile(activeProject.id, file);
                     }} />
                   </label>
                 </div>
@@ -2628,13 +2443,7 @@ function CoLab() {
                               <div style={{ fontSize: 10, color: textMuted }}>{file.user_name} · {new Date(file.created_at).toLocaleDateString()} · {file.size ? `${(file.size / 1024).toFixed(0)}kb` : ""}</div>
                             </div>
                             <a href={file.url} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: text, textDecoration: "underline", flexShrink: 0 }}>open</a>
-                            <button className="hb" onClick={async () => {
-                              const path = file.url.split("/project-files/")[1];
-                              await supabase.storage.from("project-files").remove([path]);
-                              await supabase.from("project_files").delete().eq("id", file.id);
-                              setProjectFiles(prev => prev.filter(f => f.id !== file.id));
-                              showToast("File deleted.");
-                            }} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontSize: 12, fontFamily: "inherit", flexShrink: 0 }}>delete</button>
+                            <button className="hb" onClick={async () => handleDeleteProjectFile(file)} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontSize: 12, fontFamily: "inherit", flexShrink: 0 }}>delete</button>
                           </div>
                           {file.type?.startsWith("image") && (
                             <img src={file.url} alt={file.name} style={{ width: "100%", maxHeight: 260, objectFit: "cover", borderRadius: 6, border: `1px solid ${border}` }} />
@@ -2656,12 +2465,7 @@ function CoLab() {
                   <div style={{ fontSize: 10, color: textMuted, letterSpacing: "1.5px" }}>SHARED DOCUMENTS</div>
                   <button className="hb" onClick={async () => {
                     const title = prompt("Document title:");
-                    if (!title) return;
-                    const { data } = await supabase.from("project_docs").insert({
-                      project_id: activeProject.id, title, content: "",
-                      last_edited_by: profile.name, last_edited_initials: myInitials,
-                    }).select().single();
-                    if (data) { setProjectDocs(prev => [...prev, data]); setActiveDoc(data); }
+                    await handleCreateProjectDoc(activeProject.id, title);
                   }} style={{ background: "none", border: "none", color: text, cursor: "pointer", fontFamily: "inherit", fontSize: 11, textDecoration: "underline" }}>+ new doc</button>
                 </div>
                 {activeDoc ? (
@@ -2677,12 +2481,7 @@ function CoLab() {
                           style={{ background: "none", border: `1px solid ${border}`, borderRadius: 6, padding: "5px 10px", fontSize: 11, cursor: "pointer", color: textMuted, fontFamily: "inherit" }}>
                           {docPreviewMode ? "edit" : "preview"}
                         </button>
-                        <button className="hb" onClick={async () => {
-                          await supabase.from("project_docs").delete().eq("id", activeDoc.id);
-                          setProjectDocs(prev => prev.filter(d => d.id !== activeDoc.id));
-                          setActiveDoc(null);
-                          showToast("Document deleted.");
-                        }} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontFamily: "inherit", fontSize: 11, textDecoration: "underline" }}>delete doc</button>
+                        <button className="hb" onClick={async () => handleDeleteProjectDoc(activeDoc.id, true)} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontFamily: "inherit", fontSize: 11, textDecoration: "underline" }}>delete doc</button>
                       </div>
                     </div>
                     {docPreviewMode ? (
@@ -2704,16 +2503,7 @@ function CoLab() {
                       <textarea
                         value={activeDoc.content || ""}
                         onChange={e => setActiveDoc({ ...activeDoc, content: e.target.value })}
-                        onBlur={async () => {
-                          await supabase.from("project_docs").update({
-                            content: activeDoc.content,
-                            last_edited_by: profile.name,
-                            last_edited_initials: myInitials,
-                            updated_at: new Date().toISOString(),
-                          }).eq("id", activeDoc.id);
-                          setProjectDocs(prev => prev.map(d => d.id === activeDoc.id ? { ...activeDoc } : d));
-                          showToast("Saved.");
-                        }}
+                        onBlur={async () => handleSaveProjectDoc(activeDoc)}
                         placeholder="Start writing... Use # for headers, **bold**, *italic*, - for bullets"
                         style={{ ...inputStyle, resize: "none", minHeight: 400, fontSize: 13, lineHeight: 1.8, fontFamily: "inherit" }}
                       />
@@ -2730,11 +2520,7 @@ function CoLab() {
                               <div style={{ fontSize: 14, color: text, marginBottom: 4 }}>{doc.title}</div>
                               <div style={{ fontSize: 10, color: textMuted }}>edited by {doc.last_edited_by} · {new Date(doc.updated_at).toLocaleDateString()}</div>
                             </div>
-                            <button className="hb" onClick={async () => {
-                              await supabase.from("project_docs").delete().eq("id", doc.id);
-                              setProjectDocs(prev => prev.filter(d => d.id !== doc.id));
-                              showToast("Document deleted.");
-                            }} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontFamily: "inherit", fontSize: 11, flexShrink: 0 }}>delete</button>
+                            <button className="hb" onClick={async () => handleDeleteProjectDoc(doc.id)} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontFamily: "inherit", fontSize: 11, flexShrink: 0 }}>delete</button>
                           </div>
                         ))}
                       </div>
