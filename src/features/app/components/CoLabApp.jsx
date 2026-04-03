@@ -978,6 +978,104 @@ function CoLab() {
     users,
   ]);
 
+  const collaborationNeeds = useMemo(() => {
+    if (!activeProject) return null;
+
+    const toNorm = (value = "") => value.toLowerCase().trim();
+    const roleLabelBySkill = {
+      Design: "Designer needed",
+      Engineering: "Frontend / engineering help needed",
+      Marketing: "Marketing help needed",
+      Product: "Product support needed",
+      Writing: "Writing support needed",
+      "AI/ML": "AI/ML support needed",
+      Video: "Video collaborator needed",
+      Music: "Music collaborator needed",
+      Finance: "Finance support needed",
+      Sales: "Sales help needed",
+      Operations: "Operations support needed",
+      Legal: "Legal support needed",
+      Data: "Data support needed",
+      Photography: "Photography support needed",
+      "3D/CAD": "3D/CAD collaborator needed",
+      Architecture: "Architecture support needed",
+    };
+
+    const explicitNeeds = (activeProject.skills || []).filter(Boolean);
+    const ownerProfile = users.find((u) => u.id === activeProject.owner_id);
+    const acceptedApplicants = applications.filter((a) => a.project_id === activeProject.id && a.status === "accepted");
+    const pendingApplicants = applications.filter((a) => a.project_id === activeProject.id && a.status === "pending");
+    const activeProjectTasks = tasks.filter((t) => t.project_id === activeProject.id);
+    const openProjectTasks = activeProjectTasks.filter((t) => !t.done);
+    const unassignedOpenTasks = openProjectTasks.filter((t) => !(t.assigned_name || "").trim()).length;
+
+    const existingSkillSignals = new Set(
+      [
+        ...(ownerProfile?.skills || []),
+        ...(acceptedApplicants.flatMap((a) => a.applicant_skills || [])),
+        ...(acceptedApplicants.map((a) => a.applicant_role || "")),
+      ].map(toNorm).filter(Boolean)
+    );
+
+    const explicitMissing = explicitNeeds.filter((skill) => !existingSkillSignals.has(toNorm(skill)));
+
+    const inferenceText = [
+      activeProject.title,
+      activeProject.description,
+      activeProject.goals,
+      activeProject.timeline,
+      ...openProjectTasks.map((t) => t.text),
+      ...projectUpdates.slice(0, 6).map((u) => u.text),
+    ].join(" ").toLowerCase();
+
+    const inferenceRules = [
+      { skill: "Design", minHits: 2, keywords: ["design", "ui", "ux", "figma", "wireframe", "prototype", "brand"] },
+      { skill: "Engineering", minHits: 2, keywords: ["frontend", "backend", "api", "code", "dev", "react", "build", "integration"] },
+      { skill: "Marketing", minHits: 2, keywords: ["marketing", "launch", "growth", "campaign", "social", "seo", "community"] },
+      { skill: "Product", minHits: 2, keywords: ["product", "roadmap", "scope", "requirements", "prioritize"] },
+      { skill: "Writing", minHits: 2, keywords: ["copy", "docs", "documentation", "writing", "content"] },
+    ];
+
+    const inferredMissing = inferenceRules
+      .filter((rule) => {
+        if (explicitNeeds.includes(rule.skill)) return false;
+        if (existingSkillSignals.has(toNorm(rule.skill))) return false;
+        const hits = rule.keywords.reduce((sum, keyword) => sum + (inferenceText.includes(keyword) ? 1 : 0), 0);
+        return hits >= rule.minHits;
+      })
+      .map((rule) => rule.skill)
+      .slice(0, 2);
+
+    const roleNeeds = [...new Set((explicitMissing.length > 0 ? explicitMissing : inferredMissing))]
+      .map((skill) => ({ skill, label: roleLabelBySkill[skill] || `${skill} support needed`, inferred: explicitMissing.length === 0 }));
+
+    const maxCollaborators = Math.max(1, activeProject.max_collaborators || 2);
+    const collaboratorCoverage = acceptedApplicants.length / maxCollaborators;
+    const unfilledCollaboratorNeeds = Math.max(0, maxCollaborators - acceptedApplicants.length);
+
+    const demandSignals = [
+      pendingApplicants.length > 0
+        ? { key: "pending-apps", label: `${pendingApplicants.length} open application${pendingApplicants.length !== 1 ? "s" : ""}` }
+        : null,
+      unfilledCollaboratorNeeds > 0
+        ? { key: "unfilled-needs", label: `${unfilledCollaboratorNeeds} collaborator slot${unfilledCollaboratorNeeds !== 1 ? "s" : ""} still unfilled` }
+        : null,
+      collaboratorCoverage < 0.5 && openProjectTasks.length > 0
+        ? { key: "low-coverage-active-tasks", label: "Low collaborator coverage while tasks are active" }
+        : null,
+      unassignedOpenTasks > 0
+        ? { key: "unassigned-open-tasks", label: `${unassignedOpenTasks} open task${unassignedOpenTasks !== 1 ? "s" : ""} with no assignee` }
+        : null,
+    ].filter(Boolean);
+
+    return {
+      roleNeeds,
+      demandSignals,
+      pendingApplicantsCount: pendingApplicants.length,
+      hasExplicitNeeds: explicitNeeds.length > 0,
+    };
+  }, [activeProject, applications, projectUpdates, tasks, users]);
+
   const TabBtn = ({ id, label, count, setter, current }) => (
     <button onClick={() => setter(id)} style={{ background: "none", border: "none", borderBottom: current === id ? `1px solid ${text}` : "1px solid transparent", color: current === id ? text : textMuted, padding: "8px 0", fontSize: 12, cursor: "pointer", fontFamily: "inherit", marginRight: 20, transition: "all 0.15s", display: "inline-flex", gap: 5, alignItems: "center", whiteSpace: "nowrap" }}>
       {label}{count > 0 && <span style={{ fontSize: 10, background: bg3, borderRadius: 10, padding: "1px 6px", color: textMuted }}>{count}</span>}
@@ -2790,6 +2888,65 @@ function CoLab() {
                     )}
                     {!todayNextUp.hasUrgentSignals && (
                       <div style={{ fontSize: 11, color: textMuted }}>No urgent signals right now.</div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {collaborationNeeds && (
+            <div className="pad" style={{ padding: "12px 28px", borderBottom: `1px solid ${border}`, background: bg2 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 10, flexWrap: "wrap" }}>
+                <div style={{ fontSize: 10, color: textMuted, letterSpacing: "1.6px" }}>THIS PROJECT NEEDS…</div>
+                <div style={{ fontSize: 10, color: textMuted }}>
+                  {collaborationNeeds.hasExplicitNeeds ? "based on listed project skills" : "inferred from project activity"}
+                </div>
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1.5fr 1fr 1fr", gap: 12 }}>
+                <div style={{ background: bg, border: `1px solid ${border}`, borderRadius: 8, padding: "10px 12px" }}>
+                  <div style={{ fontSize: 10, color: textMuted, letterSpacing: "1.2px", marginBottom: 8 }}>MISSING ROLES / SKILLS</div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                    {collaborationNeeds.roleNeeds.length > 0 ? collaborationNeeds.roleNeeds.map((need) => (
+                      <div key={need.skill} style={{ fontSize: 11, color: text }}>
+                        • {need.label}
+                        {need.inferred && <span style={{ color: textMuted }}> (inferred)</span>}
+                      </div>
+                    )) : (
+                      <div style={{ fontSize: 11, color: textMuted }}>No clear missing role signal yet.</div>
+                    )}
+                  </div>
+                </div>
+
+                <div style={{ background: bg, border: `1px solid ${border}`, borderRadius: 8, padding: "10px 12px" }}>
+                  <div style={{ fontSize: 10, color: textMuted, letterSpacing: "1.2px", marginBottom: 8 }}>COLLABORATION SIGNALS</div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                    {collaborationNeeds.demandSignals.length > 0 ? collaborationNeeds.demandSignals.map((signal) => (
+                      <div key={signal.key} style={{ fontSize: 11, color: text }}>{signal.label}</div>
+                    )) : (
+                      <div style={{ fontSize: 11, color: textMuted }}>Team coverage looks healthy right now.</div>
+                    )}
+                  </div>
+                </div>
+
+                <div style={{ background: bg, border: `1px solid ${border}`, borderRadius: 8, padding: "10px 12px" }}>
+                  <div style={{ fontSize: 10, color: textMuted, letterSpacing: "1.2px", marginBottom: 8 }}>QUICK ACTIONS</div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+                    <button className="hb" onClick={() => handleGenerateInvite(activeProject.id)} style={{ ...btnG, padding: "6px 10px", fontSize: 11, textAlign: "left" }}>
+                      Invite collaborator
+                    </button>
+                    <button
+                      className="hb"
+                      onClick={() => { navigator.clipboard?.writeText(`${window.location.origin}/p/${activeProject.id}`).catch(() => {}); showToast("Project link copied!"); }}
+                      style={{ ...btnG, padding: "6px 10px", fontSize: 11, textAlign: "left" }}
+                    >
+                      Share project
+                    </button>
+                    {activeProject.owner_id === authUser?.id && collaborationNeeds.pendingApplicantsCount > 0 && (
+                      <button className="hb" onClick={() => openReviewApplicants(activeProject)} style={{ ...btnP, padding: "6px 10px", fontSize: 11, textAlign: "left" }}>
+                        Review applications ({collaborationNeeds.pendingApplicantsCount})
+                      </button>
                     )}
                   </div>
                 </div>
