@@ -4,12 +4,13 @@ import PublicProfilePage from "./pages/PublicProfilePage";
 import PublicProjectPage from "./pages/PublicProjectPage";
 import ShippedPage from "./pages/ShippedPage";
 
-const publicMatch = typeof window !== "undefined" ? window.location.pathname.match(/^\/p\/([^/]+)$/) : null;
-const shippedMatch = typeof window !== "undefined" ? window.location.pathname.match(/^\/p\/([^/]+)\/shipped$/) : null;
-const profileMatch = typeof window !== "undefined" ? window.location.pathname.match(/^\/u\/([^/]+)$/) : null;
-const joinMatch = typeof window !== "undefined" ? window.location.pathname.match(/^\/join\/([^/]+)$/) : null;
-
 export default function App() {
+  const pathname = typeof window !== "undefined" ? window.location.pathname : "";
+  const publicMatch = pathname.match(/^\/p\/([^/]+)$/);
+  const shippedMatch = pathname.match(/^\/p\/([^/]+)\/shipped$/);
+  const profileMatch = pathname.match(/^\/u\/([^/]+)$/);
+  const joinMatch = pathname.match(/^\/join\/([^/]+)$/);
+
   if (shippedMatch) return <ShippedPage projectId={shippedMatch[1]} />;
   if (publicMatch) return <PublicProjectPage projectId={publicMatch[1]} />;
   if (profileMatch) return <PublicProfilePage username={profileMatch[1]} />;

@@ -39,11 +39,13 @@ export function useMessaging({
 }) {
   const loadDmMessages = async (threadId) => {
     const { data } = await fetchDmMessages(threadId);
-    setDmMessages((prev) => ({ ...prev, [threadId]: data || [] }));
+    const messages = data || [];
+    setDmMessages((prev) => ({ ...prev, [threadId]: messages }));
+    return messages;
   };
 
-  const markDmRead = async (threadId) => {
-    const msgs = dmMessages[threadId] || [];
+  const markDmRead = async (threadId, messagesOverride) => {
+    const msgs = messagesOverride || dmMessages[threadId] || [];
     const unread = msgs.filter((m) => m.sender_id !== authUser?.id && !(m.read_by || []).includes(authUser?.id));
     if (unread.length === 0) return;
 
@@ -61,12 +63,12 @@ export function useMessaging({
 
   const openDmThread = async ({ thread, otherUser }) => {
     setActiveDmThread({ ...thread, otherUser });
-    loadDmMessages(thread.id);
+    const loadedMessages = await loadDmMessages(thread.id);
     setAppScreen("messages");
     setViewingProfile(null);
     setViewFullProfile(null);
     setDmThreads((prev) => prev.map((t) => (t.id === thread.id ? { ...t, unread: false } : t)));
-    setTimeout(() => markDmRead(thread.id), 500);
+    setTimeout(() => markDmRead(thread.id, loadedMessages), 500);
   };
 
   const openDm = async (user) => {
