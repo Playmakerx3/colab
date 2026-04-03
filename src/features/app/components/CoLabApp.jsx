@@ -529,6 +529,8 @@ function CoLab() {
   const [toast, setToast] = useState(null);
   const [showCreate, setShowCreate] = useState(false);
   const [newProject, setNewProject] = useState({ title: "", description: "", category: CATEGORIES[0], skills: [], maxCollaborators: 2, location: "", goals: "", timeline: "", is_private: false });
+  const [createProjectError, setCreateProjectError] = useState("");
+  const [isCreatingProject, setIsCreatingProject] = useState(false);
   const [newTaskText, setNewTaskText] = useState("");
   const [taskAssignee, setTaskAssignee] = useState("");
   const [taskDueDate, setTaskDueDate] = useState("");
@@ -1557,6 +1559,8 @@ function CoLab() {
     setGithubLoading,
     setGithubError,
     setGithubCommits,
+    setCreateProjectError,
+    setIsCreatingProject,
   });
 
   const {
@@ -3948,13 +3952,13 @@ function CoLab() {
 
       {/* CREATE PROJECT MODAL */}
       {showCreate && (
-        <div onClick={() => setShowCreate(false)} style={{ position: "fixed", inset: 0, background: dark ? "rgba(0,0,0,0.9)" : "rgba(200,200,200,0.88)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100, backdropFilter: "blur(10px)", padding: 16 }}>
+        <div onClick={() => { if (!isCreatingProject) setShowCreate(false); }} style={{ position: "fixed", inset: 0, background: dark ? "rgba(0,0,0,0.9)" : "rgba(200,200,200,0.88)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100, backdropFilter: "blur(10px)", padding: 16 }}>
           <div onClick={e => e.stopPropagation()} style={{ background: bg, border: `1px solid ${border}`, borderRadius: 14, padding: "24px", width: "100%", maxWidth: 520, maxHeight: "92vh", overflowY: "auto" }}>
             <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px", marginBottom: 12 }}>NEW PROJECT</div>
             <h2 style={{ fontSize: 20, fontWeight: 400, letterSpacing: "-1px", marginBottom: 20, color: text }}>What are you building?</h2>
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              <div><label style={labelStyle}>TITLE</label><input style={inputStyle} placeholder="Project name" value={newProject.title} onChange={e => setNewProject({ ...newProject, title: e.target.value })} /></div>
-              <div><label style={labelStyle}>DESCRIPTION</label><textarea style={{ ...inputStyle, resize: "none" }} rows={4} placeholder="What are you building? What do you need?" value={newProject.description} onChange={e => setNewProject({ ...newProject, description: e.target.value })} /></div>
+              <div><label style={labelStyle}>TITLE</label><input style={inputStyle} placeholder="Project name" value={newProject.title} onChange={e => { setCreateProjectError(""); setNewProject({ ...newProject, title: e.target.value }); }} /></div>
+              <div><label style={labelStyle}>DESCRIPTION</label><textarea style={{ ...inputStyle, resize: "none" }} rows={4} placeholder="What are you building? What do you need?" value={newProject.description} onChange={e => { setCreateProjectError(""); setNewProject({ ...newProject, description: e.target.value }); }} /></div>
               <div><label style={labelStyle}>CATEGORY</label><select style={inputStyle} value={newProject.category} onChange={e => setNewProject({ ...newProject, category: e.target.value })}>{CATEGORIES.map(c => <option key={c}>{c}</option>)}</select></div>
               <div>
                 <label style={labelStyle}>SKILLS NEEDED</label>
@@ -3976,10 +3980,15 @@ function CoLab() {
                   {newProject.is_private ? "on" : "off"}
                 </button>
               </div>
+              {createProjectError && (
+                <div style={{ fontSize: 11, color: "#ef4444", border: `1px solid ${border}`, borderRadius: 8, padding: "8px 10px", lineHeight: 1.5 }}>
+                  {createProjectError}
+                </div>
+              )}
             </div>
             <div style={{ display: "flex", gap: 10, marginTop: 18 }}>
-              <button className="hb" onClick={() => { setShowCreate(false); setNewProject({ title: "", description: "", category: CATEGORIES[0], skills: [], maxCollaborators: 2, location: "", goals: "", timeline: "", is_private: false }); }} style={btnG}>cancel</button>
-              <button className="hb" onClick={handlePostProject} style={{ ...btnP, flex: 1 }}>post →</button>
+              <button className="hb" onClick={() => { if (isCreatingProject) return; setShowCreate(false); setCreateProjectError(""); setNewProject({ title: "", description: "", category: CATEGORIES[0], skills: [], maxCollaborators: 2, location: "", goals: "", timeline: "", is_private: false }); }} style={btnG}>cancel</button>
+              <button className="hb" onClick={handlePostProject} disabled={isCreatingProject} style={{ ...btnP, flex: 1, opacity: isCreatingProject ? 0.7 : 1, cursor: isCreatingProject ? "wait" : "pointer" }}>{isCreatingProject ? "posting..." : "post →"}</button>
             </div>
           </div>
         </div>
