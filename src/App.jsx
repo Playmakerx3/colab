@@ -15,6 +15,7 @@ import { resetPassword, signIn, signOut, signUp } from "./services/authService";
 import { useProfileState } from "./features/profile/hooks/useProfileState";
 import { useAppDataBootstrap } from "./features/app/hooks/useAppDataBootstrap";
 import { useRealtimeSubscriptions } from "./features/realtime/hooks/useRealtimeSubscriptions";
+import { useMessaging } from "./features/messaging/hooks/useMessaging";
 
 function PostCard({ post, ctx }) {
   const {
@@ -617,11 +618,6 @@ function CoLab() {
     loadActivity(projectId);
   };
 
-  const loadDmMessages = async (threadId) => {
-    const { data } = await supabase.from("dm_messages").select("*").eq("thread_id", threadId).order("created_at");
-    setDmMessages(prev => ({ ...prev, [threadId]: data || [] }));
-  };
-
   // ── AUTH ──
   const handleSignUp = async () => {
     setAuthError("");
@@ -904,22 +900,6 @@ function CoLab() {
     if (task) syncProgress(task.project_id, newTasks);
   };
 
-  // ── MESSAGES ──
-  const handleSendMessage = async (projectId) => {
-    if (!newMessage.trim()) return;
-    const text = newMessage;
-    setNewMessage(""); // optimistic clear
-    const { data } = await supabase.from("messages").insert({
-      project_id: projectId, from_user: authUser.id,
-      from_initials: myInitials, from_name: profile.name, text,
-    }).select().single();
-    if (data) {
-      setMessages(prev => prev.find(m => m.id === data.id) ? prev : [...prev, data]);
-      setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
-      detectAndNotifyMentions(text, projectId);
-    }
-  };
-
   const handlePostUpdate = async (projectId) => {
     if (!newUpdate.trim()) return;
     const { data } = await supabase.from("updates").insert({
@@ -927,55 +907,6 @@ function CoLab() {
       author: profile.name, initials: myInitials, text: newUpdate,
     }).select().single();
     if (data) { setProjectUpdates([data, ...projectUpdates]); setNewUpdate(""); detectAndNotifyMentions(newUpdate, projectId); showToast("Update posted."); }
-  };
-
-  // ── DMs ──
-  const openDm = async (user) => {
-    if (user.id === authUser?.id) return;
-    let thread = dmThreads.find(t =>
-      (t.user_a === authUser.id && t.user_b === user.id) ||
-      (t.user_b === authUser.id && t.user_a === user.id)
-    );
-    if (!thread) {
-      // Check DB both orderings before creating — prevents duplicate threads
-      const { data: existing } = await supabase.from("dm_threads").select("*")
-        .or(`and(user_a.eq.${authUser.id},user_b.eq.${user.id}),and(user_a.eq.${user.id},user_b.eq.${authUser.id})`);
-      if (existing && existing.length > 0) {
-        thread = existing[0];
-        setDmThreads(prev => prev.find(t => t.id === thread.id) ? prev : [...prev, thread]);
-      } else {
-        const { data } = await supabase.from("dm_threads").insert({ user_a: authUser.id, user_b: user.id }).select().single();
-        if (data) { thread = data; setDmThreads(prev => [...prev, data]); }
-      }
-    }
-    if (thread) {
-      setActiveDmThread({ ...thread, otherUser: user });
-      loadDmMessages(thread.id);
-      setAppScreen("messages");
-      setViewingProfile(null);
-      setViewFullProfile(null);
-      setDmThreads(prev => prev.map(t => t.id === thread.id ? { ...t, unread: false } : t));
-      setTimeout(() => markDmRead(thread.id), 500);
-    }
-  };
-
-  const handleSendDm = async () => {
-    if (!dmInput.trim() || !activeDmThread) return;
-    const text = dmInput;
-    const threadId = activeDmThread.id; // capture before async — avoids stale closure
-    const { data } = await supabase.from("dm_messages").insert({
-      thread_id: threadId, sender_id: authUser.id,
-      sender_name: profile.name, sender_initials: myInitials, text,
-    }).select().single();
-    if (data) {
-      setDmInput(""); // clear only after successful insert
-      setDmMessages(prev => {
-        const existing = prev[threadId] || [];
-        if (existing.find(m => m.id === data.id)) return prev;
-        return { ...prev, [threadId]: [...existing, data] };
-      });
-      setTimeout(() => dmEndRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
-    }
   };
 
   // ── APPLICATIONS ──
@@ -1359,55 +1290,6 @@ function CoLab() {
     );
   };
 
-  // ── MESSAGE DELETE + EDIT ──
-  const handleDeleteDm = async (msgId) => {
-    await supabase.from("dm_messages").delete().eq("id", msgId);
-    setDmMessages(prev => ({ ...prev, [activeDmThread.id]: (prev[activeDmThread.id] || []).filter(m => m.id !== msgId) }));
-  };
-
-  const handleDeleteThread = async (threadId) => {
-    await supabase.from("dm_messages").delete().eq("thread_id", threadId);
-    await supabase.from("dm_threads").delete().eq("id", threadId);
-    setDmMessages(prev => { const n = { ...prev }; delete n[threadId]; return n; });
-    setDmThreads(prev => prev.filter(t => t.id !== threadId));
-    if (activeDmThread?.id === threadId) setActiveDmThread(null);
-    showToast("Conversation deleted.");
-  };
-
-  const handleEditDm = async (msgId, newText) => {
-    const { data } = await supabase.from("dm_messages").update({ text: newText, edited: true }).eq("id", msgId).select().single();
-    if (data) {
-      setDmMessages(prev => ({ ...prev, [activeDmThread.id]: (prev[activeDmThread.id] || []).map(m => m.id === msgId ? data : m) }));
-      setEditingMessage(null);
-    }
-  };
-
-  const handleDeleteProjectMessage = async (msgId) => {
-    await supabase.from("messages").delete().eq("id", msgId);
-    setMessages(prev => prev.filter(m => m.id !== msgId));
-  };
-
-  const handleEditProjectMessage = async (msgId, newText) => {
-    const { data } = await supabase.from("messages").update({ text: newText, edited: true }).eq("id", msgId).select().single();
-    if (data) { setMessages(prev => prev.map(m => m.id === msgId ? data : m)); setEditingMessage(null); }
-  };
-
-  // ── READ RECEIPTS ──
-  const markDmRead = async (threadId) => {
-    const msgs = dmMessages[threadId] || [];
-    const unread = msgs.filter(m => m.sender_id !== authUser?.id && !(m.read_by || []).includes(authUser?.id));
-    if (unread.length === 0) return;
-    await Promise.all(unread.map(m =>
-      supabase.from("dm_messages").update({ read_by: [...(m.read_by || []), authUser.id] }).eq("id", m.id)
-    ));
-    setDmMessages(prev => ({
-      ...prev,
-      [threadId]: (prev[threadId] || []).map(m =>
-        m.sender_id !== authUser?.id ? { ...m, read_by: [...(m.read_by || []), authUser.id] } : m
-      )
-    }));
-  };
-
   // ── MENTION DETECTION ──
   const detectAndNotifyMentions = async (text, projectId) => {
     const mentioned = text.match(/@(\w[\w\s]*)/g);
@@ -1424,6 +1306,42 @@ function CoLab() {
       }
     }
   };
+
+  const {
+    openDmThread,
+    openDm,
+    handleSendMessage,
+    handleSendDm,
+    handleDeleteDm,
+    handleDeleteThread,
+    handleEditDm,
+    handleDeleteProjectMessage,
+    handleEditProjectMessage,
+  } = useMessaging({
+    authUser,
+    profile,
+    myInitials,
+    dmThreads,
+    dmMessages,
+    activeDmThread,
+    newMessage,
+    setNewMessage,
+    dmInput,
+    setDmInput,
+    messagesEndRef,
+    dmEndRef,
+    setMessages,
+    setDmMessages,
+    setDmThreads,
+    setActiveDmThread,
+    setAppScreen,
+    setViewingProfile,
+    setViewFullProfile,
+    setEditingMessage,
+    detectAndNotifyMentions,
+    showToast,
+  });
+
   const handleCreatePost = async () => {
     if (!newPostContent.trim()) return;
     const proj = myProjects.find(p => p.id === newPostProject);
@@ -2326,7 +2244,7 @@ function CoLab() {
                   const threadMsgs = dmMessages[thread.id] || [];
                   const lastMsg = threadMsgs[threadMsgs.length - 1];
                   return (
-                    <div key={thread.id} onClick={() => { setActiveDmThread({ ...thread, otherUser: other }); loadDmMessages(thread.id); setDmThreads(prev => prev.map(t => t.id === thread.id ? { ...t, unread: false } : t)); setTimeout(() => markDmRead(thread.id), 500); }}
+                    <div key={thread.id} onClick={() => openDmThread({ thread, otherUser: other })}
                       style={{ padding: "14px 20px", borderBottom: `1px solid ${border}`, cursor: "pointer", background: isActive ? bg2 : "none", display: "flex", gap: 12, alignItems: "center" }}
                       onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = bg2; }}
                       onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = "none"; }}>
