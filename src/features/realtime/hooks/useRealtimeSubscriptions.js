@@ -18,6 +18,27 @@ export function useRealtimeSubscriptions({
   onIncomingPost,
   setMentionNotifications,
 }) {
+  const shouldAutoScroll = (endRef) => {
+    const el = endRef?.current?.parentElement;
+    if (!el) return true;
+    const distanceFromBottom = el.scrollHeight - (el.scrollTop + el.clientHeight);
+    return distanceFromBottom < 80;
+  };
+  const upsertIncoming = (list, incoming) => {
+    if (list.find((m) => m.id === incoming.id)) return list;
+    const optimisticIdx = list.findIndex((m) =>
+      String(m.id || "").startsWith("temp-") &&
+      ((m.thread_id && m.thread_id === incoming.thread_id) || (m.project_id && m.project_id === incoming.project_id)) &&
+      ((m.sender_id && m.sender_id === incoming.sender_id) || (m.from_user && m.from_user === incoming.from_user)) &&
+      m.text === incoming.text
+    );
+    if (optimisticIdx >= 0) {
+      const copy = [...list];
+      copy[optimisticIdx] = incoming;
+      return copy;
+    }
+    return [...list, incoming];
+  };
   // Ref so realtime callbacks always see current projects without re-subscribing
   const projectsRef = useRef([]);
   useEffect(() => {
@@ -31,11 +52,11 @@ export function useRealtimeSubscriptions({
       .channel("realtime-colab")
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages" }, (payload) => {
         if (activeProject && payload.new.project_id === activeProject.id) {
+          const canScroll = shouldAutoScroll(messagesEndRef);
           setMessages((prev) => {
-            if (prev.find((m) => m.id === payload.new.id)) return prev;
-            return [...prev, payload.new];
+            return upsertIncoming(prev, payload.new);
           });
-          setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
+          if (canScroll) messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
         }
       })
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "dm_messages" }, (payload) => {
@@ -43,15 +64,14 @@ export function useRealtimeSubscriptions({
         setDmMessages((prev) => {
           const threadId = payload.new.thread_id;
           const existing = prev[threadId] || [];
-          if (existing.find((m) => m.id === payload.new.id)) return prev;
-          return { ...prev, [threadId]: [...existing, payload.new] };
+          return { ...prev, [threadId]: upsertIncoming(existing, payload.new) };
         });
         // If this thread is active, scroll to bottom
         if (activeDmThread?.id === payload.new.thread_id) {
-          setTimeout(() => dmEndRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
+          if (shouldAutoScroll(dmEndRef)) dmEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
         }
         // Show notification dot if message is from someone else and we're not on messages tab
-        if (payload.new.sender_id !== authUser?.id) {
+        if (payload.new.sender_id !== authUser?.id && activeDmThread?.id !== payload.new.thread_id) {
           setDmThreads((prev) =>
             prev.map((t) =>
               t.id === payload.new.thread_id ? { ...t, unread: true } : t
