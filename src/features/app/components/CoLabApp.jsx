@@ -45,6 +45,14 @@ const toHost = (url = "") => {
   }
 };
 
+const resolveTaskOwnership = (task, memberMap, currentUserId) => {
+  const assigneeId = task?.assigned_to || null;
+  const assignee = assigneeId ? (memberMap[assigneeId] || null) : null;
+  const isUnassigned = !assignee;
+  const isAssignedToMe = !!assignee && assignee.id === currentUserId;
+  return { assignee, isUnassigned, isAssignedToMe };
+};
+
 function PostCard({ post, ctx }) {
   const {
     postLikes, expandedComments, postComments, authUser, users,
@@ -547,10 +555,16 @@ function CoLab() {
   const [newDmSearch, setNewDmSearch] = useState("");
   const [showAddPortfolio, setShowAddPortfolio] = useState(false);
   const [newPortfolioItem, setNewPortfolioItem] = useState({ title: "", description: "", url: "" });
+  const [editingTaskId, setEditingTaskId] = useState(null);
+  const [editingTaskTitle, setEditingTaskTitle] = useState("");
+  const [taskEditorTaskId, setTaskEditorTaskId] = useState(null);
+  const [taskEditorDraft, setTaskEditorDraft] = useState({ assigneeId: "", dueDate: "", description: "" });
+  const [taskUpdatePendingById, setTaskUpdatePendingById] = useState({});
   const [hideFirstTimeGuide, setHideFirstTimeGuide] = useState(false);
   const [projectLastReadAt, setProjectLastReadAt] = useState({});
   const messagesEndRef = useRef(null);
   const dmEndRef = useRef(null);
+  const taskMutationSeqRef = useRef({});
 
   const bg = dark ? "#0a0a0a" : "#ffffff";
   const bg2 = dark ? "#111111" : "#f5f5f5";
@@ -597,6 +611,75 @@ function CoLab() {
   const getMatchScore = (p) => (profile?.skills || []).filter(s => (p.skills || []).includes(s)).length;
   const unreadDms = dmThreads.filter(t => t.unread && t.id !== activeDmThread?.id).length;
   const unreadNotifs = notifications.filter(n => !n.read).length + mentionNotifications.length;
+  const acceptedProjectApplicants = useMemo(() => (
+    activeProject
+      ? applications.filter((a) => a.project_id === activeProject.id && a.status === "accepted")
+      : []
+  ), [activeProject, applications]);
+  const usersById = useMemo(() => users.reduce((acc, user) => {
+    acc[user.id] = user;
+    return acc;
+  }, {}), [users]);
+
+  const projectMemberMap = useMemo(() => {
+    if (!activeProject) return {};
+    const memberIds = [activeProject.owner_id, ...acceptedProjectApplicants.map((a) => a.applicant_id)].filter(Boolean);
+    return Array.from(new Set(memberIds)).reduce((acc, memberId) => {
+      const member = usersById[memberId];
+      if (member) acc[member.id] = member;
+      return acc;
+    }, {});
+  }, [activeProject, acceptedProjectApplicants, usersById]);
+
+  const projectMembers = useMemo(() => {
+    if (!activeProject) return [];
+    return Object.values(projectMemberMap);
+  }, [activeProject, projectMemberMap]);
+
+  const hasTaskDescriptionField = useMemo(() => {
+    if (!activeProject) return false;
+    return tasks.some((task) => task.project_id === activeProject.id && Object.prototype.hasOwnProperty.call(task, "description"));
+  }, [activeProject, tasks]);
+
+  const taskOwnerSummary = useMemo(() => {
+    if (!activeProject) return { unassigned: 0, assignedToMe: 0 };
+    const openTasks = tasks.filter((t) => t.project_id === activeProject.id && !t.done);
+    const unassigned = openTasks.filter((task) => resolveTaskOwnership(task, projectMemberMap, authUser?.id).isUnassigned).length;
+    const assignedToMe = openTasks.filter((task) => resolveTaskOwnership(task, projectMemberMap, authUser?.id).isAssignedToMe).length;
+    return { unassigned, assignedToMe };
+  }, [activeProject, authUser?.id, tasks, projectMemberMap]);
+
+  const updateTaskOptimistic = async (taskId, updates) => {
+    const previousTask = tasks.find((task) => task.id === taskId);
+    if (!previousTask) return;
+    const mutationSeq = (taskMutationSeqRef.current[taskId] || 0) + 1;
+    taskMutationSeqRef.current[taskId] = mutationSeq;
+    setTaskUpdatePendingById((prev) => ({ ...prev, [taskId]: true }));
+    setTasks((prev) => prev.map((task) => (task.id === taskId ? { ...task, ...updates } : task)));
+    const { data, error } = await supabase.from("tasks").update(updates).eq("id", taskId).select().single();
+    if (taskMutationSeqRef.current[taskId] !== mutationSeq) return;
+    if (error || !data) {
+      setTasks((prev) => prev.map((task) => (task.id === taskId ? previousTask : task)));
+      showToast("Task update failed. Changes rolled back.");
+    } else {
+      setTasks((prev) => prev.map((task) => (task.id === taskId ? data : task)));
+    }
+    setTaskUpdatePendingById((prev) => {
+      const next = { ...prev };
+      delete next[taskId];
+      return next;
+    });
+  };
+
+  const openTaskEditor = (task) => {
+    if (!task) return;
+    setTaskEditorTaskId(task.id);
+    setTaskEditorDraft({
+      assigneeId: task.assigned_to || "",
+      dueDate: task.due_date || "",
+      description: task.description || "",
+    });
+  };
 
   // Render mentions with highlights
   const renderWithMentions = (text) => {
@@ -895,16 +978,11 @@ function CoLab() {
     const dayEnd = new Date(now);
     dayEnd.setHours(23, 59, 59, 999);
 
-    const normalizedMe = new Set([
-      (profile?.name || "").trim().toLowerCase(),
-      (users.find((u) => u.id === authUser?.id)?.name || "").trim().toLowerCase(),
-    ].filter(Boolean));
-
     const overdueTasks = incompleteTasks
       .filter((t) => t.due_date && new Date(t.due_date) < now)
       .sort((a, b) => new Date(a.due_date) - new Date(b.due_date));
     const assignedToMeTasks = incompleteTasks
-      .filter((t) => normalizedMe.has((t.assigned_name || "").trim().toLowerCase()))
+      .filter((t) => resolveTaskOwnership(t, projectMemberMap, authUser?.id).isAssignedToMe)
       .sort((a, b) => {
         if (!a.due_date) return 1;
         if (!b.due_date) return -1;
@@ -971,11 +1049,10 @@ function CoLab() {
     authUser?.id,
     mentionNotifications,
     messages,
-    profile?.name,
     projectActivity,
     projectLastReadAt,
     tasks,
-    users,
+    projectMemberMap,
   ]);
 
   const collaborationNeeds = useMemo(() => {
@@ -1007,7 +1084,7 @@ function CoLab() {
     const pendingApplicants = applications.filter((a) => a.project_id === activeProject.id && a.status === "pending");
     const activeProjectTasks = tasks.filter((t) => t.project_id === activeProject.id);
     const openProjectTasks = activeProjectTasks.filter((t) => !t.done);
-    const unassignedOpenTasks = openProjectTasks.filter((t) => !(t.assigned_name || "").trim()).length;
+    const unassignedOpenTasks = openProjectTasks.filter((t) => resolveTaskOwnership(t, projectMemberMap, authUser?.id).isUnassigned).length;
 
     const existingSkillSignals = new Set(
       [
@@ -1074,7 +1151,7 @@ function CoLab() {
       pendingApplicantsCount: pendingApplicants.length,
       hasExplicitNeeds: explicitNeeds.length > 0,
     };
-  }, [activeProject, applications, projectUpdates, tasks, users]);
+  }, [activeProject, applications, projectUpdates, tasks, users, projectMemberMap, authUser?.id]);
 
   const TabBtn = ({ id, label, count, setter, current }) => (
     <button onClick={() => setter(id)} style={{ background: "none", border: "none", borderBottom: current === id ? `1px solid ${text}` : "1px solid transparent", color: current === id ? text : textMuted, padding: "8px 0", fontSize: 12, cursor: "pointer", fontFamily: "inherit", marginRight: 20, transition: "all 0.15s", display: "inline-flex", gap: 5, alignItems: "center", whiteSpace: "nowrap" }}>
@@ -2983,9 +3060,18 @@ function CoLab() {
                   <input type="date" value={taskDueDate || ""} onChange={e => setTaskDueDate(e.target.value)} style={{ ...inputStyle, fontSize: 11, width: "auto", flexShrink: 0 }} title="due date" />
                   <select value={taskAssignee} onChange={e => setTaskAssignee(e.target.value)} style={{ ...inputStyle, fontSize: 12, maxWidth: 140 }}>
                     <option value="">assign...</option>
-                    {users.filter(u => [authUser?.id, ...(applications.filter(a => a.project_id === activeProject.id && a.status === "accepted").map(a => a.applicant_id))].includes(u.id)).map(u => <option key={u.id} value={u.name}>{u.name}</option>)}
+                    {projectMembers.map((u) => <option key={u.id} value={u.name}>{u.name}</option>)}
                   </select>
                   <button className="hb" onClick={() => handleAddTask(activeProject.id)} style={{ ...btnP, padding: "10px 16px", flexShrink: 0, fontSize: 12 }}>add</button>
+                </div>
+                <div style={{ display: "flex", gap: 8, marginBottom: 14, flexWrap: "wrap" }}>
+                  <span style={{ fontSize: 10, color: taskOwnerSummary.unassigned > 0 ? "#f97316" : textMuted, border: `1px solid ${taskOwnerSummary.unassigned > 0 ? "#f97316" : border}`, borderRadius: 999, padding: "3px 9px", background: taskOwnerSummary.unassigned > 0 ? (dark ? "#211207" : "#fff7ed") : "transparent" }}>
+                    {taskOwnerSummary.unassigned} unassigned
+                  </span>
+                  <span style={{ fontSize: 10, color: textMuted, border: `1px solid ${border}`, borderRadius: 999, padding: "3px 9px" }}>
+                    {taskOwnerSummary.assignedToMe} assigned to you
+                  </span>
+                  {taskOwnerSummary.unassigned > 0 && <span style={{ fontSize: 10, color: textMuted }}>owner signal: unassigned tasks need coverage</span>}
                 </div>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
                   {[
@@ -3003,16 +3089,62 @@ function CoLab() {
                           const due = task.due_date ? new Date(task.due_date) : null;
                           const isOverdue = due && !task.done && due < now;
                           const isDueSoon = due && !task.done && !isOverdue && (due - now) < 3 * 24 * 60 * 60 * 1000;
+                          const { assignee, isUnassigned, isAssignedToMe } = resolveTaskOwnership(task, projectMemberMap, authUser?.id);
+                          const isEditingTitle = editingTaskId === task.id;
                           return (
-                          <div key={task.id} style={{ background: isOverdue ? (dark ? "#1a0000" : "#fff5f5") : bg, border: `1px solid ${isOverdue ? "#ef4444" : isDueSoon ? "#f97316" : border}`, borderLeft: isOverdue ? "3px solid #ef4444" : isDueSoon ? "3px solid #f97316" : `1px solid ${border}`, borderRadius: 8, padding: "10px 12px" }}>
-                            <div style={{ fontSize: 12, color: text, marginBottom: 6, lineHeight: 1.4 }}>{task.text}</div>
-                            {task.assigned_name && <div style={{ fontSize: 10, color: textMuted, marginBottom: 4 }}>→ {task.assigned_name}</div>}
+                          <div
+                            key={task.id}
+                            onClick={() => { if (editingTaskId !== task.id) openTaskEditor(task); }}
+                            style={{ background: isUnassigned ? (dark ? "#15120b" : "#fffaf2") : isAssignedToMe ? (dark ? "#101621" : "#f3f8ff") : isOverdue ? (dark ? "#1a0000" : "#fff5f5") : bg, border: `1px solid ${isUnassigned ? "#f59e0b" : isOverdue ? "#ef4444" : isDueSoon ? "#f97316" : isAssignedToMe ? "#60a5fa" : border}`, borderLeft: isUnassigned ? "3px solid #f59e0b" : isOverdue ? "3px solid #ef4444" : isDueSoon ? "3px solid #f97316" : isAssignedToMe ? "3px solid #60a5fa" : `1px solid ${border}`, borderRadius: 8, padding: "10px 12px", cursor: "pointer", opacity: taskUpdatePendingById[task.id] ? 0.6 : 1 }}>
+                            {isEditingTitle ? (
+                              <input
+                                value={editingTaskTitle}
+                                onChange={(e) => setEditingTaskTitle(e.target.value)}
+                                onClick={(e) => e.stopPropagation()}
+                                onKeyDown={async (e) => {
+                                  if (e.key === "Escape") {
+                                    setEditingTaskId(null);
+                                    setEditingTaskTitle("");
+                                  }
+                                  if (e.key === "Enter" && editingTaskTitle.trim()) {
+                                    await updateTaskOptimistic(task.id, { text: editingTaskTitle.trim() });
+                                    setEditingTaskId(null);
+                                    setEditingTaskTitle("");
+                                  }
+                                }}
+                                onBlur={async () => {
+                                  if (editingTaskTitle.trim() && editingTaskTitle.trim() !== task.text) {
+                                    await updateTaskOptimistic(task.id, { text: editingTaskTitle.trim() });
+                                  }
+                                  setEditingTaskId(null);
+                                  setEditingTaskTitle("");
+                                }}
+                                style={{ ...inputStyle, fontSize: 12, padding: "6px 8px", marginBottom: 6 }}
+                                autoFocus
+                              />
+                            ) : (
+                              <div onClick={(e) => { e.stopPropagation(); setEditingTaskId(task.id); setEditingTaskTitle(task.text || ""); }} style={{ fontSize: 12, color: text, marginBottom: 6, lineHeight: 1.4 }}>
+                                {task.text}
+                              </div>
+                            )}
+                            <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
+                              {assignee ? (
+                                <>
+                                  <Avatar initials={initials(assignee.name, "??")} size={16} dark={dark} />
+                                  <div style={{ fontSize: 10, color: textMuted }}>{assignee.name}</div>
+                                  {isAssignedToMe && <span style={{ fontSize: 9, color: "#60a5fa" }}>you</span>}
+                                </>
+                              ) : (
+                                <span style={{ fontSize: 9, color: "#f59e0b", border: "1px solid #f59e0b", borderRadius: 999, padding: "1px 7px" }}>unassigned</span>
+                              )}
+                            </div>
                             {due && <div style={{ fontSize: 10, color: isOverdue ? "#ef4444" : isDueSoon ? "#f97316" : textMuted, marginBottom: 8, fontWeight: isOverdue ? 500 : 400 }}>{isOverdue ? "overdue · " : isDueSoon ? "due soon · " : "due "}{due.toLocaleDateString()}</div>}
                             <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                              {col.id !== "todo" && <button className="hb" onClick={async () => { await supabase.from("tasks").update({ in_progress: false, done: false }).eq("id", task.id); setTasks(tasks.map(t => t.id === task.id ? { ...t, in_progress: false, done: false } : t)); }} style={{ fontSize: 9, padding: "2px 7px", border: `1px solid ${border}`, borderRadius: 3, background: "none", color: textMuted, cursor: "pointer", fontFamily: "inherit" }}>← to do</button>}
-                              {col.id === "todo" && <button className="hb" onClick={async () => { await supabase.from("tasks").update({ in_progress: true, done: false }).eq("id", task.id); setTasks(tasks.map(t => t.id === task.id ? { ...t, in_progress: true, done: false } : t)); }} style={{ fontSize: 9, padding: "2px 7px", border: `1px solid ${border}`, borderRadius: 3, background: "none", color: textMuted, cursor: "pointer", fontFamily: "inherit" }}>in progress →</button>}
-                              {col.id === "inprogress" && <button className="hb" onClick={() => handleToggleTask(task)} style={{ fontSize: 9, padding: "2px 7px", border: `1px solid ${border}`, borderRadius: 3, background: "none", color: textMuted, cursor: "pointer", fontFamily: "inherit" }}>done →</button>}
-                              <button className="hb" onClick={() => handleDeleteTask(task.id)} style={{ fontSize: 9, padding: "2px 7px", border: `1px solid ${border}`, borderRadius: 3, background: "none", color: textMuted, cursor: "pointer", fontFamily: "inherit" }}>✕</button>
+                              {col.id !== "todo" && <button className="hb" onClick={async (e) => { e.stopPropagation(); await supabase.from("tasks").update({ in_progress: false, done: false }).eq("id", task.id); setTasks(tasks.map(t => t.id === task.id ? { ...t, in_progress: false, done: false } : t)); }} style={{ fontSize: 9, padding: "2px 7px", border: `1px solid ${border}`, borderRadius: 3, background: "none", color: textMuted, cursor: "pointer", fontFamily: "inherit" }}>← to do</button>}
+                              {col.id === "todo" && <button className="hb" onClick={async (e) => { e.stopPropagation(); await supabase.from("tasks").update({ in_progress: true, done: false }).eq("id", task.id); setTasks(tasks.map(t => t.id === task.id ? { ...t, in_progress: true, done: false } : t)); }} style={{ fontSize: 9, padding: "2px 7px", border: `1px solid ${border}`, borderRadius: 3, background: "none", color: textMuted, cursor: "pointer", fontFamily: "inherit" }}>in progress →</button>}
+                              {col.id === "inprogress" && <button className="hb" onClick={(e) => { e.stopPropagation(); handleToggleTask(task); }} style={{ fontSize: 9, padding: "2px 7px", border: `1px solid ${border}`, borderRadius: 3, background: "none", color: textMuted, cursor: "pointer", fontFamily: "inherit" }}>done →</button>}
+                              <button className="hb" onClick={(e) => { e.stopPropagation(); openTaskEditor(task); }} style={{ fontSize: 9, padding: "2px 7px", border: `1px solid ${border}`, borderRadius: 3, background: "none", color: textMuted, cursor: "pointer", fontFamily: "inherit" }}>edit</button>
+                              <button className="hb" onClick={(e) => { e.stopPropagation(); handleDeleteTask(task.id); }} style={{ fontSize: 9, padding: "2px 7px", border: `1px solid ${border}`, borderRadius: 3, background: "none", color: textMuted, cursor: "pointer", fontFamily: "inherit" }}>✕</button>
                             </div>
                           </div>
                           );
@@ -3024,6 +3156,60 @@ function CoLab() {
                 </div>
               </div>
             )}
+            {projectTab === "kanban" && taskEditorTaskId && (() => {
+              const task = tasks.find((item) => item.id === taskEditorTaskId);
+              if (!task) return null;
+              return (
+                <div onClick={() => setTaskEditorTaskId(null)} style={{ position: "fixed", inset: 0, background: dark ? "rgba(0,0,0,0.68)" : "rgba(0,0,0,0.45)", zIndex: 70, display: "flex", alignItems: "center", justifyContent: "center", padding: 18 }}>
+                  <div onClick={(e) => e.stopPropagation()} style={{ width: "min(460px, 96vw)", background: bg, border: `1px solid ${border}`, borderRadius: 10, padding: 16 }}>
+                    <div style={{ fontSize: 11, color: textMuted, letterSpacing: "1.2px", marginBottom: 8 }}>EDIT TASK</div>
+                    <div style={{ fontSize: 13, color: text, marginBottom: 14, lineHeight: 1.5 }}>{task.text}</div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                      <div>
+                        <label style={labelStyle}>ASSIGNEE</label>
+                        <select value={taskEditorDraft.assigneeId} onChange={(e) => setTaskEditorDraft((prev) => ({ ...prev, assigneeId: e.target.value }))} style={{ ...inputStyle, fontSize: 12 }}>
+                          <option value="">unassigned</option>
+                          {projectMembers.map((member) => (
+                            <option key={member.id} value={member.id}>{member.name}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label style={labelStyle}>DUE DATE</label>
+                        <input type="date" value={taskEditorDraft.dueDate} onChange={(e) => setTaskEditorDraft((prev) => ({ ...prev, dueDate: e.target.value }))} style={{ ...inputStyle, fontSize: 12 }} />
+                      </div>
+                      {(hasTaskDescriptionField || Object.prototype.hasOwnProperty.call(task, "description")) && (
+                        <div>
+                          <label style={labelStyle}>DESCRIPTION</label>
+                          <textarea rows={3} value={taskEditorDraft.description} onChange={(e) => setTaskEditorDraft((prev) => ({ ...prev, description: e.target.value }))} style={{ ...inputStyle, resize: "vertical", fontSize: 12 }} />
+                        </div>
+                      )}
+                    </div>
+                    <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 14 }}>
+                      <button className="hb" onClick={() => setTaskEditorTaskId(null)} style={{ ...btnG, padding: "8px 12px", fontSize: 11 }}>cancel</button>
+                      <button
+                        className="hb"
+                        onClick={async () => {
+                          const selectedAssignee = taskEditorDraft.assigneeId ? (projectMemberMap[taskEditorDraft.assigneeId] || null) : null;
+                          const payload = {
+                            assigned_to: selectedAssignee?.id || null,
+                            due_date: taskEditorDraft.dueDate || null,
+                          };
+                          if (hasTaskDescriptionField || Object.prototype.hasOwnProperty.call(task, "description")) {
+                            payload.description = taskEditorDraft.description || null;
+                          }
+                          await updateTaskOptimistic(task.id, payload);
+                          setTaskEditorTaskId(null);
+                        }}
+                        style={{ ...btnP, padding: "8px 12px", fontSize: 11 }}
+                      >
+                        save
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
 
             {/* CHAT */}
             {projectTab === "messages" && (
