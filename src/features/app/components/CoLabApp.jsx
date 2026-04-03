@@ -432,6 +432,7 @@ function CoLab() {
   const [newDmSearch, setNewDmSearch] = useState("");
   const [showAddPortfolio, setShowAddPortfolio] = useState(false);
   const [newPortfolioItem, setNewPortfolioItem] = useState({ title: "", description: "", url: "" });
+  const [hideFirstTimeGuide, setHideFirstTimeGuide] = useState(false);
   const messagesEndRef = useRef(null);
   const dmEndRef = useRef(null);
 
@@ -697,6 +698,13 @@ function CoLab() {
   };
 
   const myCollaborators = getCollaborators(authUser?.id);
+  const hasCollaborations = applications.some((a) => {
+    if (a.status !== "accepted") return false;
+    const proj = projects.find(p => p.id === a.project_id);
+    return a.applicant_id === authUser?.id || proj?.owner_id === authUser?.id;
+  });
+  const isFirstTimeUser = Boolean(authUser?.id) && myProjects.length === 0 && !hasCollaborations;
+  const showFirstTimeGuide = isFirstTimeUser && !hideFirstTimeGuide;
   const [showCollaborators, setShowCollaborators] = useState(null); // userId whose collaborators to show
   const appliedProjectIds = applications.filter(a => a.applicant_id === authUser?.id).map(a => a.project_id);
   const browseBase = projects.filter(p => p.owner_id !== authUser?.id && !p.archived && !p.is_private);
@@ -710,6 +718,51 @@ function CoLab() {
     <button onClick={() => setter(id)} style={{ background: "none", border: "none", borderBottom: current === id ? `1px solid ${text}` : "1px solid transparent", color: current === id ? text : textMuted, padding: "8px 0", fontSize: 12, cursor: "pointer", fontFamily: "inherit", marginRight: 20, transition: "all 0.15s", display: "inline-flex", gap: 5, alignItems: "center", whiteSpace: "nowrap" }}>
       {label}{count > 0 && <span style={{ fontSize: 10, background: bg3, borderRadius: 10, padding: "1px 6px", color: textMuted }}>{count}</span>}
     </button>
+  );
+
+  useEffect(() => {
+    if (!authUser?.id) {
+      setHideFirstTimeGuide(false);
+      return;
+    }
+    const dismissed = localStorage.getItem(`onboarding-guide-dismissed:${authUser.id}`) === "true";
+    setHideFirstTimeGuide(dismissed);
+  }, [authUser?.id]);
+
+  const dismissFirstTimeGuide = () => {
+    if (authUser?.id) localStorage.setItem(`onboarding-guide-dismissed:${authUser.id}`, "true");
+    setHideFirstTimeGuide(true);
+  };
+
+  const openCreateProjectFlow = () => {
+    setAppScreen("workspace");
+    setActiveProject(null);
+    setShowCreate(true);
+  };
+
+  const openJoinProjectFlow = () => {
+    setAppScreen("explore");
+    setActiveProject(null);
+    setExploreTab("all");
+    setTimeout(() => {
+      document.getElementById("feed")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 50);
+  };
+
+  const renderFirstTimeGuide = () => (
+    <div style={{ marginBottom: 24, background: bg2, border: `1px solid ${border}`, borderRadius: 12, padding: "16px 18px" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", gap: 12, marginBottom: 8 }}>
+        <div>
+          <div style={{ fontSize: 10, color: textMuted, letterSpacing: "1.5px", marginBottom: 6 }}>GET STARTED</div>
+          <div style={{ fontSize: 15, color: text, lineHeight: 1.5 }}>Welcome to CoLab. Your first step is to create a project or join one.</div>
+        </div>
+        <button className="hb" onClick={dismissFirstTimeGuide} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontFamily: "inherit", fontSize: 12, flexShrink: 0 }}>dismiss</button>
+      </div>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        <button className="hb" onClick={openCreateProjectFlow} style={btnP}>Create your first project</button>
+        <button className="hb" onClick={openJoinProjectFlow} style={btnG}>Find collaborators / join a project</button>
+      </div>
+    </div>
   );
 
   const PRow = ({ p }) => {
@@ -1865,12 +1918,13 @@ function CoLab() {
       {/* EXPLORE */}
       {!viewFullProfile && appScreen === "explore" && !activeProject && (
         <div className="pad fu" style={{ width: "100%", padding: "48px 32px" }}>
+          {showFirstTimeGuide && renderFirstTimeGuide()}
           <div style={{ marginBottom: 32 }}>
             <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px", marginBottom: 14 }}>FIND YOUR PEOPLE. BUILD SOMETHING REAL.</div>
             <h1 style={{ fontSize: "clamp(30px, 5vw, 56px)", fontWeight: 400, lineHeight: 1.0, letterSpacing: "-2.5px", marginBottom: 14, color: text }}>Don't just connect.<br />Build together.</h1>
             <p style={{ fontSize: 13, color: textMuted, maxWidth: 400, lineHeight: 1.8, marginBottom: 22 }}>Post your project. Find people with the skills you need. Get to work.</p>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              <button className="hb" onClick={() => setShowCreate(true)} style={btnP}>Post a project</button>
+              <button className="hb" onClick={openCreateProjectFlow} style={btnP}>Post a project</button>
               <button className="hb" onClick={() => document.getElementById("feed")?.scrollIntoView({ behavior: "smooth" })} style={btnG}>Browse</button>
             </div>
           </div>
@@ -2112,12 +2166,13 @@ function CoLab() {
       {/* WORKSPACE */}
       {appScreen === "workspace" && !activeProject && (
         <div className="pad fu" style={{ width: "100%", padding: "44px 32px" }}>
+          {showFirstTimeGuide && renderFirstTimeGuide()}
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 32, flexWrap: "wrap", gap: 14 }}>
             <div>
               <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px", marginBottom: 8 }}>WORKSPACE</div>
               <h2 style={{ fontSize: "clamp(20px, 4vw, 26px)", fontWeight: 400, letterSpacing: "-1.5px", color: text }}>{profile?.name ? `${profile.name.split(" ")[0]}'s workspace.` : "Your workspace."}</h2>
             </div>
-            <button className="hb" onClick={() => setShowCreate(true)} style={btnP}>+ new project</button>
+            <button className="hb" onClick={openCreateProjectFlow} style={btnP}>+ new project</button>
           </div>
 
           {/* Stats */}
@@ -2141,7 +2196,14 @@ function CoLab() {
             <div>
               <div style={{ fontSize: 10, color: textMuted, letterSpacing: "1.5px", marginBottom: 14 }}>MY PROJECTS</div>
               {loading ? <Spinner dark={dark} /> : myProjects.length === 0
-                ? <div style={{ fontSize: 12, color: textMuted }}>no projects yet. <button onClick={() => setShowCreate(true)} style={{ background: "none", border: "none", color: text, cursor: "pointer", fontFamily: "inherit", fontSize: 12, textDecoration: "underline" }}>post one →</button></div>
+                ? <div style={{ background: bg2, border: `1px solid ${border}`, borderRadius: 10, padding: "14px 16px" }}>
+                    <div style={{ fontSize: 12, color: text, marginBottom: 6 }}>No projects yet.</div>
+                    <div style={{ fontSize: 11, color: textMuted, lineHeight: 1.6, marginBottom: 10 }}>Start by creating your first project or browse open projects to collaborate.</div>
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                      <button className="hb" onClick={openCreateProjectFlow} style={{ ...btnP, padding: "8px 12px", fontSize: 11 }}>Create your first project</button>
+                      <button className="hb" onClick={openJoinProjectFlow} style={{ ...btnG, padding: "8px 12px", fontSize: 11 }}>Find collaborators / join a project</button>
+                    </div>
+                  </div>
                 : <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
                     {myProjects.map((p,i) => {
                       const pendingApps = applications.filter(a => a.project_id === p.id && a.status === "pending").length;
