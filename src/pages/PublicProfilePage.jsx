@@ -2,11 +2,38 @@ import React, { useEffect, useState } from "react";
 import { supabase } from "../supabase";
 import { initials } from "../utils/appHelpers";
 
+const getMediaType = (url = "") => {
+  if (!url) return "none";
+  const lower = url.toLowerCase();
+  if (/\.(jpg|jpeg|png|gif|webp)$/i.test(lower)) return "image";
+  if (lower.includes("youtube.com") || lower.includes("youtu.be")) return "youtube";
+  return "link";
+};
+
+const getYouTubeId = (url = "") => {
+  const shortMatch = url.match(/youtu\.be\/([^?&/]+)/i);
+  if (shortMatch?.[1]) return shortMatch[1];
+  const longMatch = url.match(/[?&]v=([^?&/]+)/i);
+  if (longMatch?.[1]) return longMatch[1];
+  const embedMatch = url.match(/youtube\.com\/embed\/([^?&/]+)/i);
+  return embedMatch?.[1] || null;
+};
+
+const toHost = (url = "") => {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return "external link";
+  }
+};
+
 export default function PublicProfilePage({ username }) {
   const [dark, setDark] = useState(true);
   const [user, setUser] = useState(null);
   const [projects, setProjects] = useState([]);
   const [portfolio, setPortfolio] = useState([]);
+  const [profilesById, setProfilesById] = useState({});
+  const [applications, setApplications] = useState([]);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -61,8 +88,30 @@ export default function PublicProfilePage({ username }) {
         supabase.from("projects").select("*").eq("owner_id", u.id).order("created_at", { ascending: false }),
         supabase.from("portfolio_items").select("*").eq("user_id", u.id),
       ]);
+      const projectIds = (projs || []).map((p) => p.id);
+      let apps = [];
+      if (projectIds.length > 0) {
+        const { data: appRows } = await supabase
+          .from("applications")
+          .select("id, project_id, applicant_id, status, created_at")
+          .in("project_id", projectIds)
+          .eq("status", "accepted")
+          .order("created_at", { ascending: false });
+        apps = appRows || [];
+        const uniqueApplicantIds = [...new Set(apps.map((a) => a.applicant_id).filter(Boolean))];
+        if (uniqueApplicantIds.length > 0) {
+          const { data: collaboratorProfiles } = await supabase
+            .from("profiles")
+            .select("id, name, username")
+            .in("id", uniqueApplicantIds);
+          const map = {};
+          (collaboratorProfiles || []).forEach((row) => { map[row.id] = row; });
+          setProfilesById(map);
+        }
+      }
       setProjects(projs || []);
       setPortfolio(port || []);
+      setApplications(apps);
       setLoading(false);
     }
     load();
@@ -96,6 +145,16 @@ export default function PublicProfilePage({ username }) {
   );
 
   const bannerPixels = (() => { try { return user.banner_pixels ? JSON.parse(user.banner_pixels) : null; } catch { return null; } })();
+  const sortedProjects = [...projects].sort((a, b) => Number(b.featured) - Number(a.featured) || new Date(b.created_at) - new Date(a.created_at));
+  const pinnedProjects = sortedProjects.filter((p) => p.featured);
+  const hasActivity = applications.length > 0 || projects.some((p) => p.shipped);
+  const getProjectCollaborators = (projectId) => {
+    return applications
+      .filter((a) => a.project_id === projectId)
+      .map((a) => profilesById[a.applicant_id])
+      .filter(Boolean)
+      .slice(0, 3);
+  };
 
   return (
     <div style={{ minHeight: "100vh", background: bg, color: text, fontFamily: "'DM Mono', monospace" }}>
@@ -142,39 +201,86 @@ export default function PublicProfilePage({ username }) {
           </div>
         )}
 
-        {projects.length > 0 && (
+        <div style={{ marginBottom: 28 }}>
+          <div style={{ fontSize: 10, color: textMuted, letterSpacing: "1.5px", marginBottom: 12 }}>PROJECTS</div>
+          {projects.length > 0 ? (
           <div style={{ marginBottom: 28 }}>
-            <div style={{ fontSize: 10, color: textMuted, letterSpacing: "1.5px", marginBottom: 12 }}>PROJECTS</div>
             <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
-              {projects.map((p, i) => (
+              {sortedProjects.map((p, i) => {
+                const collaborators = getProjectCollaborators(p.id);
+                return (
                 <a key={p.id} href={`/p/${p.id}`} style={{ display: "block", background: bg2, border: `1px solid ${border}`, borderRadius: i === 0 && projects.length === 1 ? 8 : i === 0 ? "8px 8px 0 0" : i === projects.length - 1 ? "0 0 8px 8px" : 0, borderBottom: i < projects.length - 1 ? "none" : `1px solid ${border}`, padding: "14px 18px", textDecoration: "none", transition: "opacity 0.15s" }}
                   onMouseEnter={e => e.currentTarget.style.opacity = "0.7"} onMouseLeave={e => e.currentTarget.style.opacity = "1"}>
-                  <div style={{ fontSize: 13, color: text, marginBottom: 4 }}>{p.title}</div>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
+                    <div style={{ fontSize: 13, color: text, marginBottom: 4, fontWeight: p.featured ? 500 : 400 }}>{p.title}</div>
+                    <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+                      {p.featured && <span style={{ fontSize: 10, border: `1px solid ${border}`, borderRadius: 3, padding: "1px 6px", color: text }}>pinned</span>}
+                      <span style={{ fontSize: 10, border: `1px solid ${p.shipped ? "#22c55e66" : border}`, borderRadius: 3, padding: "1px 6px", color: p.shipped ? "#22c55e" : textMuted }}>{p.shipped ? "shipped" : "active"}</span>
+                    </div>
+                  </div>
+                  {p.description && <div style={{ fontSize: 11, color: textMuted, marginBottom: 6, lineHeight: 1.6 }}>{p.description.slice(0, 120)}{p.description.length > 120 ? "..." : ""}</div>}
                   <div style={{ fontSize: 11, color: textMuted, marginBottom: 6 }}>{p.category}</div>
+                  {collaborators.length > 0 && <div style={{ fontSize: 10, color: textMuted, marginBottom: 6 }}>with {collaborators.map((c) => c.username ? `@${c.username}` : c.name).join(", ")}</div>}
                   {(p.skills || []).length > 0 && (
                     <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
                       {p.skills.slice(0, 4).map(s => <span key={s} style={{ fontSize: 10, padding: "2px 7px", border: `1px solid ${border}`, borderRadius: 3, color: textMuted }}>{s}</span>)}
                     </div>
                   )}
                 </a>
-              ))}
+              )})}
             </div>
+            {pinnedProjects.length > 0 && <div style={{ marginTop: 8, fontSize: 10, color: textMuted }}>{pinnedProjects.length} pinned project{pinnedProjects.length > 1 ? "s" : ""} highlighted first.</div>}
           </div>
-        )}
+          ) : (
+            <div style={{ background: bg2, border: `1px dashed ${border}`, borderRadius: 8, padding: "14px 16px" }}>
+              <div style={{ fontSize: 12, color: text, marginBottom: 4 }}>No projects yet.</div>
+              <div style={{ fontSize: 11, color: textMuted, marginBottom: 8 }}>Create your first project to show what you’re building.</div>
+              <a href="/" style={{ fontSize: 11, color: text, textDecoration: "underline" }}>Create your first project →</a>
+            </div>
+          )}
+        </div>
 
-        {portfolio.length > 0 && (
-          <div style={{ marginBottom: 28 }}>
-            <div style={{ fontSize: 10, color: textMuted, letterSpacing: "1.5px", marginBottom: 12 }}>PORTFOLIO</div>
+        <div style={{ marginBottom: 28 }}>
+          <div style={{ fontSize: 10, color: textMuted, letterSpacing: "1.5px", marginBottom: 12 }}>PORTFOLIO</div>
+          {portfolio.length > 0 ? (
             <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
               {portfolio.map((item, i) => (
                 <div key={item.id} style={{ background: bg2, border: `1px solid ${border}`, borderRadius: i === 0 && portfolio.length === 1 ? 8 : i === 0 ? "8px 8px 0 0" : i === portfolio.length - 1 ? "0 0 8px 8px" : 0, borderBottom: i < portfolio.length - 1 ? "none" : `1px solid ${border}`, padding: "14px 18px" }}>
                   <div style={{ fontSize: 13, color: text, marginBottom: 4 }}>{item.title}</div>
                   {item.description && <div style={{ fontSize: 12, color: textMuted, lineHeight: 1.65, marginBottom: 6 }}>{item.description}</div>}
-                  {item.url && (item.url.match(/\.(jpg|jpeg|png|gif|webp)$/i)
-                    ? <img src={item.url} alt={item.title} style={{ maxWidth: "100%", maxHeight: 200, borderRadius: 6, border: `1px solid ${border}`, marginTop: 4 }} />
-                    : <a href={item.url} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: text, textDecoration: "underline", wordBreak: "break-all" }}>{item.url.includes("user-uploads") ? "view file" : item.url}</a>
+                  {item.url && getMediaType(item.url) === "image" && <img src={item.url} alt={item.title} style={{ width: "100%", maxHeight: 240, objectFit: "cover", borderRadius: 6, border: `1px solid ${border}`, marginTop: 4 }} />}
+                  {item.url && getMediaType(item.url) === "youtube" && (
+                    <div style={{ borderRadius: 8, overflow: "hidden", border: `1px solid ${border}`, marginTop: 6 }}>
+                      <iframe title={item.title} src={`https://www.youtube.com/embed/${getYouTubeId(item.url) || ""}`} style={{ width: "100%", height: 240, border: "none" }} allowFullScreen />
+                    </div>
+                  )}
+                  {item.url && getMediaType(item.url) === "link" && (
+                    <a href={item.url} target="_blank" rel="noreferrer" style={{ display: "block", textDecoration: "none", border: `1px solid ${border}`, borderRadius: 8, padding: "10px 12px", marginTop: 6 }}>
+                      <div style={{ fontSize: 10, color: textMuted, marginBottom: 3 }}>{toHost(item.url)}</div>
+                      <div style={{ fontSize: 11, color: text, textDecoration: "underline", wordBreak: "break-all" }}>{item.url.includes("user-uploads") ? "view file" : item.url}</div>
+                    </a>
                   )}
                 </div>
+              ))}
+            </div>
+          ) : (
+            <div style={{ background: bg2, border: `1px dashed ${border}`, borderRadius: 8, padding: "14px 16px" }}>
+              <div style={{ fontSize: 12, color: text, marginBottom: 4 }}>No portfolio work yet.</div>
+              <div style={{ fontSize: 11, color: textMuted, marginBottom: 8 }}>Add portfolio work so collaborators can quickly see what you’ve built.</div>
+              <a href="/" style={{ fontSize: 11, color: text, textDecoration: "underline" }}>Add portfolio work →</a>
+            </div>
+          )}
+        </div>
+
+        {hasActivity && (
+          <div style={{ marginBottom: 28 }}>
+            <div style={{ fontSize: 10, color: textMuted, letterSpacing: "1.5px", marginBottom: 12 }}>ACTIVITY</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
+              {projects.filter((p) => p.shipped).slice(0, 3).map((p, i) => (
+                <a key={p.id} href={`/p/${p.id}/shipped`} style={{ background: bg2, border: `1px solid ${border}`, borderBottom: i < Math.min(projects.filter((x) => x.shipped).length, 3) - 1 ? "none" : `1px solid ${border}`, borderRadius: i === 0 ? "8px 8px 0 0" : i === 2 ? "0 0 8px 8px" : 0, textDecoration: "none", padding: "11px 14px" }}>
+                  <div style={{ fontSize: 12, color: text }}>Shipped {p.title}</div>
+                  <div style={{ fontSize: 10, color: textMuted }}>{p.shipped_at ? new Date(p.shipped_at).toLocaleDateString() : "recently"}</div>
+                </a>
               ))}
             </div>
           </div>
