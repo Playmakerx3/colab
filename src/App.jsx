@@ -12,6 +12,7 @@ import JoinPage from "./pages/JoinPage";
 import ShippedPage from "./pages/ShippedPage";
 import { useAuthBootstrap } from "./hooks/useAuthBootstrap";
 import { resetPassword, signIn, signOut, signUp } from "./services/authService";
+import { useProfileState } from "./features/profile/hooks/useProfileState";
 
 function PostCard({ post, ctx }) {
   const {
@@ -757,33 +758,24 @@ function CoLab() {
     }
   };
 
-  const handleSaveProfile = async () => {
-    const { data, error } = await supabase.from("profiles").update({
-      name: profile.name, username: profile.username, role: profile.role,
-      bio: profile.bio, skills: profile.skills, location: profile.location || "",
-    }).eq("id", authUser.id).select().single();
-    if (!error) { setProfile(data); setEditProfile(false); showToast("Profile saved."); }
-  };
-
-  // ── PORTFOLIO ──
-  const handleAddPortfolioItem = async () => {
-    if (!newPortfolioItem.title) return;
-    const { data } = await supabase.from("portfolio_items").insert({
-      user_id: authUser.id, ...newPortfolioItem,
-    }).select().single();
-    if (data) {
-      setPortfolioItems([...portfolioItems, data]);
-      setNewPortfolioItem({ title: "", description: "", url: "" });
-      setShowAddPortfolio(false);
-      showToast("Portfolio item added.");
-    }
-  };
-
-  const handleDeletePortfolioItem = async (id) => {
-    await supabase.from("portfolio_items").delete().eq("id", id);
-    setPortfolioItems(portfolioItems.filter(p => p.id !== id));
-    showToast("Removed.");
-  };
+  const {
+    handleSaveProfile,
+    saveBanner,
+    handleAddPortfolioItem,
+    handleDeletePortfolioItem,
+  } = useProfileState({
+    authUser,
+    profile,
+    portfolioItems,
+    newPortfolioItem,
+    setProfile,
+    setEditProfile,
+    setPortfolioItems,
+    setNewPortfolioItem,
+    setShowAddPortfolio,
+    setBannerPixels,
+    showToast,
+  });
 
   // ── PROJECTS ──
   const handlePostProject = async () => {
@@ -1523,14 +1515,6 @@ function CoLab() {
       }
     }
   };
-  const saveBanner = async (pixels) => {
-    const pixelStr = JSON.stringify(pixels);
-    await supabase.from("profiles").update({ banner_pixels: pixelStr }).eq("id", authUser.id);
-    setProfile(prev => ({ ...prev, banner_pixels: pixelStr }));
-    setBannerPixels(pixels);
-    showToast("Banner saved.");
-  };
-
   const handleCreatePost = async () => {
     if (!newPostContent.trim()) return;
     const proj = myProjects.find(p => p.id === newPostProject);
