@@ -16,6 +16,7 @@ import { useProfileState } from "./features/profile/hooks/useProfileState";
 import { useAppDataBootstrap } from "./features/app/hooks/useAppDataBootstrap";
 import { useRealtimeSubscriptions } from "./features/realtime/hooks/useRealtimeSubscriptions";
 import { useMessaging } from "./features/messaging/hooks/useMessaging";
+import { useApplications } from "./features/applications/hooks/useApplications";
 
 function PostCard({ post, ctx }) {
   const {
@@ -430,10 +431,8 @@ function CoLab() {
   const [showBannerEditor, setShowBannerEditor] = useState(false);
   const [bannerPixels, setBannerPixels] = useState(new Array(48 * 12).fill(0));
   const [showApplicationForm, setShowApplicationForm] = useState(null);
-  const [applicationSuccess, setApplicationSuccess] = useState(false);
   const [showNewDm, setShowNewDm] = useState(false);
   const [newDmSearch, setNewDmSearch] = useState("");
-  const [applicationForm, setApplicationForm] = useState({ skills: [], availability: "", motivation: "", portfolio_url: "" });
   const [reviewingApplicants, setReviewingApplicants] = useState(null);
   const [showAddPortfolio, setShowAddPortfolio] = useState(false);
   const [newPortfolioItem, setNewPortfolioItem] = useState({ title: "", description: "", url: "" });
@@ -522,15 +521,6 @@ function CoLab() {
       .msg-layout { grid-template-columns: 1fr !important; }
     }
   `;
-
-  // Pre-populate application form with matching skills when it opens
-  useEffect(() => {
-    if (showApplicationForm) {
-      const matchingSkills = (showApplicationForm.skills || []).filter(s => (profile?.skills || []).includes(s));
-      setApplicationForm({ skills: matchingSkills, availability: "", motivation: "", portfolio_url: "" });
-      setApplicationSuccess(false);
-    }
-  }, [showApplicationForm, profile?.skills]);
 
   // Force body background + mobile browser chrome color on mode switch
   useEffect(() => {
@@ -800,14 +790,6 @@ function CoLab() {
     loadGithubCommits(slug);
   };
 
-  const handleLeaveProject = async (applicationId) => {
-    if (!window.confirm("Leave this project? You'll need to re-apply to rejoin.")) return;
-    await supabase.from("applications").update({ status: "left" }).eq("id", applicationId);
-    setApplications(prev => prev.map(a => a.id === applicationId ? { ...a, status: "left" } : a));
-    setActiveProject(null);
-    showToast("You've left the project.");
-  };
-
   const handleGenerateInvite = async (projectId) => {
     const { data } = await supabase.from("project_invites").insert({ project_id: projectId, created_by: authUser.id }).select().single();
     if (data) {
@@ -909,56 +891,31 @@ function CoLab() {
     if (data) { setProjectUpdates([data, ...projectUpdates]); setNewUpdate(""); detectAndNotifyMentions(newUpdate, projectId); showToast("Update posted."); }
   };
 
-  // ── APPLICATIONS ──
-  const handleApply = async () => {
-    const project = showApplicationForm;
-    if (!project) return;
-    const existing = applications.find(a => a.project_id === project.id && a.applicant_id === authUser.id);
-    if (existing) {
-      if (existing.status === "pending") { showToast("Already applied."); return; }
-      if (existing.status === "accepted") { showToast("You're already on this project."); return; }
-      if (existing.status === "declined") {
-        const hoursSince = (Date.now() - new Date(existing.updated_at || existing.created_at).getTime()) / 3600000;
-        if (hoursSince < 24) { showToast(`You can reapply in ${Math.ceil(24 - hoursSince)}h`); return; }
-        await supabase.from("applications").delete().eq("id", existing.id);
-        setApplications(prev => prev.filter(a => a.id !== existing.id));
-      }
-    }
-    const { data, error } = await supabase.from("applications").insert({
-      project_id: project.id, applicant_id: authUser.id,
-      applicant_name: profile.name, applicant_initials: myInitials,
-      applicant_role: profile.role || "", applicant_bio: profile.bio || "",
-      availability: applicationForm.availability || "",
-      motivation: applicationForm.motivation || "",
-      portfolio_url: applicationForm.portfolio_url || "",
-      status: "pending",
-    }).select().single();
-    if (error) { showToast("Error submitting. Try again."); return; }
-    if (data) {
-      setApplications([...applications, data]);
-      setApplicationSuccess(true);
-    }
-  };
-
-  const handleRemoveDeniedApp = async (appId) => {
-    await supabase.from("applications").delete().eq("id", appId);
-    setApplications(prev => prev.filter(a => a.id !== appId));
-    showToast("Application removed.");
-  };
-
-  const handleAccept = async (notif) => {
-    await supabase.from("applications").update({ status: "accepted" }).eq("id", notif.id);
-    setNotifications(prev => prev.filter(n => n.id !== notif.id));
-    showToast(`${notif.applicant.name} accepted!`);
-    logActivity(notif.projectId, "member_joined", `${notif.applicant.name} joined the project`);
-    loadAllData(authUser.id);
-  };
-
-  const handleDecline = async (notif) => {
-    await supabase.from("applications").update({ status: "declined" }).eq("id", notif.id);
-    setNotifications(prev => prev.filter(n => n.id !== notif.id));
-    showToast("Application declined.");
-  };
+  const {
+    applicationSuccess,
+    setApplicationSuccess,
+    applicationForm,
+    setApplicationForm,
+    handleApply,
+    handleRemoveDeniedApp,
+    handleAccept,
+    handleDecline,
+    handleLeaveProject,
+    handleReviewDecline,
+    handleReviewAccept,
+  } = useApplications({
+    showApplicationForm,
+    profile,
+    authUser,
+    myInitials,
+    applications,
+    setApplications,
+    setNotifications,
+    setActiveProject,
+    loadAllData,
+    logActivity,
+    showToast,
+  });
 
   const handleFollow = async (userId) => {
     if (following.includes(userId)) {
@@ -1269,18 +1226,16 @@ function CoLab() {
                   </div>
                   <div style={{ display: "flex", gap: 10 }}>
                     <button className="hb" onClick={async () => {
-                      const { error } = await supabase.from("applications").update({ status: "declined" }).eq("id", selected.id);
-                      if (error) { showToast("Failed to decline. Try again."); return; }
-                      setApplications(applications.filter(a => a.id !== selected.id));
-                      setSelected(null); showToast("Declined.");
+                      const success = await handleReviewDecline(selected);
+                      if (!success) return;
+                      setSelected(null);
                     }} style={{ ...btnG, flex: 1 }}>decline</button>
                     <button className="hb" onClick={async () => {
-                      const { error } = await supabase.from("applications").update({ status: "accepted" }).eq("id", selected.id);
-                      if (error) { showToast("Failed to accept. Try again."); return; }
-                      setApplications(applications.filter(a => a.id !== selected.id));
-                      const u = users.find(u => u.id === selected.applicant_id);
+                      const acceptedApplicantId = await handleReviewAccept(selected);
+                      if (!acceptedApplicantId) return;
+                      const u = users.find(u => u.id === acceptedApplicantId);
                       if (u) openDm(u);
-                      setSelected(null); onClose(); showToast(`${selected.applicant_name} accepted!`);
+                      setSelected(null); onClose();
                     }} style={{ ...btnP, flex: 1 }}>accept + message →</button>
                   </div>
                 </div>
