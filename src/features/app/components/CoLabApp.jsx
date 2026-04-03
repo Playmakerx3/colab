@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { supabase } from "../../../supabase";
 import { AVAILABILITY, CATEGORIES, COLS, PLUGINS, PRESETS, ROWS, SKILLS } from "../../../constants/appConstants";
 import { initials, matchesRegion, relativeTime } from "../../../utils/appHelpers";
@@ -548,6 +548,7 @@ function CoLab() {
   const [showAddPortfolio, setShowAddPortfolio] = useState(false);
   const [newPortfolioItem, setNewPortfolioItem] = useState({ title: "", description: "", url: "" });
   const [hideFirstTimeGuide, setHideFirstTimeGuide] = useState(false);
+  const [projectLastReadAt, setProjectLastReadAt] = useState({});
   const messagesEndRef = useRef(null);
   const dmEndRef = useRef(null);
 
@@ -884,6 +885,99 @@ function CoLab() {
     (!search || p.title?.toLowerCase().includes(search.toLowerCase()))
   ).sort((a, b) => b._s - a._s);
 
+  const todayNextUp = useMemo(() => {
+    if (!activeProject) return null;
+
+    const projectTasks = tasks.filter((t) => t.project_id === activeProject.id);
+    const incompleteTasks = projectTasks.filter((t) => !t.done);
+    const remainingCount = incompleteTasks.length;
+    const now = new Date();
+    const dayEnd = new Date(now);
+    dayEnd.setHours(23, 59, 59, 999);
+
+    const normalizedMe = new Set([
+      (profile?.name || "").trim().toLowerCase(),
+      (users.find((u) => u.id === authUser?.id)?.name || "").trim().toLowerCase(),
+    ].filter(Boolean));
+
+    const overdueTasks = incompleteTasks
+      .filter((t) => t.due_date && new Date(t.due_date) < now)
+      .sort((a, b) => new Date(a.due_date) - new Date(b.due_date));
+    const assignedToMeTasks = incompleteTasks
+      .filter((t) => normalizedMe.has((t.assigned_name || "").trim().toLowerCase()))
+      .sort((a, b) => {
+        if (!a.due_date) return 1;
+        if (!b.due_date) return -1;
+        return new Date(a.due_date) - new Date(b.due_date);
+      });
+    const dueTodayTasks = incompleteTasks
+      .filter((t) => t.due_date && new Date(t.due_date) <= dayEnd)
+      .sort((a, b) => new Date(a.due_date) - new Date(b.due_date));
+    const taskSeen = new Set();
+    const focusTasks = [];
+    overdueTasks.forEach((t) => {
+      if (taskSeen.has(t.id) || focusTasks.length >= 4) return;
+      taskSeen.add(t.id);
+      focusTasks.push({ id: t.id, text: t.text, dueDate: t.due_date, tone: "overdue", label: "⚠ overdue" });
+    });
+    assignedToMeTasks.forEach((t) => {
+      if (taskSeen.has(t.id) || focusTasks.length >= 4) return;
+      taskSeen.add(t.id);
+      focusTasks.push({ id: t.id, text: t.text, dueDate: t.due_date, tone: "mine", label: "you own" });
+    });
+    dueTodayTasks.forEach((t) => {
+      if (taskSeen.has(t.id) || focusTasks.length >= 4) return;
+      taskSeen.add(t.id);
+      focusTasks.push({ id: t.id, text: t.text, dueDate: t.due_date, tone: "today", label: "due soon" });
+    });
+
+    const lastReadTs = projectLastReadAt[activeProject.id];
+    const unreadMessages = messages.filter((m) => (
+      m.project_id === activeProject.id &&
+      m.from_user !== authUser?.id &&
+      (!lastReadTs || new Date(m.created_at).getTime() > lastReadTs)
+    ));
+    const unreadProjectMessages = new Set(unreadMessages.map((m) => m.id)).size;
+    const projectMentions = mentionNotifications.filter((n) => n.project_id === activeProject.id && !n.read);
+    const pendingApplications = applications.filter((a) => a.project_id === activeProject.id && a.status === "pending");
+
+    const lastActivityTimestamp = [projectActivity[0]?.created_at, activeProject.updated_at, messages[messages.length - 1]?.created_at]
+      .filter(Boolean)
+      .map((ts) => new Date(ts).getTime())
+      .sort((a, b) => b - a)[0];
+    const noRecentActivity = !lastActivityTimestamp || (Date.now() - lastActivityTimestamp > 72 * 60 * 60 * 1000);
+    const isBlocked = remainingCount > 0 && noRecentActivity;
+    const progress = projectTasks.length > 0
+      ? Math.round(((projectTasks.length - remainingCount) / projectTasks.length) * 100)
+      : (activeProject.progress || 0);
+    const readyToShip = !activeProject.shipped && remainingCount <= 1 && progress >= 90;
+
+    return {
+      overdueTasks,
+      assignedToMeTasks,
+      dueTodayTasks,
+      focusTasks,
+      remainingCount,
+      unreadProjectMessages,
+      mentionCount: projectMentions.length,
+      pendingApplicationsCount: pendingApplications.length,
+      isBlocked,
+      readyToShip,
+      hasUrgentSignals: unreadProjectMessages > 0 || projectMentions.length > 0 || (activeProject.owner_id === authUser?.id && pendingApplications.length > 0),
+    };
+  }, [
+    activeProject,
+    applications,
+    authUser?.id,
+    mentionNotifications,
+    messages,
+    profile?.name,
+    projectActivity,
+    projectLastReadAt,
+    tasks,
+    users,
+  ]);
+
   const TabBtn = ({ id, label, count, setter, current }) => (
     <button onClick={() => setter(id)} style={{ background: "none", border: "none", borderBottom: current === id ? `1px solid ${text}` : "1px solid transparent", color: current === id ? text : textMuted, padding: "8px 0", fontSize: 12, cursor: "pointer", fontFamily: "inherit", marginRight: 20, transition: "all 0.15s", display: "inline-flex", gap: 5, alignItems: "center", whiteSpace: "nowrap" }}>
       {label}{count > 0 && <span style={{ fontSize: 10, background: bg3, borderRadius: 10, padding: "1px 6px", color: textMuted }}>{count}</span>}
@@ -898,6 +992,16 @@ function CoLab() {
     const dismissed = localStorage.getItem(`onboarding-guide-dismissed:${authUser.id}`) === "true";
     setHideFirstTimeGuide(dismissed);
   }, [authUser?.id]);
+
+  useEffect(() => {
+    if (!activeProject?.id) return;
+    setProjectLastReadAt((prev) => (prev[activeProject.id] ? prev : { ...prev, [activeProject.id]: Date.now() }));
+  }, [activeProject?.id]);
+
+  useEffect(() => {
+    if (!activeProject?.id || projectTab !== "messages") return;
+    setProjectLastReadAt((prev) => ({ ...prev, [activeProject.id]: Date.now() }));
+  }, [activeProject?.id, messages.length, projectTab]);
 
   const dismissFirstTimeGuide = () => {
     if (authUser?.id) localStorage.setItem(`onboarding-guide-dismissed:${authUser.id}`, "true");
@@ -2617,6 +2721,81 @@ function CoLab() {
               </div>
             );
           })()}
+
+          {/* Today / Next Up */}
+          {todayNextUp && (
+            <div className="pad" style={{ padding: "12px 28px", borderBottom: `1px solid ${border}`, background: bg2 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 10, flexWrap: "wrap" }}>
+                <div style={{ fontSize: 10, color: textMuted, letterSpacing: "1.6px" }}>TODAY / NEXT UP</div>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  <span style={{ fontSize: 10, color: textMuted, border: `1px solid ${border}`, borderRadius: 999, padding: "2px 8px" }}>
+                    {todayNextUp.remainingCount} task{todayNextUp.remainingCount !== 1 ? "s" : ""} remaining
+                  </span>
+                  {todayNextUp.isBlocked && (
+                    <span style={{ fontSize: 10, color: "#ef4444", border: "1px solid #ef444440", borderRadius: 999, padding: "2px 8px", background: dark ? "#1a000088" : "#fff5f5" }}>
+                      Project is blocked
+                    </span>
+                  )}
+                  {todayNextUp.readyToShip && (
+                    <span style={{ fontSize: 10, color: "#22c55e", border: "1px solid #22c55e55", borderRadius: 999, padding: "2px 8px", background: dark ? "#0a1a0a88" : "#f0fdf4" }}>
+                      Ready to ship 🚀
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 12 }}>
+                <div style={{ background: bg, border: `1px solid ${border}`, borderRadius: 8, padding: "10px 12px" }}>
+                  <div style={{ fontSize: 10, color: textMuted, letterSpacing: "1.2px", marginBottom: 8 }}>TASKS</div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                    {todayNextUp.focusTasks.map((task) => (
+                      <div key={task.id} style={{ fontSize: 11, color: task.tone === "overdue" ? text : textMuted, display: "flex", justifyContent: "space-between", gap: 8 }}>
+                        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{task.label} · {task.text}</span>
+                        <span style={{ color: task.tone === "overdue" ? "#ef4444" : textMuted, flexShrink: 0 }}>
+                          {task.dueDate ? new Date(task.dueDate).toLocaleDateString() : "no due date"}
+                        </span>
+                      </div>
+                    ))}
+                    {todayNextUp.remainingCount === 0 && (
+                      <div style={{ fontSize: 11, color: "#22c55e" }}>All tasks complete. Nice work.</div>
+                    )}
+                    {todayNextUp.remainingCount > 0 && todayNextUp.focusTasks.length === 0 && (
+                      <div style={{ fontSize: 11, color: textMuted }}>No urgent task picks. Continue with the board backlog.</div>
+                    )}
+                    {todayNextUp.focusTasks.length > 0 && todayNextUp.remainingCount > todayNextUp.focusTasks.length && (
+                      <div style={{ fontSize: 10, color: textMuted }}>
+                        +{todayNextUp.remainingCount - todayNextUp.focusTasks.length} additional task{todayNextUp.remainingCount - todayNextUp.focusTasks.length !== 1 ? "s" : ""} in backlog
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div style={{ background: bg, border: `1px solid ${border}`, borderRadius: 8, padding: "10px 12px" }}>
+                  <div style={{ fontSize: 10, color: textMuted, letterSpacing: "1.2px", marginBottom: 8 }}>URGENT SIGNALS</div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                    {todayNextUp.unreadProjectMessages > 0 && (
+                      <div style={{ fontSize: 11, color: text }}>
+                        {todayNextUp.unreadProjectMessages} unread chat message{todayNextUp.unreadProjectMessages !== 1 ? "s" : ""}
+                      </div>
+                    )}
+                    {todayNextUp.mentionCount > 0 && (
+                      <div style={{ fontSize: 11, color: text }}>
+                        {todayNextUp.mentionCount} mention{todayNextUp.mentionCount !== 1 ? "s" : ""} need reply
+                      </div>
+                    )}
+                    {activeProject.owner_id === authUser?.id && todayNextUp.pendingApplicationsCount > 0 && (
+                      <div style={{ fontSize: 11, color: text }}>
+                        {todayNextUp.pendingApplicationsCount} pending applicant{todayNextUp.pendingApplicationsCount !== 1 ? "s" : ""}
+                      </div>
+                    )}
+                    {!todayNextUp.hasUrgentSignals && (
+                      <div style={{ fontSize: 11, color: textMuted }}>No urgent signals right now.</div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Tab bar */}
           <div className="pad proj-tabs" style={{ padding: "0 28px", borderBottom: `1px solid ${border}`, display: "flex", flexShrink: 0, overflowX: "auto" }}>
