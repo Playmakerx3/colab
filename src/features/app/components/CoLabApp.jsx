@@ -575,6 +575,27 @@ function CoLab() {
         : part
     );
   };
+  const renderMessageBody = (msgText, isMe, compact = false) => {
+    const lines = (msgText || "").split("\n");
+    const maybeUrl = lines[lines.length - 1]?.trim();
+    const hasSingleUrl = /^https?:\/\//i.test(maybeUrl);
+    const isImage = hasSingleUrl && maybeUrl.match(/\.(jpg|jpeg|png|gif|webp|bmp|svg)(\?.*)?$/i);
+    const bodyText = hasSingleUrl ? lines.slice(0, -1).join("\n").trim() : msgText;
+    return (
+      <div>
+        {bodyText && (
+          <div style={{ whiteSpace: "pre-wrap" }}>
+            {compact ? bodyText : renderWithMentions(bodyText)}
+          </div>
+        )}
+        {hasSingleUrl && (
+          isImage
+            ? <img src={maybeUrl} alt={bodyText || "attachment"} style={{ width: "100%", maxHeight: 240, objectFit: "cover", borderRadius: 8, marginTop: bodyText ? 8 : 0 }} onError={(e) => { e.currentTarget.style.display = "none"; }} />
+            : <a href={maybeUrl} target="_blank" rel="noreferrer" style={{ color: "inherit", textDecoration: "underline", fontSize: 11, display: "inline-block", marginTop: bodyText ? 6 : 0 }}>open attachment</a>
+        )}
+      </div>
+    );
+  };
 
   const CSS = `
     @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&display=swap');
@@ -1237,10 +1258,17 @@ function CoLab() {
     handleEditDm,
     handleDeleteProjectMessage,
     handleEditProjectMessage,
+    dmAttachments,
+    projectAttachments,
+    addDmAttachments,
+    addProjectAttachments,
+    retryDmAttachment,
+    retryProjectAttachment,
   } = useMessaging({
     authUser,
     profile,
     myInitials,
+    users,
     dmThreads,
     dmMessages,
     activeDmThread,
@@ -2289,7 +2317,10 @@ function CoLab() {
                 </div>
                 <div style={{ flex: 1, overflowY: "auto", padding: "20px", display: "flex", flexDirection: "column", gap: 14 }}>
                   {(dmMessages[activeDmThread.id] || []).length === 0
-                    ? <div style={{ fontSize: 12, color: textMuted, textAlign: "center", marginTop: 40 }}>start the conversation.</div>
+                    ? <div style={{ fontSize: 12, color: textMuted, textAlign: "center", marginTop: 40, lineHeight: 1.7 }}>
+                        start the conversation.<br />
+                        share context, ask a question, or drop an attachment.
+                      </div>
                     : (dmMessages[activeDmThread.id] || []).map((msg, i) => {
                         const isMe = msg.sender_id === authUser?.id;
                         const isRead = (msg.read_by || []).length > 0;
@@ -2304,7 +2335,9 @@ function CoLab() {
                                   <button onClick={() => handleEditDm(msg.id, editMessageText)} style={{ ...btnP, padding: "6px 10px", fontSize: 11, flexShrink: 0 }}>save</button>
                                 </div>
                               ) : (
-                                <div style={{ background: isMe ? text : bg2, color: isMe ? bg : text, padding: "9px 13px", borderRadius: isMe ? "14px 14px 2px 14px" : "14px 14px 14px 2px", fontSize: 13, lineHeight: 1.55, border: isMe ? "none" : `1px solid ${border}` }}>{msg.text}{msg.edited && <span style={{ fontSize: 9, opacity: 0.5, marginLeft: 6 }}>edited</span>}</div>
+                                <div style={{ background: isMe ? text : bg2, color: isMe ? bg : text, padding: "9px 13px", borderRadius: isMe ? "14px 14px 2px 14px" : "14px 14px 14px 2px", fontSize: 13, lineHeight: 1.55, border: isMe ? "none" : `1px solid ${border}` }}>
+                                  {renderMessageBody(msg.text, isMe)}{msg.edited && <span style={{ fontSize: 9, opacity: 0.5, marginLeft: 6 }}>edited</span>}
+                                </div>
                               )}
                               <div style={{ fontSize: 10, color: textMuted, marginTop: 3, textAlign: isMe ? "right" : "left", display: "flex", gap: 8, justifyContent: isMe ? "flex-end" : "flex-start", alignItems: "center" }}>
                                 <span>{new Date(msg.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
@@ -2321,12 +2354,35 @@ function CoLab() {
                 </div>
                 <div style={{ padding: "14px 20px", borderTop: `1px solid ${border}`, display: "flex", gap: 10 }}>
                   <input placeholder="message..." value={dmInput} onChange={e => setDmInput(e.target.value)} onKeyDown={e => e.key === "Enter" && handleSendDm()} style={{ ...inputStyle, fontSize: 13 }} autoFocus />
+                  <label style={{ ...btnG, padding: "10px 12px", cursor: "pointer", flexShrink: 0 }}>
+                    + file
+                    <input type="file" multiple style={{ display: "none" }} onChange={(e) => addDmAttachments(Array.from(e.target.files || []), activeDmThread.id)} />
+                  </label>
                   <button className="hb" onClick={handleSendDm} style={{ ...btnP, padding: "10px 18px", flexShrink: 0 }}>send</button>
                 </div>
+                {!!(dmAttachments[activeDmThread.id] || []).length && (
+                  <div style={{ padding: "0 20px 12px", display: "flex", flexDirection: "column", gap: 6 }}>
+                    {(dmAttachments[activeDmThread.id] || []).map((a) => (
+                      <div key={a.tempId} style={{ fontSize: 11, color: textMuted, display: "flex", justifyContent: "space-between", gap: 12 }}>
+                        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.name}</span>
+                        <span>
+                          {a.status === "failed" ? <button className="hb" onClick={() => retryDmAttachment(activeDmThread.id, a.tempId)} style={{ background: "none", border: "none", color: text, textDecoration: "underline", fontSize: 11, fontFamily: "inherit" }}>retry</button> : `${a.status} ${a.progress}%`}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </>
             ) : (
               <div style={{ display: "flex", alignItems: "center", justifyContent: "center", flex: 1, color: textMuted, fontSize: 13 }}>
-                {dmThreads.length > 0 ? "select a conversation →" : "message someone from their profile to get started"}
+                {dmThreads.length > 0 ? "select a conversation →" : (
+                  <div style={{ textAlign: "center", lineHeight: 1.7 }}>
+                    message someone from their profile to get started.<br />
+                    {(myCollaborators || []).slice(0, 3).map((c) => (
+                      <button key={c.user.id} className="hb" onClick={() => openDm(c.user)} style={{ background: "none", border: "none", color: text, textDecoration: "underline", margin: "0 4px", fontFamily: "inherit", fontSize: 12 }}>{c.user.name}</button>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -2626,7 +2682,7 @@ function CoLab() {
                                 </div>
                               ) : (
                                 <div style={{ background: isMe ? text : bg2, color: isMe ? bg : text, padding: "8px 12px", borderRadius: isMe ? "12px 12px 2px 12px" : "12px 12px 12px 2px", fontSize: 12, lineHeight: 1.6, border: isMe ? "none" : `1px solid ${border}` }}>
-                                  {renderWithMentions(msg.text)}{msg.edited && <span style={{ fontSize: 9, opacity: 0.5, marginLeft: 6 }}>edited</span>}
+                                  {renderMessageBody(msg.text, isMe)}{msg.edited && <span style={{ fontSize: 9, opacity: 0.5, marginLeft: 6 }}>edited</span>}
                                 </div>
                               )}
                             </div>
@@ -2638,8 +2694,24 @@ function CoLab() {
                 </div>
                 <div style={{ display: "flex", gap: 8, borderTop: `1px solid ${border}`, paddingTop: 12 }}>
                   <MentionInput dark={dark} value={newMessage} onChange={setNewMessage} onKeyDown={e => e.key === "Enter" && !e.shiftKey && handleSendMessage(activeProject.id)} placeholder="message the team... (@mention)" users={users} style={{ ...inputStyle, fontSize: 12 }} />
+                  <label style={{ ...btnG, padding: "10px 12px", cursor: "pointer", flexShrink: 0 }}>
+                    + file
+                    <input type="file" multiple style={{ display: "none" }} onChange={(e) => addProjectAttachments(Array.from(e.target.files || []), activeProject.id)} />
+                  </label>
                   <button className="hb" onClick={() => handleSendMessage(activeProject.id)} style={{ ...btnP, padding: "10px 16px", flexShrink: 0, fontSize: 12 }}>send</button>
                 </div>
+                {!!(projectAttachments[activeProject.id] || []).length && (
+                  <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 6 }}>
+                    {(projectAttachments[activeProject.id] || []).map((a) => (
+                      <div key={a.tempId} style={{ fontSize: 11, color: textMuted, display: "flex", justifyContent: "space-between", gap: 12 }}>
+                        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.name}</span>
+                        <span>
+                          {a.status === "failed" ? <button className="hb" onClick={() => retryProjectAttachment(activeProject.id, a.tempId)} style={{ background: "none", border: "none", color: text, textDecoration: "underline", fontSize: 11, fontFamily: "inherit" }}>retry</button> : `${a.status} ${a.progress}%`}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
 
