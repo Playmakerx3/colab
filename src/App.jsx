@@ -16,6 +16,7 @@ import { useProfileState } from "./features/profile/hooks/useProfileState";
 import { useAppDataBootstrap } from "./features/app/hooks/useAppDataBootstrap";
 import { useRealtimeSubscriptions } from "./features/realtime/hooks/useRealtimeSubscriptions";
 import { useMessaging } from "./features/messaging/hooks/useMessaging";
+import { useApplications } from "./features/applications/hooks/useApplications";
 
 function PostCard({ post, ctx }) {
   const {
@@ -430,11 +431,8 @@ function CoLab() {
   const [showBannerEditor, setShowBannerEditor] = useState(false);
   const [bannerPixels, setBannerPixels] = useState(new Array(48 * 12).fill(0));
   const [showApplicationForm, setShowApplicationForm] = useState(null);
-  const [applicationSuccess, setApplicationSuccess] = useState(false);
   const [showNewDm, setShowNewDm] = useState(false);
   const [newDmSearch, setNewDmSearch] = useState("");
-  const [applicationForm, setApplicationForm] = useState({ skills: [], availability: "", motivation: "", portfolio_url: "" });
-  const [reviewingApplicants, setReviewingApplicants] = useState(null);
   const [showAddPortfolio, setShowAddPortfolio] = useState(false);
   const [newPortfolioItem, setNewPortfolioItem] = useState({ title: "", description: "", url: "" });
   const messagesEndRef = useRef(null);
@@ -522,15 +520,6 @@ function CoLab() {
       .msg-layout { grid-template-columns: 1fr !important; }
     }
   `;
-
-  // Pre-populate application form with matching skills when it opens
-  useEffect(() => {
-    if (showApplicationForm) {
-      const matchingSkills = (showApplicationForm.skills || []).filter(s => (profile?.skills || []).includes(s));
-      setApplicationForm({ skills: matchingSkills, availability: "", motivation: "", portfolio_url: "" });
-      setApplicationSuccess(false);
-    }
-  }, [showApplicationForm, profile?.skills]);
 
   // Force body background + mobile browser chrome color on mode switch
   useEffect(() => {
@@ -909,57 +898,6 @@ function CoLab() {
     if (data) { setProjectUpdates([data, ...projectUpdates]); setNewUpdate(""); detectAndNotifyMentions(newUpdate, projectId); showToast("Update posted."); }
   };
 
-  // ── APPLICATIONS ──
-  const handleApply = async () => {
-    const project = showApplicationForm;
-    if (!project) return;
-    const existing = applications.find(a => a.project_id === project.id && a.applicant_id === authUser.id);
-    if (existing) {
-      if (existing.status === "pending") { showToast("Already applied."); return; }
-      if (existing.status === "accepted") { showToast("You're already on this project."); return; }
-      if (existing.status === "declined") {
-        const hoursSince = (Date.now() - new Date(existing.updated_at || existing.created_at).getTime()) / 3600000;
-        if (hoursSince < 24) { showToast(`You can reapply in ${Math.ceil(24 - hoursSince)}h`); return; }
-        await supabase.from("applications").delete().eq("id", existing.id);
-        setApplications(prev => prev.filter(a => a.id !== existing.id));
-      }
-    }
-    const { data, error } = await supabase.from("applications").insert({
-      project_id: project.id, applicant_id: authUser.id,
-      applicant_name: profile.name, applicant_initials: myInitials,
-      applicant_role: profile.role || "", applicant_bio: profile.bio || "",
-      availability: applicationForm.availability || "",
-      motivation: applicationForm.motivation || "",
-      portfolio_url: applicationForm.portfolio_url || "",
-      status: "pending",
-    }).select().single();
-    if (error) { showToast("Error submitting. Try again."); return; }
-    if (data) {
-      setApplications([...applications, data]);
-      setApplicationSuccess(true);
-    }
-  };
-
-  const handleRemoveDeniedApp = async (appId) => {
-    await supabase.from("applications").delete().eq("id", appId);
-    setApplications(prev => prev.filter(a => a.id !== appId));
-    showToast("Application removed.");
-  };
-
-  const handleAccept = async (notif) => {
-    await supabase.from("applications").update({ status: "accepted" }).eq("id", notif.id);
-    setNotifications(prev => prev.filter(n => n.id !== notif.id));
-    showToast(`${notif.applicant.name} accepted!`);
-    logActivity(notif.projectId, "member_joined", `${notif.applicant.name} joined the project`);
-    loadAllData(authUser.id);
-  };
-
-  const handleDecline = async (notif) => {
-    await supabase.from("applications").update({ status: "declined" }).eq("id", notif.id);
-    setNotifications(prev => prev.filter(n => n.id !== notif.id));
-    showToast("Application declined.");
-  };
-
   const handleFollow = async (userId) => {
     if (following.includes(userId)) {
       await supabase.from("follows").delete().eq("follower_id", authUser.id).eq("following_id", userId);
@@ -1153,7 +1091,7 @@ function CoLab() {
   const renderApplicationForm = () => {
     const project = showApplicationForm;
     if (!project) return null;
-    const closeForm = () => { setShowApplicationForm(null); setApplicationSuccess(false); };
+    const closeForm = () => closeApplicationForm();
     const projectSkills = project.skills || [];
     const otherSkills = SKILLS.filter(s => !projectSkills.includes(s));
     const toggleSkill = (s) => setApplicationForm(f => ({ ...f, skills: f.skills.includes(s) ? f.skills.filter(x => x !== s) : [...f.skills, s] }));
@@ -1221,8 +1159,7 @@ function CoLab() {
   };
 
   const ReviewModal = ({ project, onClose }) => {
-    const projectApps = applications.filter(a => a.project_id === project.id && a.status === "pending");
-    const [selected, setSelected] = useState(null);
+    const projectApps = getProjectPendingApplications(project.id);
     return (
       <div style={{ position: "fixed", inset: 0, background: dark ? "rgba(0,0,0,0.9)" : "rgba(200,200,200,0.88)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200, backdropFilter: "blur(10px)", padding: 16 }} onClick={onClose}>
         <div style={{ background: bg, border: `1px solid ${border}`, borderRadius: 16, padding: "28px", width: "100%", maxWidth: 640, maxHeight: "92vh", overflowY: "auto" }} onClick={e => e.stopPropagation()}>
@@ -1235,10 +1172,10 @@ function CoLab() {
           </div>
           {projectApps.length === 0
             ? <div style={{ fontSize: 13, color: textMuted, padding: "24px 0" }}>no applications yet.</div>
-            : !selected
+            : !selectedApplicant
               ? <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                   {projectApps.map(a => (
-                    <div key={a.id} onClick={() => setSelected(a)} style={{ background: bg2, border: `1px solid ${border}`, borderRadius: 10, padding: "14px 16px", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center", transition: "border 0.15s" }}
+                    <div key={a.id} onClick={() => setSelectedApplicant(a)} style={{ background: bg2, border: `1px solid ${border}`, borderRadius: 10, padding: "14px 16px", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center", transition: "border 0.15s" }}
                       onMouseEnter={e => e.currentTarget.style.borderColor = text} onMouseLeave={e => e.currentTarget.style.borderColor = border}>
                       <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
                         <Avatar initials={a.applicant_initials} size={36} dark={dark} />
@@ -1252,36 +1189,24 @@ function CoLab() {
                   ))}
                 </div>
               : <div>
-                  <button onClick={() => setSelected(null)} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontFamily: "inherit", fontSize: 12, marginBottom: 20 }}>← all applicants</button>
+                  <button onClick={() => setSelectedApplicant(null)} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontFamily: "inherit", fontSize: 12, marginBottom: 20 }}>← all applicants</button>
                   <div style={{ display: "flex", gap: 14, alignItems: "center", marginBottom: 16 }}>
-                    <Avatar initials={selected.applicant_initials} size={48} dark={dark} />
+                    <Avatar initials={selectedApplicant.applicant_initials} size={48} dark={dark} />
                     <div>
-                      <div style={{ fontSize: 18, color: text }}>{selected.applicant_name}</div>
-                      <div style={{ fontSize: 12, color: textMuted }}>{selected.applicant_role}</div>
+                      <div style={{ fontSize: 18, color: text }}>{selectedApplicant.applicant_name}</div>
+                      <div style={{ fontSize: 12, color: textMuted }}>{selectedApplicant.applicant_role}</div>
                     </div>
                   </div>
                   <div style={{ display: "flex", flexDirection: "column", gap: 14, marginBottom: 20 }}>
-                    {selected.availability && <div><div style={labelStyle}>AVAILABILITY</div><div style={{ fontSize: 13, color: text }}>{selected.availability}</div></div>}
-                    {selected.motivation && <div><div style={labelStyle}>WHY THEY WANT TO JOIN</div><div style={{ fontSize: 13, color: textMuted, lineHeight: 1.7 }}>{selected.motivation}</div></div>}
-                    {selected.applicant_bio && <div><div style={labelStyle}>BIO</div><div style={{ fontSize: 13, color: textMuted, lineHeight: 1.7 }}>{selected.applicant_bio}</div></div>}
-                    {selected.portfolio_url && <div><div style={labelStyle}>PORTFOLIO</div><a href={selected.portfolio_url} target="_blank" rel="noreferrer" style={{ fontSize: 13, color: text }}>{selected.portfolio_url}</a></div>}
-                    {(selected.applicant_skills || []).length > 0 && <div><div style={labelStyle}>SKILLS</div><div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>{selected.applicant_skills.map(s => <span key={s} style={{ fontSize: 11, padding: "3px 10px", border: `1px solid ${border}`, borderRadius: 3, color: textMuted }}>{s}</span>)}</div></div>}
+                    {selectedApplicant.availability && <div><div style={labelStyle}>AVAILABILITY</div><div style={{ fontSize: 13, color: text }}>{selectedApplicant.availability}</div></div>}
+                    {selectedApplicant.motivation && <div><div style={labelStyle}>WHY THEY WANT TO JOIN</div><div style={{ fontSize: 13, color: textMuted, lineHeight: 1.7 }}>{selectedApplicant.motivation}</div></div>}
+                    {selectedApplicant.applicant_bio && <div><div style={labelStyle}>BIO</div><div style={{ fontSize: 13, color: textMuted, lineHeight: 1.7 }}>{selectedApplicant.applicant_bio}</div></div>}
+                    {selectedApplicant.portfolio_url && <div><div style={labelStyle}>PORTFOLIO</div><a href={selectedApplicant.portfolio_url} target="_blank" rel="noreferrer" style={{ fontSize: 13, color: text }}>{selectedApplicant.portfolio_url}</a></div>}
+                    {(selectedApplicant.applicant_skills || []).length > 0 && <div><div style={labelStyle}>SKILLS</div><div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>{selectedApplicant.applicant_skills.map(s => <span key={s} style={{ fontSize: 11, padding: "3px 10px", border: `1px solid ${border}`, borderRadius: 3, color: textMuted }}>{s}</span>)}</div></div>}
                   </div>
                   <div style={{ display: "flex", gap: 10 }}>
-                    <button className="hb" onClick={async () => {
-                      const { error } = await supabase.from("applications").update({ status: "declined" }).eq("id", selected.id);
-                      if (error) { showToast("Failed to decline. Try again."); return; }
-                      setApplications(applications.filter(a => a.id !== selected.id));
-                      setSelected(null); showToast("Declined.");
-                    }} style={{ ...btnG, flex: 1 }}>decline</button>
-                    <button className="hb" onClick={async () => {
-                      const { error } = await supabase.from("applications").update({ status: "accepted" }).eq("id", selected.id);
-                      if (error) { showToast("Failed to accept. Try again."); return; }
-                      setApplications(applications.filter(a => a.id !== selected.id));
-                      const u = users.find(u => u.id === selected.applicant_id);
-                      if (u) openDm(u);
-                      setSelected(null); onClose(); showToast(`${selected.applicant_name} accepted!`);
-                    }} style={{ ...btnP, flex: 1 }}>accept + message →</button>
+                    <button className="hb" onClick={handleReviewDecline} style={{ ...btnG, flex: 1 }}>decline</button>
+                    <button className="hb" onClick={handleReviewAccept} style={{ ...btnP, flex: 1 }}>accept + message →</button>
                   </div>
                 </div>
           }
@@ -1340,6 +1265,40 @@ function CoLab() {
     setEditingMessage,
     detectAndNotifyMentions,
     showToast,
+  });
+
+  const {
+    applicationSuccess,
+    setApplicationForm,
+    applicationForm,
+    reviewingApplicants,
+    openApplicationForm,
+    openReviewApplicants,
+    closeReviewApplicants,
+    selectedApplicant,
+    setSelectedApplicant,
+    closeApplicationForm,
+    handleApply,
+    handleRemoveDeniedApp,
+    handleAccept,
+    handleDecline,
+    getProjectPendingApplications,
+    handleReviewDecline,
+    handleReviewAccept,
+  } = useApplications({
+    authUser,
+    profile,
+    myInitials,
+    showApplicationForm,
+    setShowApplicationForm,
+    applications,
+    users,
+    setApplications,
+    setNotifications,
+    showToast,
+    loadAllData,
+    logActivity,
+    openDm,
   });
 
   const handleCreatePost = async () => {
@@ -1987,7 +1946,7 @@ function CoLab() {
 
       {viewingProfile && <ProfileModal u={viewingProfile} onClose={() => setViewingProfile(null)} />}
       {renderApplicationForm()}
-      {reviewingApplicants && <ReviewModal project={reviewingApplicants} onClose={() => setReviewingApplicants(null)} />}
+      {reviewingApplicants && <ReviewModal project={reviewingApplicants} onClose={closeReviewApplicants} />}
 
       {/* NEW DM PICKER */}
       {showNewDm && (
@@ -2216,8 +2175,8 @@ function CoLab() {
           {appliedProjectIds.includes(activeProject.id)
             ? <div style={{ textAlign: "center", padding: 12, background: bg2, borderRadius: 8, color: textMuted, fontSize: 12, border: `1px solid ${border}` }}>applied — waiting to hear back</div>
             : activeProject.owner_id === authUser?.id
-              ? <button className="hb" onClick={() => setReviewingApplicants(activeProject)} style={{ ...btnP, width: "100%", padding: "13px" }}>review applicants ({applications.filter(a => a.project_id === activeProject.id && a.status === "pending").length})</button>
-              : <button className="hb" onClick={() => setShowApplicationForm(activeProject)} style={{ ...btnP, width: "100%", padding: "13px" }}>Apply to collaborate →</button>
+              ? <button className="hb" onClick={() => openReviewApplicants(activeProject)} style={{ ...btnP, width: "100%", padding: "13px" }}>review applicants ({applications.filter(a => a.project_id === activeProject.id && a.status === "pending").length})</button>
+              : <button className="hb" onClick={() => openApplicationForm(activeProject)} style={{ ...btnP, width: "100%", padding: "13px" }}>Apply to collaborate →</button>
           }
         </div>
       )}
@@ -2370,7 +2329,7 @@ function CoLab() {
                               <div style={{ fontSize: 13, color: text, letterSpacing: "-0.3px", marginBottom: 2 }}>{p.title}</div>
                               <div style={{ fontSize: 11, color: textMuted }}>{p.category}{pendingApps > 0 ? ` · ${pendingApps} pending` : ""}</div>
                             </div>
-                            {pendingApps > 0 && <button className="hb" onClick={e => { e.stopPropagation(); setReviewingApplicants(p); }} style={{ fontSize: 10, padding: "2px 8px", border: `1px solid ${border}`, borderRadius: 4, background: "none", color: text, cursor: "pointer", fontFamily: "inherit", flexShrink: 0 }}>review</button>}
+                            {pendingApps > 0 && <button className="hb" onClick={e => { e.stopPropagation(); openReviewApplicants(p); }} style={{ fontSize: 10, padding: "2px 8px", border: `1px solid ${border}`, borderRadius: 4, background: "none", color: text, cursor: "pointer", fontFamily: "inherit", flexShrink: 0 }}>review</button>}
                           </div>
                           {/* Task-based progress */}
                           {(() => {
