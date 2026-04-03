@@ -63,7 +63,9 @@ export function useProjectWorkspace({
   setInviteLink,
   setGithubLoading,
   setGithubError,
-  setGithubCommits
+  setGithubCommits,
+  setCreateProjectError,
+  setIsCreatingProject,
 }) {
   const projectsRef = useRef([]);
 
@@ -88,26 +90,73 @@ export function useProjectWorkspace({
   };
 
   const handlePostProject = async () => {
-    if (!newProject.title || !newProject.description) return;
-    const { data, error } = await createProject({
-      title: newProject.title,
-      description: newProject.description,
-      category: newProject.category,
-      skills: newProject.skills,
-      max_collaborators: newProject.maxCollaborators,
-      location: newProject.location || profile?.location || "",
-      goals: newProject.goals || null,
-      timeline: newProject.timeline || null,
+    console.info("[project:create] submit triggered");
+
+    const title = newProject.title?.trim() || "";
+    const description = newProject.description?.trim() || "";
+    if (!title || !description) {
+      const message = "Title and description are required.";
+      console.warn("[project:create] validation failed", { titlePresent: !!title, descriptionPresent: !!description });
+      setCreateProjectError?.(message);
+      showToast(message);
+      return;
+    }
+
+    if (!authUser?.id) {
+      const message = "Your session is still loading. Please wait a moment and retry.";
+      console.error("[project:create] missing user/session id");
+      setCreateProjectError?.(message);
+      showToast(message);
+      return;
+    }
+
+    const ownerName = profile?.name?.trim()
+      || authUser.user_metadata?.name?.trim()
+      || authUser.user_metadata?.full_name?.trim()
+      || authUser.email?.split("@")?.[0]
+      || "New member";
+    const ownerInitials = myInitials || ownerName.slice(0, 2).toUpperCase();
+    const payload = {
+      title,
+      description,
+      category: newProject.category || CATEGORIES[0],
+      skills: Array.isArray(newProject.skills) ? newProject.skills : [],
+      max_collaborators: Number.isFinite(newProject.maxCollaborators) ? newProject.maxCollaborators : 2,
+      location: (newProject.location || profile?.location || "").trim(),
+      goals: newProject.goals?.trim() || null,
+      timeline: newProject.timeline?.trim() || null,
       owner_id: authUser.id,
-      owner_name: profile.name,
-      owner_initials: myInitials,
+      owner_name: ownerName,
+      owner_initials: ownerInitials,
       status: "open",
       progress: 0,
       plugins: [],
       collaborators: 0,
-      is_private: newProject.is_private || false,
+      is_private: Boolean(newProject.is_private),
+    };
+
+    console.info("[project:create] payload constructed", {
+      owner_id: payload.owner_id,
+      title: payload.title,
+      category: payload.category,
+      max_collaborators: payload.max_collaborators,
     });
-    if (!error && data) {
+
+    setCreateProjectError?.("");
+    setIsCreatingProject?.(true);
+
+    try {
+      console.info("[project:create] calling createProject API");
+      const { data, error } = await createProject(payload);
+      if (error) {
+        console.error("[project:create] API returned error", error);
+        throw error;
+      }
+      if (!data) {
+        throw new Error("Project could not be created. Please retry.");
+      }
+
+      console.info("[project:create] API success", { projectId: data.id });
       setProjects([data, ...projects]);
       setNewProject({ title: "", description: "", category: CATEGORIES[0], skills: [], maxCollaborators: 2, location: "", goals: "", timeline: "", is_private: false });
       setShowCreate(false);
@@ -116,8 +165,13 @@ export function useProjectWorkspace({
       setAppScreen("workspace");
       setProjectTab("kanban");
       showToast("Project posted — you're in your workspace.");
-    } else {
-      showToast("Failed to post project. Try again.");
+    } catch (error) {
+      const message = error?.message || "Failed to post project. Try again.";
+      setCreateProjectError?.(message);
+      showToast(message);
+      console.error("[project:create] failed", error);
+    } finally {
+      setIsCreatingProject?.(false);
     }
   };
 
