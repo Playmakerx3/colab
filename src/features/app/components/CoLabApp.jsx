@@ -756,8 +756,8 @@ function CoLab() {
   const [exploreTab, setExploreTab] = useState("for-you");
   const [networkTab, setNetworkTab] = useState("feed");
   const [activeProject, setActiveProject] = useState(null);
-  const viewingProfile = null;
-  const viewFullProfile = null;
+  const [viewingProfile, setViewingProfileState] = useState(null);
+  const [viewFullProfile, setViewFullProfileState] = useState(null);
   const [projectTab, setProjectTab] = useState("tasks");
 
   // Auth
@@ -900,13 +900,11 @@ function CoLab() {
     }
     window.location.assign(`/profile/${encodeURIComponent(username)}`);
   };
-  const setViewingProfile = (user, event) => {
-    if (!user) return;
-    openUserProfile(user, event);
+  const setViewingProfile = (user) => {
+    setViewingProfileState(user || null);
   };
-  const setViewFullProfile = (user, event) => {
-    if (!user) return;
-    openUserProfile(user, event);
+  const setViewFullProfile = (user) => {
+    setViewFullProfileState(user || null);
   };
   const markRecentActivity = (postId) => {
     setRecentActivityByPost((prev) => ({ ...prev, [postId]: true }));
