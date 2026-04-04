@@ -81,14 +81,27 @@ export default function PublicProfilePage({ username }) {
   }, [user]);
 
   useEffect(() => {
+    let isActive = true;
+
     async function load() {
+      setLoading(true);
+      setNotFound(false);
+      setUser(null);
+      setProjects([]);
+      setPortfolio([]);
+      setProfilesById({});
+      setApplications([]);
+      setCollaborationHistory([]);
+
       const { data: u } = await supabase.from("profiles").select("*").eq("username", username).single();
+      if (!isActive) return;
       if (!u) { setNotFound(true); setLoading(false); return; }
       setUser(u);
       const [{ data: projs }, { data: port }] = await Promise.all([
         supabase.from("projects").select("*").eq("owner_id", u.id).order("created_at", { ascending: false }),
         supabase.from("portfolio_items").select("*").eq("user_id", u.id),
       ]);
+      if (!isActive) return;
       const projectIds = (projs || []).map((p) => p.id);
       let apps = [];
       let acceptedAsApplicant = [];
@@ -99,6 +112,7 @@ export default function PublicProfilePage({ username }) {
           .in("project_id", projectIds)
           .eq("status", "accepted")
           .order("created_at", { ascending: false });
+        if (!isActive) return;
         apps = appRows || [];
       }
       const { data: applicantRows } = await supabase
@@ -107,6 +121,7 @@ export default function PublicProfilePage({ username }) {
         .eq("applicant_id", u.id)
         .eq("status", "accepted")
         .order("created_at", { ascending: false });
+      if (!isActive) return;
       acceptedAsApplicant = applicantRows || [];
 
       const projectIdsAsApplicant = [...new Set(acceptedAsApplicant.map((a) => a.project_id).filter(Boolean))];
@@ -116,6 +131,7 @@ export default function PublicProfilePage({ username }) {
           .from("projects")
           .select("id, owner_id, title")
           .in("id", projectIdsAsApplicant);
+        if (!isActive) return;
         ownerProjects = ownerProjectRows || [];
       }
 
@@ -128,6 +144,7 @@ export default function PublicProfilePage({ username }) {
           .from("profiles")
           .select("id, name, username, role")
           .in("id", allCollaboratorIds);
+        if (!isActive) return;
         (collaboratorProfiles || []).forEach((row) => { collaboratorMap[row.id] = row; });
         setProfilesById(collaboratorMap);
       } else {
@@ -152,6 +169,7 @@ export default function PublicProfilePage({ username }) {
         seen.add(collaborator.id);
         history.push({ ...collaborator, viaProjectId: a.project_id });
       });
+      if (!isActive) return;
       setCollaborationHistory(history);
       setProjects(projs || []);
       setPortfolio(port || []);
@@ -159,6 +177,10 @@ export default function PublicProfilePage({ username }) {
       setLoading(false);
     }
     load();
+
+    return () => {
+      isActive = false;
+    };
   }, [username]);
 
   const handleCopy = () => {
