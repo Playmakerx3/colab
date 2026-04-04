@@ -15,7 +15,7 @@ export const createProject = async (payload) => {
 };
 
 export const updateProject = async (projectId, payload) => {
-  return supabase.from("projects").update(payload).eq("id", projectId);
+  return supabase.from("projects").update(payload).eq("id", projectId).select();
 };
 
 export const deleteProject = async (projectId) => {

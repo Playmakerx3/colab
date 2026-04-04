@@ -34,6 +34,7 @@ export default function PublicProfilePage({ username }) {
   const [portfolio, setPortfolio] = useState([]);
   const [profilesById, setProfilesById] = useState({});
   const [applications, setApplications] = useState([]);
+  const [collaborationHistory, setCollaborationHistory] = useState([]);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -90,6 +91,7 @@ export default function PublicProfilePage({ username }) {
       ]);
       const projectIds = (projs || []).map((p) => p.id);
       let apps = [];
+      let acceptedAsApplicant = [];
       if (projectIds.length > 0) {
         const { data: appRows } = await supabase
           .from("applications")
@@ -98,17 +100,59 @@ export default function PublicProfilePage({ username }) {
           .eq("status", "accepted")
           .order("created_at", { ascending: false });
         apps = appRows || [];
-        const uniqueApplicantIds = [...new Set(apps.map((a) => a.applicant_id).filter(Boolean))];
-        if (uniqueApplicantIds.length > 0) {
-          const { data: collaboratorProfiles } = await supabase
-            .from("profiles")
-            .select("id, name, username")
-            .in("id", uniqueApplicantIds);
-          const map = {};
-          (collaboratorProfiles || []).forEach((row) => { map[row.id] = row; });
-          setProfilesById(map);
-        }
       }
+      const { data: applicantRows } = await supabase
+        .from("applications")
+        .select("id, project_id, applicant_id, status, created_at")
+        .eq("applicant_id", u.id)
+        .eq("status", "accepted")
+        .order("created_at", { ascending: false });
+      acceptedAsApplicant = applicantRows || [];
+
+      const projectIdsAsApplicant = [...new Set(acceptedAsApplicant.map((a) => a.project_id).filter(Boolean))];
+      let ownerProjects = [];
+      if (projectIdsAsApplicant.length > 0) {
+        const { data: ownerProjectRows } = await supabase
+          .from("projects")
+          .select("id, owner_id, title")
+          .in("id", projectIdsAsApplicant);
+        ownerProjects = ownerProjectRows || [];
+      }
+
+      const uniqueApplicantIds = [...new Set(apps.map((a) => a.applicant_id).filter(Boolean))];
+      const ownerIds = [...new Set(ownerProjects.map((p) => p.owner_id).filter((id) => id && id !== u.id))];
+      const allCollaboratorIds = [...new Set([...uniqueApplicantIds, ...ownerIds])];
+      let collaboratorMap = {};
+      if (allCollaboratorIds.length > 0) {
+        const { data: collaboratorProfiles } = await supabase
+          .from("profiles")
+          .select("id, name, username, role")
+          .in("id", allCollaboratorIds);
+        (collaboratorProfiles || []).forEach((row) => { collaboratorMap[row.id] = row; });
+        setProfilesById(collaboratorMap);
+      } else {
+        setProfilesById({});
+      }
+
+      const ownerProjectById = {};
+      ownerProjects.forEach((p) => { ownerProjectById[p.id] = p; });
+      const history = [];
+      const seen = new Set();
+      apps.forEach((a) => {
+        const collaborator = a.applicant_id ? { id: a.applicant_id, ...(collaboratorMap[a.applicant_id] || {}) } : null;
+        if (!collaborator?.id || collaborator.id === u.id || seen.has(collaborator.id)) return;
+        seen.add(collaborator.id);
+        history.push({ ...collaborator, viaProjectId: a.project_id });
+      });
+      acceptedAsApplicant.forEach((a) => {
+        const ownerProject = ownerProjectById[a.project_id];
+        const ownerId = ownerProject?.owner_id;
+        const collaborator = ownerId ? { id: ownerId, ...(collaboratorMap[ownerId] || {}) } : null;
+        if (!collaborator?.id || collaborator.id === u.id || seen.has(collaborator.id)) return;
+        seen.add(collaborator.id);
+        history.push({ ...collaborator, viaProjectId: a.project_id });
+      });
+      setCollaborationHistory(history);
       setProjects(projs || []);
       setPortfolio(port || []);
       setApplications(apps);
@@ -200,6 +244,26 @@ export default function PublicProfilePage({ username }) {
             </div>
           </div>
         )}
+
+        <div style={{ marginBottom: 28 }}>
+          <div style={{ fontSize: 10, color: textMuted, letterSpacing: "1.5px", marginBottom: 12 }}>COLLABORATORS</div>
+          {collaborationHistory.length === 0 ? (
+            <div style={{ background: bg2, border: `1px solid ${border}`, borderRadius: 8, padding: "14px 16px", fontSize: 12, color: textMuted }}>
+              no collaborators yet.
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
+              {collaborationHistory.map((c, i) => (
+                <div key={c.id} style={{ background: bg2, border: `1px solid ${border}`, borderRadius: i === 0 && collaborationHistory.length === 1 ? 8 : i === 0 ? "8px 8px 0 0" : i === collaborationHistory.length - 1 ? "0 0 8px 8px" : 0, borderBottom: i < collaborationHistory.length - 1 ? "none" : `1px solid ${border}`, padding: "12px 14px" }}>
+                  <div style={{ fontSize: 12, color: text }}>{c.name || "Unknown builder"}</div>
+                  <div style={{ fontSize: 11, color: textMuted }}>
+                    {c.username ? `@${c.username}` : "no username"}{c.role ? ` · ${c.role}` : ""}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
 
         <div style={{ marginBottom: 28 }}>
           <div style={{ fontSize: 10, color: textMuted, letterSpacing: "1.5px", marginBottom: 12 }}>PROJECTS</div>

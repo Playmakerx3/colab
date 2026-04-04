@@ -181,16 +181,30 @@ export function useProjectWorkspace({
 
   const handleArchiveProject = async (projectId) => {
     if (!window.confirm("Archive this project? It will be hidden from your workspace but not deleted.")) return;
-    await updateProject(projectId, { archived: true });
-    setProjects((prev) => prev.map((p) => (p.id === projectId ? { ...p, archived: true } : p)));
-    setActiveProject(null);
-    showToast("Project archived.");
+    try {
+      const { data, error } = await updateProject(projectId, { archived: true });
+      if (error) throw error;
+      if (!data || data.length === 0) throw new Error("Archive did not persist. Please retry.");
+      setProjects((prev) => prev.map((p) => (p.id === projectId ? { ...p, archived: true } : p)));
+      setActiveProject(null);
+      showToast("Project archived.");
+    } catch (error) {
+      console.error("Archive failed", error);
+      showToast(error?.message || "Could not archive project. Please retry.");
+    }
   };
 
   const handleUnarchiveProject = async (projectId) => {
-    await updateProject(projectId, { archived: false });
-    setProjects((prev) => prev.map((p) => (p.id === projectId ? { ...p, archived: false } : p)));
-    showToast("Project restored.");
+    try {
+      const { data, error } = await updateProject(projectId, { archived: false });
+      if (error) throw error;
+      if (!data || data.length === 0) throw new Error("Restore did not persist. Please retry.");
+      setProjects((prev) => prev.map((p) => (p.id === projectId ? { ...p, archived: false } : p)));
+      showToast("Project restored.");
+    } catch (error) {
+      console.error("Unarchive failed", error);
+      showToast(error?.message || "Could not restore project. Please retry.");
+    }
   };
 
   const logActivity = async (projectId, eventType, details) => {
@@ -288,6 +302,16 @@ export function useProjectWorkspace({
   };
 
   const handleGenerateInvite = async (projectId) => {
+    if (!projectId) {
+      const error = new Error("Project is not ready yet. Re-open the project and retry.");
+      showToast(error.message);
+      return { ok: false, error };
+    }
+    if (!authUser?.id) {
+      const error = new Error("Session not ready yet. Please sign in again and retry.");
+      showToast(error.message);
+      return { ok: false, error };
+    }
     try {
       const { data, error } = await createProjectInvite(projectId, authUser.id);
       if (error) throw error;
@@ -302,8 +326,9 @@ export function useProjectWorkspace({
         }
         return { ok: true, url };
       }
-      showToast("Invite created, but token was missing. Please retry.");
-      return { ok: false };
+      const missingTokenError = new Error("Invite was created but link token was missing. Please retry.");
+      showToast(missingTokenError.message);
+      return { ok: false, error: missingTokenError };
     } catch (error) {
       console.error("Invite generation failed", error);
       showToast("Could not create invite link. Please retry.");

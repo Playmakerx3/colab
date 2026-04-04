@@ -537,6 +537,8 @@ function CoLab() {
   const [docPreviewMode, setDocPreviewMode] = useState(false);
   const [inviteLink, setInviteLink] = useState(null);
   const [showInvitePanel, setShowInvitePanel] = useState(false);
+  const [inviteLoading, setInviteLoading] = useState(false);
+  const [inviteError, setInviteError] = useState("");
   const [showShipModal, setShowShipModal] = useState(false);
   const [shipPostContent, setShipPostContent] = useState("");
   const [githubCommits, setGithubCommits] = useState([]);
@@ -826,6 +828,8 @@ function CoLab() {
   useEffect(() => {
     setShowInvitePanel(false);
     setInviteLink(null);
+    setInviteError("");
+    setInviteLoading(false);
   }, [activeProject?.id]);
 
 
@@ -1214,6 +1218,23 @@ function CoLab() {
     setTimeout(() => {
       document.getElementById("feed")?.scrollIntoView({ behavior: "smooth", block: "start" });
     }, 50);
+  };
+
+  const generateInviteForProject = async (projectId) => {
+    setInviteError("");
+    setInviteLoading(true);
+    const result = await handleGenerateInvite(projectId);
+    if (!result?.ok) {
+      setInviteError(result?.error?.message || "Could not create invite link. Please retry.");
+    }
+    setInviteLoading(false);
+  };
+
+  const openInvitePanel = async (projectId) => {
+    setShowInvitePanel(true);
+    if (!inviteLink && !inviteLoading) {
+      await generateInviteForProject(projectId);
+    }
   };
 
   const renderFirstTimeGuide = () => (
@@ -3045,7 +3066,7 @@ function CoLab() {
                 <div style={{ background: bg, border: `1px solid ${border}`, borderRadius: 8, padding: "10px 12px" }}>
                   <div style={{ fontSize: 10, color: textMuted, letterSpacing: "1.2px", marginBottom: 8 }}>QUICK ACTIONS</div>
                   <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
-                    <button className="hb" onClick={() => handleGenerateInvite(activeProject.id)} style={{ ...btnG, padding: "6px 10px", fontSize: 11, textAlign: "left" }}>
+                    <button className="hb" onClick={() => openInvitePanel(activeProject.id)} style={{ ...btnG, padding: "6px 10px", fontSize: 11, textAlign: "left" }}>
                       Invite collaborator
                     </button>
                     <button
@@ -3486,19 +3507,23 @@ function CoLab() {
                 {activeProject.owner_id === authUser?.id && (
                   <div style={{ marginTop: 20, paddingTop: 16, borderTop: `1px solid ${border}` }}>
                     <div style={{ fontSize: 10, color: textMuted, letterSpacing: "1px", marginBottom: 10 }}>INVITE</div>
-                    <button className="hb" onClick={() => setShowInvitePanel((prev) => !prev)}
+                    <button className="hb" onClick={() => openInvitePanel(activeProject.id)}
                       style={{ background: "none", border: `1px solid ${border}`, borderRadius: 6, padding: "7px 14px", fontSize: 11, cursor: "pointer", color: text, fontFamily: "inherit" }}>
                       Invite Collaborators
                     </button>
                     {showInvitePanel && (
                       <div style={{ marginTop: 10, background: bg2, border: `1px solid ${border}`, borderRadius: 6, padding: "8px 12px", fontSize: 10, color: textMuted, wordBreak: "break-all" }}>
-                        <div style={{ marginBottom: inviteLink ? 8 : 0 }}>
-                          {inviteLink || "Create a share link to invite collaborators into this project."}
+                        <div style={{ marginBottom: 8 }}>
+                          {inviteLoading
+                            ? "Creating invite link..."
+                            : inviteLink || "Create a share link to invite collaborators into this project."}
                         </div>
+                        {inviteError && <div style={{ marginBottom: 8, color: "#ef4444" }}>{inviteError}</div>}
                         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                          <button className="hb" onClick={() => handleGenerateInvite(activeProject.id)}
-                            style={{ background: "none", border: `1px solid ${border}`, borderRadius: 4, padding: "4px 8px", color: text, cursor: "pointer", fontFamily: "inherit", fontSize: 10 }}>
-                            {inviteLink ? "Generate new link" : "Generate invite link"}
+                          <button className="hb" onClick={() => generateInviteForProject(activeProject.id)}
+                            style={{ background: "none", border: `1px solid ${border}`, borderRadius: 4, padding: "4px 8px", color: text, cursor: "pointer", fontFamily: "inherit", fontSize: 10, opacity: inviteLoading ? 0.6 : 1 }}
+                            disabled={inviteLoading}>
+                            {inviteLoading ? "Generating..." : inviteLink ? "Generate new link" : "Generate invite link"}
                           </button>
                           {inviteLink && (
                             <button className="hb" onClick={async () => {
