@@ -46,6 +46,88 @@ const toHost = (url = "") => {
   }
 };
 
+const sharedFeedAudio = {
+  activeElement: null,
+};
+
+function AudioPostPlayer({ post, border, bg2, text, textMuted }) {
+  const audioRef = useRef(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [duration, setDuration] = useState(0);
+  const [currentTime, setCurrentTime] = useState(0);
+  const trackLabel = decodeURIComponent(post.media_url.split("/").pop().split("?")[0]).replace(/^\d+-/, "");
+  const creatorLabel = post.user_name || "Unknown creator";
+  const progressPct = duration > 0 ? Math.min(100, (currentTime / duration) * 100) : 0;
+
+  const togglePlayback = async () => {
+    if (!audioRef.current) return;
+    if (isPlaying) {
+      audioRef.current.pause();
+      return;
+    }
+    try {
+      await audioRef.current.play();
+    } catch {
+      setIsPlaying(false);
+    }
+  };
+
+  useEffect(() => () => {
+    if (!audioRef.current) return;
+    audioRef.current.pause();
+    audioRef.current.currentTime = 0;
+    if (sharedFeedAudio.activeElement === audioRef.current) {
+      sharedFeedAudio.activeElement = null;
+    }
+  }, []);
+
+  const handlePlay = () => {
+    const currentAudio = audioRef.current;
+    if (!currentAudio) return;
+    if (sharedFeedAudio.activeElement && sharedFeedAudio.activeElement !== currentAudio) {
+      sharedFeedAudio.activeElement.pause();
+    }
+    sharedFeedAudio.activeElement = currentAudio;
+    setIsPlaying(true);
+  };
+
+  const handlePause = () => {
+    if (sharedFeedAudio.activeElement === audioRef.current) {
+      sharedFeedAudio.activeElement = null;
+    }
+    setIsPlaying(false);
+  };
+
+  return (
+    <div style={{ background: bg2, border: `1px solid ${border}`, borderRadius: 12, padding: "14px 16px" }}>
+      <div style={{ fontSize: 10, color: textMuted, letterSpacing: "1px", marginBottom: 8 }}>MUSIC</div>
+      <div style={{ fontSize: 13, color: text, marginBottom: 2 }}>{trackLabel || "Untitled track"}</div>
+      <div style={{ fontSize: 11, color: textMuted, marginBottom: 12 }}>by {creatorLabel}</div>
+      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <button className="hb" onClick={togglePlayback} style={{ width: 32, height: 32, borderRadius: 999, border: `1px solid ${border}`, background: "none", color: text, fontSize: 13, cursor: "pointer", fontFamily: "inherit", flexShrink: 0 }}>
+          {isPlaying ? "❚❚" : "▶"}
+        </button>
+        <div style={{ flex: 1 }}>
+          <div style={{ width: "100%", height: 6, borderRadius: 999, border: `1px solid ${border}`, overflow: "hidden" }}>
+            <div style={{ width: `${progressPct}%`, height: "100%", background: text, transition: "width 0.12s linear" }} />
+          </div>
+        </div>
+      </div>
+      <audio
+        ref={audioRef}
+        src={post.media_url}
+        preload="metadata"
+        onPlay={handlePlay}
+        onPause={handlePause}
+        onLoadedMetadata={(e) => setDuration(e.currentTarget.duration || 0)}
+        onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime || 0)}
+        onEnded={handlePause}
+        style={{ display: "none" }}
+      />
+    </div>
+  );
+}
+
 function PostCard({ post, ctx }) {
   const {
     postLikes, expandedComments, postComments, authUser, users,
@@ -168,21 +250,13 @@ function PostCard({ post, ctx }) {
               return <iframe src={`https://www.youtube.com/embed/${ytId || ""}`} style={{ width: "100%", height: 260, borderRadius: 10, border: "none" }} allowFullScreen />;
             }
             if (t === "video") return <video src={post.media_url} controls style={{ width: "100%", maxHeight: 320, borderRadius: 10, border: `1px solid ${border}` }} />;
-            if (t === "audio") return (
-              <div style={{ background: bg2, border: `1px solid ${border}`, borderRadius: 10, padding: "14px 18px" }}>
-                <div style={{ fontSize: 11, color: textMuted, marginBottom: 10, display: "flex", gap: 6, alignItems: "center" }}>
-                  <span style={{ fontSize: 14 }}>♪</span>
-                  <span>{decodeURIComponent(post.media_url.split("/").pop().split("?")[0]).replace(/^\d+-/, "")}</span>
-                </div>
-                <audio src={post.media_url} controls style={{ width: "100%", height: 36 }} />
-              </div>
-            );
+            if (t === "audio") return <AudioPostPlayer post={post} border={border} bg2={bg2} text={text} textMuted={textMuted} />;
             if (t === "pdf") return (
               <a href={post.media_url} target="_blank" rel="noreferrer" style={{ display: "inline-flex", alignItems: "center", gap: 8, fontSize: 12, color: text, background: bg2, border: `1px solid ${border}`, borderRadius: 8, padding: "10px 16px", textDecoration: "none" }}>
                 <span style={{ fontSize: 16 }}>↗</span> view PDF
               </a>
             );
-            return <img src={post.media_url} alt="" style={{ width: "100%", maxHeight: 400, objectFit: "cover", borderRadius: 10, border: `1px solid ${border}`, display: "block" }} onError={e => e.target.style.display = "none"} />;
+            return <img className="feed-image-desktop" src={post.media_url} alt="" style={{ width: "100%", maxHeight: 400, objectFit: "cover", borderRadius: 10, border: `1px solid ${border}`, display: "block" }} onError={e => e.target.style.display = "none"} />;
           })()}
         </div>
       )}
@@ -740,6 +814,12 @@ function CoLab() {
     .hb:hover { opacity: 0.7; cursor: pointer; }
     .card-h:hover { border-color: ${text} !important; }
     .task-row:hover .tdel { opacity: 1 !important; }
+    @media (min-width: 641px) {
+      .feed-image-desktop {
+        max-width: 620px !important;
+        max-height: 340px !important;
+      }
+    }
     @media (max-width: 640px) {
       .search-desktop { display: none !important; }
       .search-mobile { display: block !important; }
@@ -761,6 +841,11 @@ function CoLab() {
       .msgs-has-thread .msgs-left { display: none !important; }
       .msgs-no-thread .msgs-right { display: none !important; }
       .msgs-back { display: flex !important; }
+      .profile-identity-banner { flex-direction: column-reverse !important; gap: 14px !important; margin-bottom: 24px !important; }
+      .profile-identity-row { margin-bottom: 0 !important; align-items: flex-start !important; }
+      .profile-banner-shell { width: 100% !important; }
+      .profile-banner-card { min-height: 120px !important; }
+      .profile-banner-canvas { height: 120px !important; }
     }
       .nav-label { font-size: 10px !important; padding: 4px 4px !important; }
       .hero-h1 { font-size: 44px !important; letter-spacing: -2px !important; }
@@ -3643,9 +3728,9 @@ function CoLab() {
 
           {/* Identity — mirrors own profile */}
           <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px", marginBottom: 20 }}>PROFILE</div>
-          <div style={{ display: "flex", gap: 24, alignItems: "flex-start", marginBottom: 20 }}>
+          <div className="profile-identity-banner" style={{ display: "flex", gap: 24, alignItems: "flex-start", marginBottom: 20 }}>
             <div style={{ flexShrink: 0 }}>
-              <div style={{ display: "flex", gap: 16, alignItems: "center", marginBottom: 12 }}>
+              <div className="profile-identity-row" style={{ display: "flex", gap: 16, alignItems: "center", marginBottom: 12 }}>
                 <Avatar initials={initials(viewFullProfile.name)} size={52} dark={dark} />
                 <div>
                   <div style={{ fontSize: 20, fontWeight: 400, color: text, letterSpacing: "-0.5px" }}>{viewFullProfile.name}</div>
@@ -3663,12 +3748,39 @@ function CoLab() {
               </div>
             </div>
             {viewFullProfile.banner_pixels && (
-              <div style={{ flex: 1, minWidth: 0, border: `1px solid ${border}`, borderRadius: 8, overflow: "hidden", background: dark ? "#000" : "#fff" }}>
-                <PixelBannerDisplay pixels={(() => { try { return JSON.parse(viewFullProfile.banner_pixels); } catch { return []; } })()} dark={dark} height={80} />
+              <div className="profile-banner-shell" style={{ flex: 1, minWidth: 0, border: `1px solid ${border}`, borderRadius: 8, overflow: "hidden", background: dark ? "#000" : "#fff" }}>
+                <div className="profile-banner-canvas">
+                  <PixelBannerDisplay pixels={(() => { try { return JSON.parse(viewFullProfile.banner_pixels); } catch { return []; } })()} dark={dark} height={80} />
+                </div>
               </div>
             )}
           </div>
           {viewFullProfile.bio && <p style={{ fontSize: 13, color: textMuted, lineHeight: 1.75, marginBottom: 20 }}>{viewFullProfile.bio}</p>}
+          <div style={{ marginBottom: 28, paddingBottom: 28, borderBottom: `1px solid ${border}` }}>
+            <div style={{ ...labelStyle, marginBottom: 10 }}>COLLABORATORS</div>
+            {getCollaborators(viewFullProfile.id).length === 0 ? (
+              <div style={{ fontSize: 12, color: textMuted }}>no collaborators yet.</div>
+            ) : (
+              <>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: 10 }}>
+                  {getCollaborators(viewFullProfile.id).slice(0, 8).map((c) => (
+                    <button key={c.user.id} className="hb" onClick={() => setViewFullProfile(c.user)} style={{ display: "flex", alignItems: "center", gap: 10, border: `1px solid ${border}`, borderRadius: 8, background: bg2, padding: "10px 12px", textAlign: "left", cursor: "pointer", fontFamily: "inherit" }}>
+                      <Avatar initials={initials(c.user.name)} size={28} dark={dark} />
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ fontSize: 12, color: text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.user.name}</div>
+                        <div style={{ fontSize: 10, color: textMuted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.user.username ? `@${c.user.username}` : c.user.role || "collaborator"}</div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+                {getCollaborators(viewFullProfile.id).length > 8 && (
+                  <button className="hb" onClick={() => setShowCollaborators(viewFullProfile.id)} style={{ marginTop: 10, background: "none", border: "none", color: text, fontSize: 11, textDecoration: "underline", cursor: "pointer", fontFamily: "inherit", padding: 0 }}>
+                    view all {getCollaborators(viewFullProfile.id).length} collaborators →
+                  </button>
+                )}
+              </>
+            )}
+          </div>
 
           {/* Skills */}
           <div style={{ marginBottom: 28, paddingBottom: 28, borderBottom: `1px solid ${border}` }}>
@@ -3762,10 +3874,10 @@ function CoLab() {
             <div>
               {/* Identity + Banner side by side */}
               <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px", marginBottom: 20 }}>PROFILE</div>
-              <div style={{ display: "flex", gap: 24, alignItems: "flex-start", marginBottom: 20 }}>
+              <div className="profile-identity-banner" style={{ display: "flex", gap: 24, alignItems: "flex-start", marginBottom: 20 }}>
                 {/* Left: identity */}
                 <div style={{ flexShrink: 0 }}>
-                  <div style={{ display: "flex", gap: 16, alignItems: "center", marginBottom: 12 }}>
+                  <div className="profile-identity-row" style={{ display: "flex", gap: 16, alignItems: "center", marginBottom: 12 }}>
                     <Avatar initials={myInitials} size={52} dark={dark} />
                     <div>
                       <div style={{ fontSize: 20, fontWeight: 400, color: text, letterSpacing: "-0.5px" }}>{profile?.name || "Anonymous"}</div>
@@ -3787,12 +3899,12 @@ function CoLab() {
                   </div>
                 </div>
                 {/* Right: pixel banner */}
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ position: "relative", border: `1px solid ${border}`, borderRadius: 8, overflow: "hidden", background: dark ? "#000" : "#fff", minHeight: 80, cursor: "pointer" }} onClick={() => setShowBannerEditor(true)}>
+                <div className="profile-banner-shell" style={{ flex: 1, minWidth: 0 }}>
+                  <div className="profile-banner-card" style={{ position: "relative", border: `1px solid ${border}`, borderRadius: 8, overflow: "hidden", background: dark ? "#000" : "#fff", minHeight: 80, cursor: "pointer" }} onClick={() => setShowBannerEditor(true)}>
                     {bannerPixels.some(v => v) ? (
-                      <PixelBannerDisplay pixels={bannerPixels} dark={dark} height={80} />
+                      <div className="profile-banner-canvas"><PixelBannerDisplay pixels={bannerPixels} dark={dark} height={80} /></div>
                     ) : (
-                      <div style={{ height: 80, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      <div className="profile-banner-canvas" style={{ height: 80, display: "flex", alignItems: "center", justifyContent: "center" }}>
                         <span style={{ fontSize: 11, color: textMuted }}>+ design your banner</span>
                       </div>
                     )}
@@ -3801,6 +3913,29 @@ function CoLab() {
                 </div>
               </div>
               {profile?.bio && <p style={{ fontSize: 13, color: textMuted, lineHeight: 1.75, marginBottom: 20 }}>{profile.bio}</p>}
+              <div style={{ marginBottom: 28, paddingBottom: 28, borderBottom: `1px solid ${border}` }}>
+                <div style={{ ...labelStyle, marginBottom: 10 }}>COLLABORATORS</div>
+                {myCollaborators.length === 0 ? (
+                  <div style={{ fontSize: 12, color: textMuted }}>no collaborators yet. accept project applicants to build your network.</div>
+                ) : (
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: 10 }}>
+                    {myCollaborators.slice(0, 8).map((c) => (
+                      <button key={c.user.id} className="hb" onClick={() => setViewFullProfile(c.user)} style={{ display: "flex", alignItems: "center", gap: 10, border: `1px solid ${border}`, borderRadius: 8, background: bg2, padding: "10px 12px", textAlign: "left", cursor: "pointer", fontFamily: "inherit" }}>
+                        <Avatar initials={initials(c.user.name)} size={28} dark={dark} />
+                        <div style={{ minWidth: 0 }}>
+                          <div style={{ fontSize: 12, color: text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.user.name}</div>
+                          <div style={{ fontSize: 10, color: textMuted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.user.username ? `@${c.user.username}` : c.user.role || "collaborator"}</div>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {myCollaborators.length > 8 && (
+                  <button className="hb" onClick={() => setShowCollaborators(authUser?.id)} style={{ marginTop: 10, background: "none", border: "none", color: text, fontSize: 11, textDecoration: "underline", cursor: "pointer", fontFamily: "inherit", padding: 0 }}>
+                    view all {myCollaborators.length} collaborators →
+                  </button>
+                )}
+              </div>
               <div style={{ marginBottom: 28, paddingBottom: 28, borderBottom: `1px solid ${border}` }}>
                 <div style={{ ...labelStyle, marginBottom: 8 }}>SKILLS</div>
                 {(profile?.skills || []).length === 0
