@@ -9,6 +9,7 @@ import {
   createProjectUpdate,
   createShipPost,
   createTask,
+  deleteProject,
   deleteProjectDoc,
   deleteProjectFileRecord,
   deleteTask,
@@ -80,7 +81,10 @@ export function useProjectWorkspace({
 
   const loadProjectData = async (projectId) => {
     const [{ data: t }, { data: m }, { data: u }, { data: f }, { data: d }] = await fetchProjectWorkspaceData(projectId);
-    setTasks(t || []);
+    setTasks((prev) => {
+      const next = (prev || []).filter((task) => task.project_id !== projectId);
+      return [...next, ...(t || [])];
+    });
     setMessages(m || []);
     setProjectUpdates(u || []);
     setProjectFiles(f || []);
@@ -284,13 +288,46 @@ export function useProjectWorkspace({
   };
 
   const handleGenerateInvite = async (projectId) => {
-    const { data } = await createProjectInvite(projectId, authUser.id);
-    if (data) {
-      const url = `${window.location.origin}/join/${data.token}`;
-      setInviteLink(url);
-      navigator.clipboard?.writeText(url);
-      showToast("Invite link copied to clipboard.");
+    try {
+      const { data, error } = await createProjectInvite(projectId, authUser.id);
+      if (error) throw error;
+      if (data?.token) {
+        const url = `${window.location.origin}/join/${data.token}`;
+        setInviteLink(url);
+        try {
+          await navigator.clipboard?.writeText(url);
+          showToast("Invite link copied to clipboard.");
+        } catch {
+          showToast("Invite link ready. Copy it from the panel.");
+        }
+        return { ok: true, url };
+      }
+      showToast("Invite created, but token was missing. Please retry.");
+      return { ok: false };
+    } catch (error) {
+      console.error("Invite generation failed", error);
+      showToast("Could not create invite link. Please retry.");
+      return { ok: false, error };
     }
+  };
+
+  const handleDeleteArchivedProject = async (projectId) => {
+    const project = projectsRef.current.find((item) => item.id === projectId);
+    if (!project) return;
+    if (!project.archived) {
+      showToast("Archive this project before deleting.");
+      return;
+    }
+    if (!window.confirm(`Delete "${project.title}" permanently? This cannot be undone.`)) return;
+    const { error } = await deleteProject(projectId);
+    if (error) {
+      showToast("Project could not be deleted.");
+      return;
+    }
+    setProjects((prev) => prev.filter((item) => item.id !== projectId));
+    setTasks((prev) => prev.filter((task) => task.project_id !== projectId));
+    if (activeProject?.id === projectId) setActiveProject(null);
+    showToast("Project deleted permanently.");
   };
 
   const calcProgress = (projectId, taskList) => {
@@ -449,6 +486,7 @@ export function useProjectWorkspace({
     handleSaveGithubRepo,
     handleLeaveProject,
     handleGenerateInvite,
+    handleDeleteArchivedProject,
     logActivity,
     loadActivity,
     handleAddTask,

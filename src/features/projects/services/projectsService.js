@@ -18,6 +18,10 @@ export const updateProject = async (projectId, payload) => {
   return supabase.from("projects").update(payload).eq("id", projectId);
 };
 
+export const deleteProject = async (projectId) => {
+  return supabase.from("projects").delete().eq("id", projectId);
+};
+
 export const createProjectInvite = async (projectId, userId) => {
   return supabase.from("project_invites").insert({ project_id: projectId, created_by: userId }).select().single();
 };

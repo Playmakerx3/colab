@@ -14,6 +14,7 @@ import { useRealtimeSubscriptions } from "../../realtime/hooks/useRealtimeSubscr
 import { useMessaging } from "../../messaging/hooks/useMessaging";
 import { useApplications } from "../../applications/hooks/useApplications";
 import { useProjectWorkspace } from "../../projects/hooks/useProjectWorkspace";
+import { computeProjectHealth, PROJECT_HEALTH, resolveTaskOwnership } from "../../projects/utils/projectHealth";
 
 const isFreshTimestamp = (timestamp, windowMs = 120000) => {
   if (!timestamp) return false;
@@ -43,14 +44,6 @@ const toHost = (url = "") => {
   } catch {
     return "external link";
   }
-};
-
-const resolveTaskOwnership = (task, memberMap, currentUserId) => {
-  const assigneeId = task?.assigned_to || null;
-  const assignee = assigneeId ? (memberMap[assigneeId] || null) : null;
-  const isUnassigned = !assignee;
-  const isAssignedToMe = !!assignee && assignee.id === currentUserId;
-  return { assignee, isUnassigned, isAssignedToMe };
 };
 
 function PostCard({ post, ctx }) {
@@ -543,6 +536,7 @@ function CoLab() {
   const [projectActivity, setProjectActivity] = useState([]);
   const [docPreviewMode, setDocPreviewMode] = useState(false);
   const [inviteLink, setInviteLink] = useState(null);
+  const [showInvitePanel, setShowInvitePanel] = useState(false);
   const [showShipModal, setShowShipModal] = useState(false);
   const [shipPostContent, setShipPostContent] = useState("");
   const [githubCommits, setGithubCommits] = useState([]);
@@ -650,6 +644,22 @@ function CoLab() {
     const assignedToMe = openTasks.filter((task) => resolveTaskOwnership(task, projectMemberMap, authUser?.id).isAssignedToMe).length;
     return { unassigned, assignedToMe };
   }, [activeProject, authUser?.id, tasks, projectMemberMap]);
+
+  const projectTasksById = useMemo(() => tasks.reduce((acc, task) => {
+    if (!acc[task.project_id]) acc[task.project_id] = [];
+    acc[task.project_id].push(task);
+    return acc;
+  }, {}), [tasks]);
+
+  const projectHealthById = useMemo(() => {
+    return projects.reduce((acc, project) => {
+      acc[project.id] = computeProjectHealth(project, projectTasksById[project.id] || [], {
+        currentUserId: authUser?.id,
+        activityTimestamps: [project.updated_at],
+      });
+      return acc;
+    }, {});
+  }, [projects, projectTasksById, authUser?.id]);
 
   const updateTaskOptimistic = async (taskId, updates) => {
     const previousTask = tasks.find((task) => task.id === taskId);
@@ -786,6 +796,7 @@ function CoLab() {
   const { loadAllData } = useAppDataBootstrap({
     setLoading,
     setProjects,
+    setTasks,
     setUsers,
     setApplications,
     setFollowers,
@@ -811,6 +822,11 @@ function CoLab() {
     setAuthLoading,
     loadAllData,
   });
+
+  useEffect(() => {
+    setShowInvitePanel(false);
+    setInviteLink(null);
+  }, [activeProject?.id]);
 
 
   useRealtimeSubscriptions({
@@ -1508,6 +1524,7 @@ function CoLab() {
     handleSaveGithubRepo,
     handleLeaveProject,
     handleGenerateInvite,
+    handleDeleteArchivedProject,
     logActivity,
     handleAddTask,
     handleToggleTask,
@@ -2748,6 +2765,7 @@ function CoLab() {
                 : <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
                     {myProjects.map((p,i) => {
                       const pendingApps = applications.filter(a => a.project_id === p.id && a.status === "pending").length;
+                      const health = projectHealthById[p.id] || { status: PROJECT_HEALTH.STALLED, reason: "No project signals" };
                       return (
                         <div key={p.id} style={{ background: bg2, borderRadius: i === 0 && myProjects.length === 1 ? 8 : i === 0 ? "8px 8px 0 0" : i === myProjects.length - 1 ? "0 0 8px 8px" : 0, border: `1px solid ${border}`, borderBottom: i < myProjects.length - 1 ? "none" : `1px solid ${border}`, padding: "12px 16px", cursor: "pointer", transition: "opacity 0.15s" }}
                           onMouseEnter={e => e.currentTarget.style.opacity = "0.8"} onMouseLeave={e => e.currentTarget.style.opacity = "1"}
@@ -2757,11 +2775,14 @@ function CoLab() {
                               <div style={{ fontSize: 13, color: text, letterSpacing: "-0.3px", marginBottom: 2 }}>{p.title}</div>
                               <div style={{ fontSize: 11, color: textMuted }}>{p.category}{pendingApps > 0 ? ` · ${pendingApps} pending` : ""}</div>
                             </div>
+                            <span style={{ fontSize: 10, padding: "2px 8px", borderRadius: 999, border: `1px solid ${border}`, color: health.status === PROJECT_HEALTH.ACTIVE ? "#22c55e" : health.status === PROJECT_HEALTH.AT_RISK ? "#f59e0b" : "#ef4444" }}>
+                              {health.status}
+                            </span>
                             {pendingApps > 0 && <button className="hb" onClick={e => { e.stopPropagation(); openReviewApplicants(p); }} style={{ fontSize: 10, padding: "2px 8px", border: `1px solid ${border}`, borderRadius: 4, background: "none", color: text, cursor: "pointer", fontFamily: "inherit", flexShrink: 0 }}>review</button>}
                           </div>
                           {/* Task-based progress */}
                           {(() => {
-                            const projTasks = tasks.filter(t => t.project_id === p.id);
+                            const projTasks = projectTasksById[p.id] || [];
                             const done = projTasks.filter(t => t.done).length;
                             const prog = projTasks.length > 0 ? Math.round((done / projTasks.length) * 100) : (p.progress || 0);
                             return (
@@ -2784,8 +2805,12 @@ function CoLab() {
                 {projects.filter(p => p.owner_id === authUser?.id && p.archived).map(p => (
                   <div key={p.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 14px", background: bg2, border: `1px solid ${border}`, borderRadius: 6, marginBottom: 4, opacity: 0.6 }}>
                     <div style={{ fontSize: 12, color: text }}>{p.title}</div>
-                    <button className="hb" onClick={() => handleUnarchiveProject(p.id)}
-                      style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontFamily: "inherit", fontSize: 10 }}>restore</button>
+                    <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                      <button className="hb" onClick={() => handleUnarchiveProject(p.id)}
+                        style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontFamily: "inherit", fontSize: 10 }}>restore</button>
+                      <button className="hb" onClick={() => handleDeleteArchivedProject(p.id)}
+                        style={{ background: "none", border: "none", color: "#ef4444", cursor: "pointer", fontFamily: "inherit", fontSize: 10 }}>delete</button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -2843,7 +2868,13 @@ function CoLab() {
             <button className="hb" onClick={() => setActiveProject(null)} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontFamily: "inherit", fontSize: 12 }}>← workspace</button>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: 16, fontWeight: 400, color: text, letterSpacing: "-0.5px" }}>{activeProject.title}</div>
-              <div style={{ fontSize: 11, color: textMuted }}>{activeProject.category}</div>
+              <div style={{ fontSize: 11, color: textMuted, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                <span>{activeProject.category}</span>
+                <span style={{ fontSize: 10, padding: "2px 8px", borderRadius: 999, border: `1px solid ${border}`, color: (projectHealthById[activeProject.id]?.status || PROJECT_HEALTH.STALLED) === PROJECT_HEALTH.ACTIVE ? "#22c55e" : (projectHealthById[activeProject.id]?.status || PROJECT_HEALTH.STALLED) === PROJECT_HEALTH.AT_RISK ? "#f59e0b" : "#ef4444" }}>
+                  {projectHealthById[activeProject.id]?.status || PROJECT_HEALTH.STALLED}
+                </span>
+                <span style={{ fontSize: 10 }}>{projectHealthById[activeProject.id]?.reason || "No project signals"}</span>
+              </div>
             </div>
             <div style={{ display: "flex", gap: 8, alignItems: "center", flexShrink: 0 }}>
               {(() => {
@@ -3455,17 +3486,34 @@ function CoLab() {
                 {activeProject.owner_id === authUser?.id && (
                   <div style={{ marginTop: 20, paddingTop: 16, borderTop: `1px solid ${border}` }}>
                     <div style={{ fontSize: 10, color: textMuted, letterSpacing: "1px", marginBottom: 10 }}>INVITE</div>
-                    <button className="hb" onClick={() => handleGenerateInvite(activeProject.id)}
+                    <button className="hb" onClick={() => setShowInvitePanel((prev) => !prev)}
                       style={{ background: "none", border: `1px solid ${border}`, borderRadius: 6, padding: "7px 14px", fontSize: 11, cursor: "pointer", color: text, fontFamily: "inherit" }}>
-                      generate invite link
+                      Invite Collaborators
                     </button>
-                    {inviteLink && (
+                    {showInvitePanel && (
                       <div style={{ marginTop: 10, background: bg2, border: `1px solid ${border}`, borderRadius: 6, padding: "8px 12px", fontSize: 10, color: textMuted, wordBreak: "break-all" }}>
-                        {inviteLink}
-                        <button className="hb" onClick={() => { navigator.clipboard?.writeText(inviteLink); showToast("Copied."); }}
-                          style={{ display: "block", marginTop: 6, background: "none", border: "none", color: text, cursor: "pointer", fontFamily: "inherit", fontSize: 10, textDecoration: "underline", padding: 0 }}>
-                          copy again
-                        </button>
+                        <div style={{ marginBottom: inviteLink ? 8 : 0 }}>
+                          {inviteLink || "Create a share link to invite collaborators into this project."}
+                        </div>
+                        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                          <button className="hb" onClick={() => handleGenerateInvite(activeProject.id)}
+                            style={{ background: "none", border: `1px solid ${border}`, borderRadius: 4, padding: "4px 8px", color: text, cursor: "pointer", fontFamily: "inherit", fontSize: 10 }}>
+                            {inviteLink ? "Generate new link" : "Generate invite link"}
+                          </button>
+                          {inviteLink && (
+                            <button className="hb" onClick={async () => {
+                              try {
+                                await navigator.clipboard?.writeText(inviteLink);
+                                showToast("Copied.");
+                              } catch {
+                                showToast("Copy failed. Select and copy manually.");
+                              }
+                            }}
+                              style={{ background: "none", border: "none", color: text, cursor: "pointer", fontFamily: "inherit", fontSize: 10, textDecoration: "underline", padding: 0 }}>
+                              copy link
+                            </button>
+                          )}
+                        </div>
                       </div>
                     )}
                   </div>
