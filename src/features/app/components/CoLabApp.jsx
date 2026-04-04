@@ -128,6 +128,82 @@ function AudioPostPlayer({ post, border, bg2, text, textMuted }) {
   );
 }
 
+const extractFirstUrl = (text = "") => {
+  if (!text) return null;
+  const match = text.match(/https?:\/\/[^\s)]+/i);
+  return match?.[0] || null;
+};
+
+const isGoogleDriveUrl = (url = "") => /(?:drive\.google\.com|docs\.google\.com)/i.test(url);
+
+const normalizeGoogleDriveEmbed = (url = "") => {
+  if (!isGoogleDriveUrl(url)) return null;
+  try {
+    const parsed = new URL(url);
+    const fileIdMatch = parsed.pathname.match(/\/file\/d\/([^/]+)/i);
+    if (fileIdMatch?.[1]) return `https://drive.google.com/file/d/${fileIdMatch[1]}/preview`;
+    const docIdMatch = parsed.pathname.match(/\/document\/d\/([^/]+)/i);
+    if (docIdMatch?.[1]) return `https://docs.google.com/document/d/${docIdMatch[1]}/preview`;
+    const sheetIdMatch = parsed.pathname.match(/\/spreadsheets\/d\/([^/]+)/i);
+    if (sheetIdMatch?.[1]) return `https://docs.google.com/spreadsheets/d/${sheetIdMatch[1]}/preview`;
+    const slideIdMatch = parsed.pathname.match(/\/presentation\/d\/([^/]+)/i);
+    if (slideIdMatch?.[1]) return `https://docs.google.com/presentation/d/${slideIdMatch[1]}/preview`;
+  } catch {
+    return null;
+  }
+  return null;
+};
+
+const GoogleDriveCard = ({ url, border, bg2, text, textMuted, compact = false }) => {
+  if (!isGoogleDriveUrl(url)) return null;
+  const embedUrl = normalizeGoogleDriveEmbed(url);
+  const pathname = (() => {
+    try {
+      return new URL(url).pathname.toLowerCase();
+    } catch {
+      return "";
+    }
+  })();
+  const typeLabel = pathname.includes("/spreadsheets/") ? "Google Sheet"
+    : pathname.includes("/presentation/") ? "Google Slides"
+      : pathname.includes("/document/") ? "Google Doc"
+        : "Google Drive file";
+
+  return (
+    <div style={{ border: `1px solid ${border}`, borderRadius: 10, background: bg2, overflow: "hidden" }}>
+      <a
+        href={url}
+        target="_blank"
+        rel="noreferrer"
+        style={{
+          textDecoration: "none",
+          color: text,
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          gap: 10,
+          padding: compact ? "10px 12px" : "12px 14px",
+        }}
+      >
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontSize: 10, color: textMuted, letterSpacing: "0.8px", marginBottom: 3 }}>{typeLabel}</div>
+          <div style={{ fontSize: 12, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{toHost(url)}</div>
+        </div>
+        <span style={{ fontSize: 11, color: textMuted, flexShrink: 0 }}>open ↗</span>
+      </a>
+      {!compact && embedUrl && (
+        <iframe
+          title="google-drive-preview"
+          src={embedUrl}
+          style={{ width: "100%", height: 240, border: "none", borderTop: `1px solid ${border}` }}
+          loading="lazy"
+          referrerPolicy="no-referrer"
+        />
+      )}
+    </div>
+  );
+};
+
 function PostCard({ post, ctx }) {
   const {
     postLikes, expandedComments, postComments, authUser, users,
@@ -146,6 +222,11 @@ function PostCard({ post, ctx }) {
   const isCommentPending = pendingCommentByPost[post.id] > 0;
   const hasRecentActivity = recentActivityByPost[post.id] || isFreshTimestamp(post.created_at);
   const isFreshInsert = justInsertedPostIds.includes(post.id);
+  const driveUrl = React.useMemo(() => {
+    if (isGoogleDriveUrl(post.media_url || "")) return post.media_url;
+    const linkedUrl = extractFirstUrl(post.content || "");
+    return isGoogleDriveUrl(linkedUrl || "") ? linkedUrl : null;
+  }, [post.media_url, post.content]);
   const [localComment, setLocalComment] = React.useState("");
   const [hovered, setHovered] = React.useState(false);
 
@@ -233,7 +314,7 @@ function PostCard({ post, ctx }) {
       <div style={{ fontSize: 14, color: text, lineHeight: 1.75, marginBottom: 14, paddingLeft: 52, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{post.content}</div>
 
       {/* Media */}
-      {post.media_url && (
+      {post.media_url && !isGoogleDriveUrl(post.media_url) && (
         <div style={{ paddingLeft: 52, marginBottom: 14 }}>
           {(() => {
             const t = post.media_type || (
@@ -258,6 +339,11 @@ function PostCard({ post, ctx }) {
             );
             return <img className="feed-image-desktop" src={post.media_url} alt="" style={{ width: "100%", maxHeight: 400, objectFit: "cover", borderRadius: 10, border: `1px solid ${border}`, display: "block" }} onError={e => e.target.style.display = "none"} />;
           })()}
+        </div>
+      )}
+      {driveUrl && (
+        <div style={{ paddingLeft: 52, marginBottom: 14 }}>
+          <GoogleDriveCard url={driveUrl} border={border} bg2={bg2} text={text} textMuted={textMuted} />
         </div>
       )}
 
@@ -1375,23 +1461,40 @@ function CoLab() {
   const UserCard = ({ u }) => {
     const sharedSkills = (profile?.skills || []).filter(s => (u.skills || []).includes(s));
     const userProjects = projects.filter(p => p.owner_id === u.id);
+    const userCollaborators = getCollaborators(u.id);
+    const mutualCollaborators = userCollaborators.filter((c) => myCollaborators.some((mine) => mine.user.id === c.user.id));
+    const lastActiveDays = u.updated_at ? Math.floor((Date.now() - new Date(u.updated_at).getTime()) / (1000 * 60 * 60 * 24)) : null;
+    const isRecentlyActive = typeof lastActiveDays === "number" && lastActiveDays >= 0 && lastActiveDays <= 7;
+    const roleTags = [u.role, ...(u.skills || [])].filter(Boolean).slice(0, 4);
+    const safeBio = u.bio ? u.bio.slice(0, 90) : "Open to collaborating on new builds.";
     return (
-      <div onClick={() => setViewFullProfile(u)} style={{ background: bg2, border: `1px solid ${border}`, borderRadius: 12, padding: "20px", cursor: "pointer", transition: "border 0.2s" }}
+      <div onClick={() => setViewFullProfile(u)} style={{ background: bg2, border: `1px solid ${border}`, borderRadius: 12, padding: "18px 18px 16px", cursor: "pointer", transition: "border 0.2s" }}
         onMouseEnter={e => e.currentTarget.style.borderColor = text} onMouseLeave={e => e.currentTarget.style.borderColor = border}>
-        <div style={{ display: "flex", gap: 12, alignItems: "flex-start", marginBottom: 12 }}>
+        <div style={{ display: "flex", gap: 12, alignItems: "flex-start", marginBottom: 10 }}>
           <Avatar initials={initials(u.name)} size={44} dark={dark} />
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 14, fontWeight: 500, color: text }}>{u.name}</div>
-            <div style={{ fontSize: 11, color: textMuted, marginTop: 2 }}>{u.role}</div>
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "center" }}>
+              <div style={{ fontSize: 14, fontWeight: 500, color: text, lineHeight: 1.2 }}>{u.name}</div>
+              {isRecentlyActive && <span style={{ fontSize: 9, color: textMuted, border: `1px solid ${border}`, borderRadius: 20, padding: "1px 7px" }}>active</span>}
+            </div>
+            <div style={{ fontSize: 11, color: textMuted, marginTop: 2 }}>{u.role || "Builder"}</div>
             {u.location && <div style={{ fontSize: 10, color: textMuted, marginTop: 2 }}>{u.location}</div>}
-            <div style={{ fontSize: 10, color: textMuted, marginTop: 4 }}>{userProjects.length} project{userProjects.length !== 1 ? "s" : ""}</div>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", fontSize: 10, color: textMuted, marginTop: 5 }}>
+              <span>{userProjects.length} project{userProjects.length !== 1 ? "s" : ""}</span>
+              {mutualCollaborators.length > 0 && <span>· {mutualCollaborators.length} mutual collaborator{mutualCollaborators.length !== 1 ? "s" : ""}</span>}
+            </div>
           </div>
         </div>
-        <p style={{ fontSize: 12, color: textMuted, lineHeight: 1.65, marginBottom: 12 }}>{(u.bio || "").slice(0, 90)}...</p>
-        <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginBottom: sharedSkills.length > 0 ? 10 : 0 }}>
-          {(u.skills || []).slice(0, 4).map(s => <span key={s} style={{ fontSize: 10, padding: "2px 8px", borderRadius: 3, border: `1px solid ${sharedSkills.includes(s) ? (dark ? "#ffffff35" : "#00000025") : border}`, color: sharedSkills.includes(s) ? text : textMuted }}>{s}</span>)}
+        <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginBottom: 10 }}>
+          {roleTags.map((s) => <span key={s} style={{ fontSize: 10, padding: "2px 8px", borderRadius: 3, border: `1px solid ${(u.skills || []).includes(s) && sharedSkills.includes(s) ? (dark ? "#ffffff35" : "#00000025") : border}`, color: (u.skills || []).includes(s) && sharedSkills.includes(s) ? text : textMuted }}>{s}</span>)}
         </div>
-        {sharedSkills.length > 0 && <div style={{ fontSize: 10, color: textMuted }}>★ {sharedSkills.length} shared skill{sharedSkills.length !== 1 ? "s" : ""}</div>}
+        <p style={{ fontSize: 12, color: textMuted, lineHeight: 1.65, marginBottom: 8 }}>{safeBio}{u.bio && u.bio.length > 90 ? "..." : ""}</p>
+        <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "center" }}>
+          {sharedSkills.length > 0
+            ? <div style={{ fontSize: 10, color: textMuted }}>★ {sharedSkills.length} shared skill{sharedSkills.length !== 1 ? "s" : ""}</div>
+            : <div style={{ fontSize: 10, color: textMuted }}>discover profile →</div>}
+          {typeof lastActiveDays === "number" && lastActiveDays > 7 && <div style={{ fontSize: 10, color: textMuted }}>active {lastActiveDays}d ago</div>}
+        </div>
       </div>
     );
   };
@@ -2664,6 +2767,15 @@ function CoLab() {
           </div>
           <h2 style={{ fontSize: "clamp(16px, 4vw, 20px)", fontWeight: 400, letterSpacing: "-0.8px", marginBottom: 10, color: text }}>{activeProject.title}</h2>
           <p style={{ fontSize: 13, color: textMuted, lineHeight: 1.75, marginBottom: 22 }}>{activeProject.description}</p>
+          {(() => {
+            const projectDriveUrl = extractFirstUrl(activeProject.description || "");
+            if (!isGoogleDriveUrl(projectDriveUrl || "")) return null;
+            return (
+              <div style={{ marginBottom: 22 }}>
+                <GoogleDriveCard url={projectDriveUrl} border={border} bg2={bg2} text={text} textMuted={textMuted} compact />
+              </div>
+            );
+          })()}
           {(activeProject.goals || activeProject.timeline) && (
             <div style={{ marginBottom: 22, padding: "14px 16px", background: bg2, border: `1px solid ${border}`, borderRadius: 8, display: "flex", flexDirection: "column", gap: 8 }}>
               {activeProject.goals && (
