@@ -891,7 +891,11 @@ function CoLab() {
       username = (data?.username || "").trim();
     }
     if (!username) {
-      showToast("This user has no public username yet.");
+      if (user.id) {
+        window.location.assign(`/profile/id/${user.id}`);
+      } else {
+        showToast("This user has no public profile yet.");
+      }
       return;
     }
     window.location.assign(`/profile/${encodeURIComponent(username)}`);

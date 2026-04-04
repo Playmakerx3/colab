@@ -27,7 +27,7 @@ const toHost = (url = "") => {
   }
 };
 
-export default function PublicProfilePage({ username }) {
+export default function PublicProfilePage({ username, userId }) {
   const [dark, setDark] = useState(true);
   const [user, setUser] = useState(null);
   const [projects, setProjects] = useState([]);
@@ -93,7 +93,13 @@ export default function PublicProfilePage({ username }) {
       setApplications([]);
       setCollaborationHistory([]);
 
-      const { data: u } = await supabase.from("profiles").select("*").eq("username", username).single();
+      let profileQuery;
+      if (userId) {
+        profileQuery = supabase.from("profiles").select("*").eq("id", userId).single();
+      } else {
+        profileQuery = supabase.from("profiles").select("*").eq("username", username).single();
+      }
+      const { data: u } = await profileQuery;
       if (!isActive) return;
       if (!u) { setNotFound(true); setLoading(false); return; }
       setUser(u);
@@ -181,7 +187,7 @@ export default function PublicProfilePage({ username }) {
     return () => {
       isActive = false;
     };
-  }, [username]);
+  }, [username, userId]);
 
   const handleCopy = () => {
     navigator.clipboard.writeText(window.location.href).then(() => {
