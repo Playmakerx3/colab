@@ -616,8 +616,8 @@ function CoLab() {
   const [exploreTab, setExploreTab] = useState("for-you");
   const [networkTab, setNetworkTab] = useState("feed");
   const [activeProject, setActiveProject] = useState(null);
-  const [viewingProfile, setViewingProfile] = useState(null);
-  const [viewFullProfile, setViewFullProfile] = useState(null); // full page profile view
+  const viewingProfile = null;
+  const viewFullProfile = null;
   const [projectTab, setProjectTab] = useState("tasks");
 
   // Auth
@@ -738,6 +738,32 @@ function CoLab() {
   const btnG = { background: "none", color: textMuted, border: `1px solid ${border}`, borderRadius: 8, padding: "10px 20px", fontSize: 12, cursor: "pointer", fontFamily: "inherit" };
 
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(null), 3000); };
+  const openUserProfile = async (user, event) => {
+    event?.stopPropagation?.();
+    if (!user) return;
+    let username = (user.username || "").trim();
+    if (!username && user.id) {
+      const { data } = await supabase
+        .from("profiles")
+        .select("username")
+        .eq("id", user.id)
+        .maybeSingle();
+      username = (data?.username || "").trim();
+    }
+    if (!username) {
+      showToast("This user has no public username yet.");
+      return;
+    }
+    window.location.assign(`/profile/${encodeURIComponent(username)}`);
+  };
+  const setViewingProfile = (user, event) => {
+    if (!user) return;
+    openUserProfile(user, event);
+  };
+  const setViewFullProfile = (user, event) => {
+    if (!user) return;
+    openUserProfile(user, event);
+  };
   const markRecentActivity = (postId) => {
     setRecentActivityByPost((prev) => ({ ...prev, [postId]: true }));
     setTimeout(() => {

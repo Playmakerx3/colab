@@ -8,7 +8,7 @@ export default function App() {
   const pathname = typeof window !== "undefined" ? window.location.pathname : "";
   const publicMatch = pathname.match(/^\/p\/([^/]+)$/);
   const shippedMatch = pathname.match(/^\/p\/([^/]+)\/shipped$/);
-  const profileMatch = pathname.match(/^\/u\/([^/]+)$/);
+  const profileMatch = pathname.match(/^\/(?:u|profile)\/([^/]+)$/);
   const joinMatch = pathname.match(/^\/join\/([^/]+)$/);
 
   if (shippedMatch) return <ShippedPage projectId={shippedMatch[1]} />;
