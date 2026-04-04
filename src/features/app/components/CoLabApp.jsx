@@ -50,17 +50,98 @@ const sharedFeedAudio = {
   activeElement: null,
 };
 
+const WAVEFORM_BAR_COUNT = 72;
+const waveformDataCache = new Map();
+let sharedAudioContext;
+
+const getAudioContext = () => {
+  if (typeof window === "undefined") return null;
+  const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+  if (!AudioContextClass) return null;
+  if (!sharedAudioContext) {
+    sharedAudioContext = new AudioContextClass();
+  }
+  return sharedAudioContext;
+};
+
+const downsampleWaveform = (channelData, barCount = WAVEFORM_BAR_COUNT) => {
+  if (!channelData?.length) return [];
+  const bucketSize = Math.max(1, Math.floor(channelData.length / barCount));
+  const downsampled = [];
+  for (let i = 0; i < barCount; i += 1) {
+    const start = i * bucketSize;
+    const end = Math.min(start + bucketSize, channelData.length);
+    if (start >= channelData.length) break;
+    let sum = 0;
+    for (let j = start; j < end; j += 1) {
+      sum += Math.abs(channelData[j]);
+    }
+    const avg = end > start ? sum / (end - start) : 0;
+    downsampled.push(avg);
+  }
+  return downsampled;
+};
+
+const normalizeWaveform = (values = []) => {
+  if (!values.length) return [];
+  const peak = Math.max(...values, 0.0001);
+  return values.map((value) => {
+    const normalized = value / peak;
+    return Math.max(0.08, Math.min(1, normalized));
+  });
+};
+
+const getWaveformData = async (audioUrl, signal) => {
+  if (!audioUrl) return [];
+  if (waveformDataCache.has(audioUrl)) {
+    return waveformDataCache.get(audioUrl);
+  }
+  const waveformPromise = (async () => {
+    const response = await fetch(audioUrl, { signal });
+    if (!response.ok) {
+      throw new Error(`Unable to fetch audio (${response.status})`);
+    }
+    const arrayBuffer = await response.arrayBuffer();
+    const audioContext = getAudioContext();
+    if (!audioContext) return [];
+    const decodedBuffer = await audioContext.decodeAudioData(arrayBuffer.slice(0));
+    if (!decodedBuffer.numberOfChannels) return [];
+    const channelData = decodedBuffer.getChannelData(0);
+    return normalizeWaveform(downsampleWaveform(channelData));
+  })();
+  waveformDataCache.set(audioUrl, waveformPromise);
+  try {
+    const waveform = await waveformPromise;
+    waveformDataCache.set(audioUrl, waveform);
+    return waveform;
+  } catch (error) {
+    waveformDataCache.delete(audioUrl);
+    throw error;
+  }
+};
+
 function AudioPostPlayer({ post, border, bg2, text, textMuted }) {
   const audioRef = useRef(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [duration, setDuration] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
+  const [waveformData, setWaveformData] = useState([]);
+  const [waveformError, setWaveformError] = useState(false);
   const trackLabel = decodeURIComponent(post.media_url.split("/").pop().split("?")[0]).replace(/^\d+-/, "");
   const creatorLabel = post.user_name || "Unknown creator";
   const progressPct = duration > 0 ? Math.min(100, (currentTime / duration) * 100) : 0;
+  const playedBars = waveformData.length ? Math.round((progressPct / 100) * waveformData.length) : 0;
 
   const togglePlayback = async () => {
     if (!audioRef.current) return;
+    const audioContext = getAudioContext();
+    if (audioContext?.state === "suspended") {
+      try {
+        await audioContext.resume();
+      } catch {
+        // no-op: native audio element playback still runs independently
+      }
+    }
     if (isPlaying) {
       audioRef.current.pause();
       return;
@@ -98,6 +179,45 @@ function AudioPostPlayer({ post, border, bg2, text, textMuted }) {
     setIsPlaying(false);
   };
 
+  useEffect(() => {
+    let isMounted = true;
+    const controller = new AbortController();
+    let idleId = null;
+
+    const runComputation = async () => {
+      try {
+        setWaveformError(false);
+        const data = await getWaveformData(post.media_url, controller.signal);
+        if (isMounted) setWaveformData(data);
+      } catch {
+        if (isMounted) {
+          setWaveformData([]);
+          setWaveformError(true);
+        }
+      }
+    };
+
+    if (typeof window !== "undefined" && typeof window.requestIdleCallback === "function") {
+      idleId = window.requestIdleCallback(() => {
+        runComputation();
+      });
+    } else {
+      idleId = window.setTimeout(() => {
+        runComputation();
+      }, 0);
+    }
+
+    return () => {
+      isMounted = false;
+      controller.abort();
+      if (typeof window !== "undefined" && typeof window.cancelIdleCallback === "function" && idleId) {
+        window.cancelIdleCallback(idleId);
+      } else if (idleId) {
+        window.clearTimeout(idleId);
+      }
+    };
+  }, [post.media_url]);
+
   return (
     <div style={{ background: bg2, border: `1px solid ${border}`, borderRadius: 12, padding: "14px 16px" }}>
       <div style={{ fontSize: 10, color: textMuted, letterSpacing: "1px", marginBottom: 8 }}>MUSIC</div>
@@ -108,7 +228,27 @@ function AudioPostPlayer({ post, border, bg2, text, textMuted }) {
           {isPlaying ? "❚❚" : "▶"}
         </button>
         <div style={{ flex: 1 }}>
-          <div style={{ width: "100%", height: 6, borderRadius: 999, border: `1px solid ${border}`, overflow: "hidden" }}>
+          <div style={{ height: 44, display: "flex", alignItems: "flex-end", gap: 2, borderBottom: `1px solid ${border}`, paddingBottom: 6 }}>
+            {waveformData.length ? waveformData.map((value, index) => (
+              <div
+                key={`${post.id}-wave-${index}`}
+                style={{
+                  flex: 1,
+                  borderRadius: 999,
+                  minHeight: 4,
+                  height: `${Math.round(value * 100)}%`,
+                  background: text,
+                  opacity: index < playedBars ? 1 : 0.28,
+                  transition: "opacity 0.12s linear",
+                }}
+              />
+            )) : (
+              <div style={{ width: "100%", fontSize: 10, color: textMuted, opacity: 0.8 }}>
+                {waveformError ? "Waveform unavailable for this file." : "Building waveform..."}
+              </div>
+            )}
+          </div>
+          <div style={{ marginTop: 6, width: "100%", height: 4, borderRadius: 999, border: `1px solid ${border}`, overflow: "hidden" }}>
             <div style={{ width: `${progressPct}%`, height: "100%", background: text, transition: "width 0.12s linear" }} />
           </div>
         </div>
