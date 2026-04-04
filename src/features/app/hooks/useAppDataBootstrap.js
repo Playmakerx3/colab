@@ -4,6 +4,7 @@ import { fetchAppBootstrapData } from "../services/appDataBootstrapService";
 export function useAppDataBootstrap({
   setLoading,
   setProjects,
+  setTasks,
   setUsers,
   setApplications,
   setFollowers,
@@ -24,6 +25,7 @@ export function useAppDataBootstrap({
     try {
       const {
         projs,
+        allTasks,
         usrs,
         apps,
         fols,
@@ -36,6 +38,7 @@ export function useAppDataBootstrap({
       } = await fetchAppBootstrapData(userId);
 
       setProjects(projs || []);
+      setTasks(allTasks || []);
       setUsers(usrs || []);
       setApplications(apps || []);
       setFollowers((fols || []).map(f => f.follower_id)); // IDs of people who follow you
@@ -99,6 +102,7 @@ export function useAppDataBootstrap({
     setLoading(false);
   }, [
     setApplications,
+    setTasks,
     setDmThreads,
     setFollowers,
     setFollowing,

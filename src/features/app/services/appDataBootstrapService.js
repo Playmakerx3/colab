@@ -3,6 +3,7 @@ import { supabase } from "../../../supabase";
 export async function fetchAppBootstrapData(userId) {
   const [
     { data: projs },
+    { data: allTasks },
     { data: usrs },
     { data: apps },
     { data: fols },
@@ -14,6 +15,7 @@ export async function fetchAppBootstrapData(userId) {
     { data: mentionNotifs },
   ] = await Promise.all([
     supabase.from("projects").select("*").order("created_at", { ascending: false }),
+    supabase.from("tasks").select("*"),
     supabase.from("profiles").select("*"),
     supabase.from("applications").select("*"),
     supabase.from("follows").select("*").eq("following_id", userId), // people who follow YOU
@@ -27,6 +29,7 @@ export async function fetchAppBootstrapData(userId) {
 
   return {
     projs,
+    allTasks,
     usrs,
     apps,
     fols,
