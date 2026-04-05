@@ -1389,13 +1389,33 @@ function CoLab() {
   const appliedProjectIds = applications.filter(a => a.applicant_id === authUser?.id).map(a => a.project_id);
   const browseBase = projects.filter(p => p.owner_id !== authUser?.id && !p.archived && !p.is_private);
   const forYou = browseBase.map(p => ({ ...p, _s: getMatchScore(p) })).filter(p => p._s > 0).sort((a, b) => b._s - a._s);
-  const allP = browseBase.map((p) => ({ ...p, _s: getMatchScore(p) })).filter((p) => {
-    const locationMatches = !locationFilter || (p.location || "").toLowerCase().includes(locationFilter.toLowerCase());
-    return (!filterSkill || (p.skills || []).includes(filterSkill))
-      && (!industryFilter || p.category === industryFilter)
-      && (!search || p.title?.toLowerCase().includes(search.toLowerCase()))
-      && locationMatches;
-  }).sort((a, b) => b._s - a._s);
+  const normalizedSearch = search.trim().toLowerCase();
+  const normalizedLocation = locationFilter.trim().toLowerCase();
+  const localRegion = (profile?.location || "").split(",")[0].trim().toLowerCase();
+  const allP = browseBase
+    .map((p) => ({ ...p, _s: getMatchScore(p) }))
+    .filter((p) => {
+      const locationMatches = !normalizedLocation || (p.location || "").toLowerCase().includes(normalizedLocation);
+      const searchableText = [p.title, p.description, ...(p.skills || [])]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      const searchMatches = !normalizedSearch || searchableText.includes(normalizedSearch);
+      const regionMatches = !regionFilter || (p.location || "").toLowerCase().includes(
+        regionFilter === "local" || regionFilter === "city"
+          ? localRegion
+          : regionFilter === "national"
+            ? "us"
+            : "",
+      );
+
+      return (!filterSkill || (p.skills || []).includes(filterSkill))
+        && (!industryFilter || p.category === industryFilter)
+        && locationMatches
+        && searchMatches
+        && regionMatches;
+    })
+    .sort((a, b) => b._s - a._s);
 
   const todayNextUp = useMemo(() => {
     if (!activeProject) return null;
@@ -3040,7 +3060,7 @@ function CoLab() {
                     </div>
                     <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
                       {["Design","Engineering","Marketing","Music","Video","Finance","AI/ML","Writing","Product"].map(s => { const sel = filterSkill === s; return <button key={s} className="hb" onClick={() => setFilterSkill(sel ? null : s)} style={{ padding: "3px 10px", borderRadius: 3, fontSize: 10, cursor: "pointer", fontFamily: "inherit", background: sel ? text : "none", color: sel ? bg : textMuted, border: `1px solid ${sel ? text : border}`, transition: "all 0.15s" }}>{s}</button>; })}
-                      {(filterSkill || industryFilter || locationFilter) && <button className="hb" onClick={() => { setFilterSkill(null); setIndustryFilter(null); setLocationFilter(""); }} style={{ padding: "3px 10px", borderRadius: 3, fontSize: 10, cursor: "pointer", fontFamily: "inherit", background: "none", color: textMuted, border: `1px solid ${border}` }}>clear</button>}
+                      {(filterSkill || industryFilter || locationFilter || search || regionFilter) && <button className="hb" onClick={() => { setFilterSkill(null); setIndustryFilter(null); setLocationFilter(""); setSearch(""); setRegionFilter(null); }} style={{ padding: "3px 10px", borderRadius: 3, fontSize: 10, cursor: "pointer", fontFamily: "inherit", background: "none", color: textMuted, border: `1px solid ${border}` }}>clear</button>}
                     </div>
                     {/* Region filter */}
                     <div style={{ display: "flex", gap: 5, flexWrap: "wrap", alignItems: "center" }}>
@@ -3048,7 +3068,15 @@ function CoLab() {
                       {["local","city","national","international"].map(r => { const sel = regionFilter === r; return <button key={r} className="hb" onClick={() => setRegionFilter(sel ? null : r)} style={{ padding: "3px 10px", borderRadius: 3, fontSize: 10, cursor: "pointer", fontFamily: "inherit", background: sel ? text : "none", color: sel ? bg : textMuted, border: `1px solid ${sel ? text : border}`, transition: "all 0.15s" }}>{r}</button>; })}
                     </div>
                   </div>
-                  {allP.length === 0 ? <div style={{ padding: "36px 0", textAlign: "center", color: textMuted, fontSize: 12 }}>no results.</div> : allP.filter(p => !regionFilter || (p.location || "").toLowerCase().includes(regionFilter === "local" ? (profile?.location || "").split(",")[0].toLowerCase() : regionFilter === "city" ? (profile?.location || "").split(",")[0].toLowerCase() : regionFilter === "national" ? "us" : "")).map(p => <PRow key={p.id} p={p} />)}
+                  {allP.length === 0
+                    ? (
+                      <div style={{ padding: "36px 0", textAlign: "center", color: textMuted, fontSize: 12, lineHeight: 1.7 }}>
+                        no projects found for these filters.
+                        <br />
+                        try clearing search or filters to see more projects.
+                      </div>
+                    )
+                    : allP.map(p => <PRow key={p.id} p={p} />)}
                 </div>
               )}
             </>
