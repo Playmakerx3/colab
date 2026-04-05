@@ -66,7 +66,7 @@ export function useApplications({
         showToast("You're already on this project.");
         return;
       }
-      if (existing.status === "declined") {
+      if (["declined", "rejected"].includes(existing.status)) {
         const hoursSince = (Date.now() - new Date(existing.updated_at || existing.created_at).getTime()) / 3600000;
         if (hoursSince < 24) {
           showToast(`You can reapply in ${Math.ceil(24 - hoursSince)}h`);
@@ -108,7 +108,7 @@ export function useApplications({
   };
 
   const handleAccept = async (notif) => {
-    await updateApplicationStatus({ applicationId: notif.id, status: "accepted" });
+    await updateApplicationStatus({ applicationId: notif.entityId || notif.id, status: "accepted" });
     setNotifications((prev) => prev.filter((n) => n.id !== notif.id));
     showToast(`${notif.applicant.name} accepted!`);
     logActivity(notif.projectId, "member_joined", `${notif.applicant.name} joined the project`);
@@ -116,7 +116,7 @@ export function useApplications({
   };
 
   const handleDecline = async (notif) => {
-    await updateApplicationStatus({ applicationId: notif.id, status: "declined" });
+    await updateApplicationStatus({ applicationId: notif.entityId || notif.id, status: "rejected" });
     setNotifications((prev) => prev.filter((n) => n.id !== notif.id));
     showToast("Application declined.");
   };
@@ -127,12 +127,12 @@ export function useApplications({
 
   const handleReviewDecline = async () => {
     if (!selectedApplicant) return;
-    const { error } = await updateApplicationStatus({ applicationId: selectedApplicant.id, status: "declined" });
+    const { error } = await updateApplicationStatus({ applicationId: selectedApplicant.id, status: "rejected" });
     if (error) {
       showToast("Failed to decline. Try again.");
       return;
     }
-    setApplications((prev) => prev.filter((a) => a.id !== selectedApplicant.id));
+    setApplications((prev) => prev.map((a) => (a.id === selectedApplicant.id ? { ...a, status: "rejected" } : a)));
     setSelectedApplicant(null);
     showToast("Declined.");
   };
@@ -144,7 +144,7 @@ export function useApplications({
       showToast("Failed to accept. Try again.");
       return;
     }
-    setApplications((prev) => prev.filter((a) => a.id !== selectedApplicant.id));
+    setApplications((prev) => prev.map((a) => (a.id === selectedApplicant.id ? { ...a, status: "accepted" } : a)));
     const u = users.find((user) => user.id === selectedApplicant.applicant_id);
     if (u) openDm(u);
     showToast(`${selectedApplicant.applicant_name} accepted!`);

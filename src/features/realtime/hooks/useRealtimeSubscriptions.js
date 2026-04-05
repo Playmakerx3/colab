@@ -6,6 +6,8 @@ export function useRealtimeSubscriptions({
   activeProject,
   activeDmThread,
   projects,
+  users,
+  posts,
   messagesEndRef,
   dmEndRef,
   setMessages,
@@ -15,6 +17,7 @@ export function useRealtimeSubscriptions({
   setNotifications,
   setProjects,
   setPosts,
+  setFollowers,
   onIncomingPost,
   setMentionNotifications,
 }) {
@@ -39,11 +42,19 @@ export function useRealtimeSubscriptions({
     }
     return [...list, incoming];
   };
-  // Ref so realtime callbacks always see current projects without re-subscribing
+  // Ref so realtime callbacks always see current data without re-subscribing
   const projectsRef = useRef([]);
+  const usersRef = useRef([]);
+  const postsRef = useRef([]);
   useEffect(() => {
     projectsRef.current = projects;
   }, [projects]);
+  useEffect(() => {
+    usersRef.current = users;
+  }, [users]);
+  useEffect(() => {
+    postsRef.current = posts;
+  }, [posts]);
 
   // Keep dependency timing aligned with existing App subscription lifecycle.
   useEffect(() => {
@@ -88,9 +99,10 @@ export function useRealtimeSubscriptions({
         if (myProjectIds.includes(payload.new.project_id)) {
           const proj = projectsRef.current.find((p) => p.id === payload.new.project_id);
           setNotifications((prev) => {
-            if (prev.find((n) => n.id === payload.new.id)) return prev;
+            const notificationId = `application:new:${payload.new.id}`;
+            if (prev.find((n) => n.id === notificationId)) return prev;
             return [{
-              id: payload.new.id, type: "application",
+              id: notificationId, entityId: payload.new.id, type: "application",
               text: `${payload.new.applicant_name} applied to your project`,
               sub: proj?.title || "", time: "just now", read: false,
               projectId: payload.new.project_id,
@@ -98,6 +110,61 @@ export function useRealtimeSubscriptions({
             }, ...prev];
           });
         }
+      })
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "applications" }, (payload) => {
+        setApplications((prev) => prev.map((application) => (application.id === payload.new.id ? payload.new : application)));
+        if (payload.new.applicant_id === authUser?.id) {
+          const oldStatus = payload.old.status === "declined" ? "rejected" : payload.old.status;
+          const newStatus = payload.new.status === "declined" ? "rejected" : payload.new.status;
+          if (oldStatus !== newStatus && ["accepted", "rejected"].includes(newStatus)) {
+            const project = projectsRef.current.find((p) => p.id === payload.new.project_id);
+            setNotifications((prev) => {
+              const notificationId = `application:status:${payload.new.id}`;
+              if (prev.find((notification) => notification.id === notificationId)) return prev;
+              return [{
+                id: notificationId,
+                entityId: payload.new.id,
+                type: "application_status",
+                text: `Your application was ${newStatus}`,
+                sub: project?.title || "Project",
+                time: "just now",
+                read: false,
+                projectId: payload.new.project_id,
+                status: newStatus,
+              }, ...prev];
+            });
+          }
+        }
+      })
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "follows" }, (payload) => {
+        if (payload.new.following_id !== authUser?.id) return;
+        setFollowers((prev) => (prev.includes(payload.new.follower_id) ? prev : [...prev, payload.new.follower_id]));
+        const follower = usersRef.current.find((user) => user.id === payload.new.follower_id);
+        setNotifications((prev) => [{
+          id: `follow:${payload.new.id || payload.new.follower_id}`,
+          entityId: payload.new.id || payload.new.follower_id,
+          type: "follow",
+          text: `${follower?.name || "Someone"} followed you`,
+          sub: follower?.role || "",
+          time: "just now",
+          read: false,
+          userId: payload.new.follower_id,
+        }, ...prev]);
+      })
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "post_reposts" }, (payload) => {
+        const post = postsRef.current.find((entry) => entry.id === payload.new.post_id);
+        if (!post || post.user_id !== authUser?.id || payload.new.user_id === authUser?.id) return;
+        const actor = usersRef.current.find((user) => user.id === payload.new.user_id);
+        setNotifications((prev) => [{
+          id: `repost:${payload.new.id || `${payload.new.user_id}-${payload.new.post_id}`}`,
+          entityId: payload.new.id || `${payload.new.user_id}-${payload.new.post_id}`,
+          type: "repost",
+          text: `${actor?.name || "Someone"} reposted your post`,
+          sub: post.content ? post.content.slice(0, 68) : "",
+          time: "just now",
+          read: false,
+          postId: post.id,
+        }, ...prev]);
       })
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "projects" }, (payload) => {
         setProjects((prev) => {
