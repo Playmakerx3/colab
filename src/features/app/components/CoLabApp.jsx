@@ -120,7 +120,7 @@ const getWaveformData = async (audioUrl, signal) => {
   }
 };
 
-function AudioPostPlayer({ post, border, bg2, text, textMuted }) {
+function AudioPostPlayer({ post, bg2, text, textMuted }) {
   const audioRef = useRef(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [duration, setDuration] = useState(0);
@@ -219,40 +219,56 @@ function AudioPostPlayer({ post, border, bg2, text, textMuted }) {
   }, [post.media_url]);
 
   return (
-    <div style={{ background: bg2, border: `1px solid ${border}`, borderRadius: 12, padding: "14px 16px" }}>
-      <div style={{ fontSize: 10, color: textMuted, letterSpacing: "1px", marginBottom: 8 }}>MUSIC</div>
-      <div style={{ fontSize: 13, color: text, marginBottom: 2 }}>{trackLabel || "Untitled track"}</div>
-      <div style={{ fontSize: 11, color: textMuted, marginBottom: 12 }}>by {creatorLabel}</div>
-      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-        <button className="hb" onClick={togglePlayback} style={{ width: 32, height: 32, borderRadius: 999, border: `1px solid ${border}`, background: "none", color: text, fontSize: 13, cursor: "pointer", fontFamily: "inherit", flexShrink: 0 }}>
+    <div style={{ background: bg2, border: "none", borderRadius: 12, padding: "16px" }}>
+      <div style={{ display: "flex", gap: 14, alignItems: "flex-start", marginBottom: 12 }}>
+        <button
+          className="hb"
+          onClick={togglePlayback}
+          style={{ width: 40, height: 40, borderRadius: 999, background: text, color: bg2, border: "none", fontSize: 14, cursor: "pointer", fontFamily: "inherit", flexShrink: 0 }}
+        >
           {isPlaying ? "❚❚" : "▶"}
         </button>
-        <div style={{ flex: 1 }}>
-          <div style={{ height: 44, display: "flex", alignItems: "flex-end", gap: 2, borderBottom: `1px solid ${border}`, paddingBottom: 6 }}>
-            {waveformData.length ? waveformData.map((value, index) => (
-              <div
-                key={`${post.id}-wave-${index}`}
-                style={{
-                  flex: 1,
-                  borderRadius: 999,
-                  minHeight: 4,
-                  height: `${Math.round(value * 100)}%`,
-                  background: text,
-                  opacity: index < playedBars ? 1 : 0.28,
-                  transition: "opacity 0.12s linear",
-                }}
-              />
-            )) : (
-              <div style={{ width: "100%", fontSize: 10, color: textMuted, opacity: 0.8 }}>
-                {waveformError ? "Waveform unavailable for this file." : "Building waveform..."}
-              </div>
-            )}
-          </div>
-          <div style={{ marginTop: 6, width: "100%", height: 4, borderRadius: 999, border: `1px solid ${border}`, overflow: "hidden" }}>
-            <div style={{ width: `${progressPct}%`, height: "100%", background: text, transition: "width 0.12s linear" }} />
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 11, color: textMuted, marginBottom: 4 }}>{creatorLabel}</div>
+          <div style={{ fontSize: 14, fontWeight: 600, color: text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+            {trackLabel || "Untitled track"}
           </div>
         </div>
       </div>
+
+      <div
+        onClick={(e) => {
+          if (!audioRef.current || duration <= 0) return;
+          const seekTime = (e.nativeEvent.offsetX / e.currentTarget.offsetWidth) * duration;
+          audioRef.current.currentTime = seekTime;
+          setCurrentTime(seekTime);
+        }}
+        style={{ width: "100%", position: "relative", height: 60, display: "flex", alignItems: "flex-end", gap: 2, cursor: "pointer" }}
+      >
+        {waveformData.length ? waveformData.map((value, index) => (
+          <div
+            key={`${post.id}-wave-${index}`}
+            style={{
+              flex: 1,
+              borderRadius: 999,
+              minHeight: 3,
+              height: `${Math.round(value * 100)}%`,
+              background: text,
+              opacity: index < playedBars ? 1 : 0.25,
+              transition: "opacity 0.12s linear",
+            }}
+          />
+        )) : (
+          <div style={{ width: "100%", fontSize: 10, color: textMuted }}>
+            {waveformError ? "Waveform unavailable for this file." : "Building waveform..."}
+          </div>
+        )}
+      </div>
+
+      <div style={{ textAlign: "right", fontSize: 11, color: textMuted, marginTop: 6 }}>
+        {duration > 0 ? `${Math.floor(duration / 60)}:${Math.floor(duration % 60).toString().padStart(2, "0")}` : ""}
+      </div>
+
       <audio
         ref={audioRef}
         src={post.media_url}
@@ -346,14 +362,15 @@ const GoogleDriveCard = ({ url, border, bg2, text, textMuted, compact = false })
 
 function PostCard({ post, ctx }) {
   const {
-    postLikes, expandedComments, postComments, authUser, users,
+    postLikes, postReposts, expandedComments, postComments, authUser, users,
     handleDeletePost, dark, border, text, textMuted, bg2, btnP, inputStyle,
-    setViewingProfile, handleLike, setExpandedComments, loadComments,
+    setViewingProfile, handleLike, handleRepost, setExpandedComments, loadComments,
     myInitials, setPostComments, profile, supabase, pendingLikeIds,
     commentPulseIds, pendingCommentByPost, recentActivityByPost, justInsertedPostIds,
     markCommentPending, markRecentActivity,
   } = ctx;
   const isLiked = (postLikes.myLikes || []).includes(post.id);
+  const isReposted = (postReposts.myReposts || []).includes(post.id);
   const isOpen = expandedComments[post.id];
   const comments = postComments[post.id] || [];
   const isOwner = post.user_id === authUser?.id;
@@ -471,7 +488,7 @@ function PostCard({ post, ctx }) {
               return <iframe src={`https://www.youtube.com/embed/${ytId || ""}`} style={{ width: "100%", height: 260, borderRadius: 10, border: "none" }} allowFullScreen />;
             }
             if (t === "video") return <video src={post.media_url} controls style={{ width: "100%", maxHeight: 320, borderRadius: 10, border: `1px solid ${border}` }} />;
-            if (t === "audio") return <AudioPostPlayer post={post} border={border} bg2={bg2} text={text} textMuted={textMuted} />;
+            if (t === "audio") return <AudioPostPlayer post={post} bg2={bg2} text={text} textMuted={textMuted} />;
             if (t === "pdf") return (
               <a href={post.media_url} target="_blank" rel="noreferrer" style={{ display: "inline-flex", alignItems: "center", gap: 8, fontSize: 12, color: text, background: bg2, border: `1px solid ${border}`, borderRadius: 8, padding: "10px 16px", textDecoration: "none" }}>
                 <span style={{ fontSize: 16 }}>↗</span> view PDF
@@ -520,6 +537,26 @@ function PostCard({ post, ctx }) {
         >
           {isLiked ? "♥" : "♡"}
           {(post.like_count || 0) > 0 && <span style={{ fontSize: 12 }}>{post.like_count}</span>}
+        </button>
+        <button
+          className="hb"
+          onClick={() => handleRepost(post.id)}
+          style={{
+            background: "none",
+            border: "none",
+            cursor: "pointer",
+            fontFamily: "inherit",
+            fontSize: 13,
+            color: isReposted ? text : textMuted,
+            display: "flex",
+            gap: 6,
+            alignItems: "center",
+            transition: "color 0.15s",
+            fontWeight: isReposted ? 500 : 400,
+          }}
+        >
+          ⇄
+          {(post.repost_count || 0) > 0 && <span style={{ fontSize: 12 }}>{post.repost_count}</span>}
         </button>
         <button
           className="hb"
@@ -792,6 +829,7 @@ function CoLab() {
   const [showGlobalSearch, setShowGlobalSearch] = useState(false);
   const [posts, setPosts] = useState([]);
   const [postLikes, setPostLikes] = useState({ myLikes: [] });
+  const [postReposts, setPostReposts] = useState({ myReposts: [] });
   const [postComments, setPostComments] = useState({});
   const [pendingLikeIds, setPendingLikeIds] = useState([]);
   const [pendingCommentByPost, setPendingCommentByPost] = useState({});
@@ -878,7 +916,7 @@ function CoLab() {
   const btnG = { background: "none", color: textMuted, border: `1px solid ${border}`, borderRadius: 8, padding: "10px 20px", fontSize: 12, cursor: "pointer", fontFamily: "inherit" };
 
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(null), 3000); };
-  const openUserProfile = async (user, event) => {
+  const _openUserProfile = async (user, event) => {
     event?.stopPropagation?.();
     if (!user) return;
     let username = (user.username || "").trim();
@@ -1146,6 +1184,7 @@ function CoLab() {
     setPortfolioItems,
     setPosts,
     setPostLikes,
+    setPostReposts,
     setMentionNotifications,
     setTrendingProjects,
     setSkillCategoryCount,
@@ -2109,6 +2148,37 @@ function CoLab() {
     }
   };
 
+  const handleRepost = async (postId) => {
+    const previousMyReposts = [...(postReposts.myReposts || [])];
+    const previousPost = posts.find((p) => p.id === postId);
+    const previousCount = previousPost?.repost_count || 0;
+    const isReposted = previousMyReposts.includes(postId);
+    const nextMyReposts = isReposted
+      ? previousMyReposts.filter((id) => id !== postId)
+      : [...previousMyReposts, postId];
+    const nextCount = isReposted
+      ? Math.max(0, previousCount - 1)
+      : previousCount + 1;
+
+    markRecentActivity(postId);
+    setPostReposts({ myReposts: nextMyReposts });
+    setPosts((prev) => prev.map((p) => (p.id === postId ? { ...p, repost_count: nextCount } : p)));
+
+    try {
+      if (isReposted) {
+        const { error } = await supabase.from("post_reposts").delete().eq("user_id", authUser.id).eq("post_id", postId);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from("post_reposts").insert({ user_id: authUser.id, post_id: postId });
+        if (error) throw error;
+      }
+    } catch (error) {
+      setPostReposts({ myReposts: previousMyReposts });
+      setPosts((prev) => prev.map((p) => (p.id === postId ? { ...p, repost_count: previousCount } : p)));
+      showToast(`Repost sync failed: ${error?.message || "Retrying may help."}`);
+    }
+  };
+
   const loadComments = async (postId) => {
     if (postComments[postId]) return;
     const { data } = await supabase.from("comments").select("*").eq("post_id", postId).order("created_at");
@@ -2148,9 +2218,9 @@ function CoLab() {
     const allFeed = posts;
     const feedToShow = networkTab === "feed-following" ? followingFeed : allFeed;
     const postCtx = {
-      postLikes, expandedComments, postComments, authUser, users,
+      postLikes, postReposts, expandedComments, postComments, authUser, users,
       handleDeletePost, dark, border, text, textMuted, bg, bg2, btnP, inputStyle,
-      setViewingProfile, handleLike, setExpandedComments, loadComments,
+      setViewingProfile, handleLike, handleRepost, setExpandedComments, loadComments,
       myInitials, setPostComments, profile, supabase,
       pendingLikeIds, commentPulseIds, pendingCommentByPost,
       recentActivityByPost, justInsertedPostIds, markCommentPending, markRecentActivity,

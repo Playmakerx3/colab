@@ -13,6 +13,7 @@ export function useAppDataBootstrap({
   setPortfolioItems,
   setPosts,
   setPostLikes,
+  setPostReposts,
   setMentionNotifications,
   setTrendingProjects,
   setSkillCategoryCount,
@@ -34,6 +35,7 @@ export function useAppDataBootstrap({
         port,
         postsData,
         likesData,
+        repostsData,
         mentionNotifs,
       } = await fetchAppBootstrapData(userId);
 
@@ -47,6 +49,7 @@ export function useAppDataBootstrap({
       setPortfolioItems(port || []);
       setPosts(postsData || []);
       setPostLikes({ myLikes: (likesData || []).map(l => l.post_id) });
+      setPostReposts({ myReposts: (repostsData || []).map(r => r.post_id) });
       setMentionNotifications(mentionNotifs || []);
 
       // Trending — top 3 projects by applicant count
@@ -112,6 +115,7 @@ export function useAppDataBootstrap({
     setNotifications,
     setPortfolioItems,
     setPostLikes,
+    setPostReposts,
     setPosts,
     setProjects,
     setShowApplicationForm,
