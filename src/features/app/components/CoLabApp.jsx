@@ -3431,7 +3431,7 @@ function CoLab() {
                 <div style={{ background: bg, border: `1px solid ${border}`, borderRadius: 8, padding: "10px 12px" }}>
                   <div style={{ fontSize: 10, color: textMuted, letterSpacing: "1.2px", marginBottom: 8 }}>QUICK ACTIONS</div>
                   <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
-                    <button className="hb" onClick={() => openInvitePanel(activeProject.id)} style={{ ...btnG, padding: "6px 10px", fontSize: 11, textAlign: "left" }}>
+                    <button className="hb" onClick={() => { setProjectTab("team"); openInvitePanel(activeProject.id); }} style={{ ...btnG, padding: "6px 10px", fontSize: 11, textAlign: "left" }}>
                       Invite collaborator
                     </button>
                     <button
