@@ -1401,13 +1401,14 @@ function CoLab() {
         .join(" ")
         .toLowerCase();
       const searchMatches = !normalizedSearch || searchableText.includes(normalizedSearch);
-      const regionMatches = !regionFilter || (p.location || "").toLowerCase().includes(
-        regionFilter === "local" || regionFilter === "city"
-          ? localRegion
-          : regionFilter === "national"
-            ? "us"
-            : "",
-      );
+      const pLoc = (p.location || "").toLowerCase();
+      const myCountry = (profile?.location || "").split(",").pop().trim().toLowerCase();
+      const regionMatches = !regionFilter || (() => {
+        if (regionFilter === "local" || regionFilter === "city") return localRegion.length > 0 && pLoc.includes(localRegion);
+        if (regionFilter === "national") return pLoc.includes("us") || pLoc.includes("usa") || pLoc.includes("united states") || (myCountry && pLoc.split(",").pop().trim() === myCountry);
+        if (regionFilter === "international") return myCountry ? !pLoc.includes(myCountry) : false;
+        return true;
+      })();
 
       return (!filterSkill || (p.skills || []).includes(filterSkill))
         && (!industryFilter || p.category === industryFilter)
