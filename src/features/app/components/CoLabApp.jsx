@@ -4173,7 +4173,7 @@ function CoLab() {
       )}
 
       {/* PROFILE */}
-      {appScreen === "profile" && (
+      {!viewFullProfile && appScreen === "profile" && (
         <div className="pad fu" style={{ width: "100%", padding: "48px 32px" }}>
           {!editProfile ? (
             <div>
