@@ -12,6 +12,7 @@ export async function fetchAppBootstrapData(userId) {
     { data: port },
     { data: postsData },
     { data: likesData },
+    { data: repostsData },
     { data: mentionNotifs },
   ] = await Promise.all([
     supabase.from("projects").select("*").order("created_at", { ascending: false }),
@@ -24,6 +25,7 @@ export async function fetchAppBootstrapData(userId) {
     supabase.from("portfolio_items").select("*").eq("user_id", userId),
     supabase.from("posts").select("*").order("created_at", { ascending: false }),
     supabase.from("likes").select("*").eq("user_id", userId),
+    supabase.from("post_reposts").select("*").eq("user_id", userId),
     supabase.from("mention_notifications").select("*").eq("user_id", userId).eq("read", false).order("created_at", { ascending: false }),
   ]);
 
@@ -38,6 +40,7 @@ export async function fetchAppBootstrapData(userId) {
     port,
     postsData,
     likesData,
+    repostsData,
     mentionNotifs,
   };
 }
