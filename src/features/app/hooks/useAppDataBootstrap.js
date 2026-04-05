@@ -36,6 +36,7 @@ export function useAppDataBootstrap({
         postsData,
         likesData,
         repostsData,
+        allRepostsData,
         mentionNotifs,
       } = await fetchAppBootstrapData(userId);
 
@@ -52,6 +53,11 @@ export function useAppDataBootstrap({
       setPostReposts({ myReposts: (repostsData || []).map(r => r.post_id) });
       setMentionNotifications(mentionNotifs || []);
 
+      const normalizeApplicationStatus = (status) => {
+        if (status === "declined") return "rejected";
+        return status || "pending";
+      };
+
       // Trending — top 3 projects by applicant count
       const trending = [...(projs || [])].sort((a, b) => {
         const aCount = (apps || []).filter(ap => ap.project_id === a.id).length;
@@ -64,14 +70,16 @@ export function useAppDataBootstrap({
       setSkillCategoryCount(allSkills.size || 48);
       setLiveStats({ builders: (usrs || []).length, projects: (projs || []).length });
 
-      const myProjectIds = (projs || []).filter(p => p.owner_id === userId).map(p => p.id);
-      const incoming = (apps || []).filter(a => myProjectIds.includes(a.project_id) && a.status === "pending");
-      setNotifications(incoming.map(a => ({
-        id: a.id,
+      const myProjectIds = (projs || []).filter((p) => p.owner_id === userId).map((p) => p.id);
+      const incoming = (apps || []).filter((a) => myProjectIds.includes(a.project_id) && normalizeApplicationStatus(a.status) === "pending");
+      const ownerNotifications = incoming.map((a) => ({
+        id: `application:new:${a.id}`,
+        entityId: a.id,
         type: "application",
         text: `${a.applicant_name} applied to your project`,
-        sub: (projs || []).find(p => p.id === a.project_id)?.title || "",
+        sub: (projs || []).find((p) => p.id === a.project_id)?.title || "",
         time: new Date(a.created_at).toLocaleDateString(),
+        createdAt: a.created_at || new Date().toISOString(),
         read: false,
         projectId: a.project_id,
         applicant: {
@@ -85,7 +93,65 @@ export function useAppDataBootstrap({
           motivation: a.motivation,
           portfolio_url: a.portfolio_url,
         },
-      })));
+      }));
+
+      const applicantNotifications = (apps || [])
+        .filter((a) => a.applicant_id === userId)
+        .filter((a) => ["accepted", "rejected", "declined"].includes(normalizeApplicationStatus(a.status)))
+        .map((a) => {
+          const normalizedStatus = normalizeApplicationStatus(a.status);
+          const projectTitle = (projs || []).find((p) => p.id === a.project_id)?.title || "a project";
+          return {
+            id: `application:status:${a.id}`,
+            entityId: a.id,
+            type: "application_status",
+            text: `Your application was ${normalizedStatus}`,
+            sub: projectTitle,
+            time: new Date(a.updated_at || a.created_at).toLocaleDateString(),
+            createdAt: a.updated_at || a.created_at || new Date().toISOString(),
+            read: false,
+            projectId: a.project_id,
+            status: normalizedStatus,
+          };
+        });
+
+      const followerNotifications = (fols || []).map((followRow) => {
+        const follower = (usrs || []).find((u) => u.id === followRow.follower_id);
+        return {
+          id: `follow:${followRow.id || followRow.follower_id}`,
+          entityId: followRow.id || followRow.follower_id,
+          type: "follow",
+          text: `${follower?.name || "Someone"} followed you`,
+          sub: follower?.role || "",
+          time: new Date(followRow.created_at || Date.now()).toLocaleDateString(),
+          createdAt: followRow.created_at || new Date().toISOString(),
+          read: false,
+          userId: followRow.follower_id,
+        };
+      });
+
+      const repostNotifications = (allRepostsData || [])
+        .map((repost) => {
+          const post = (postsData || []).find((candidate) => candidate.id === repost.post_id);
+          if (!post || post.user_id !== userId || repost.user_id === userId) return null;
+          const actor = (usrs || []).find((u) => u.id === repost.user_id);
+          return {
+            id: `repost:${repost.id || `${repost.user_id}-${repost.post_id}`}`,
+            entityId: repost.id || `${repost.user_id}-${repost.post_id}`,
+            type: "repost",
+            text: `${actor?.name || "Someone"} reposted your post`,
+            sub: post.content ? post.content.slice(0, 68) : "",
+            time: new Date(repost.created_at || Date.now()).toLocaleDateString(),
+            createdAt: repost.created_at || new Date().toISOString(),
+            read: false,
+            postId: post.id,
+          };
+        })
+        .filter(Boolean);
+
+      const combinedNotifications = [...ownerNotifications, ...applicantNotifications, ...followerNotifications, ...repostNotifications]
+        .sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+      setNotifications(combinedNotifications);
 
       // ── PENDING APPLY FROM PUBLIC PAGE ──
       const pendingApply = sessionStorage.getItem("pendingApply");

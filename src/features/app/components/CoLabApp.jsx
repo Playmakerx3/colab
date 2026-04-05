@@ -21,6 +21,18 @@ const isFreshTimestamp = (timestamp, windowMs = 120000) => {
   return Date.now() - new Date(timestamp).getTime() < windowMs;
 };
 
+
+const normalizeApplicationStatus = (status) => {
+  if (status === "declined") return "rejected";
+  return status || "pending";
+};
+
+const applicationStatusStyles = {
+  pending: { label: "pending", color: "#f59e0b" },
+  accepted: { label: "accepted", color: "#22c55e" },
+  rejected: { label: "rejected", color: "#ef4444" },
+};
+
 const getMediaType = (url = "") => {
   if (!url) return "none";
   const lower = url.toLowerCase();
@@ -856,6 +868,8 @@ function CoLab() {
   const [filterSkill, setFilterSkill] = useState(null);
   const [networkFilter, setNetworkFilter] = useState(null);
   const [regionFilter, setRegionFilter] = useState(null); // local, national, international
+  const [industryFilter, setIndustryFilter] = useState(null);
+  const [locationFilter, setLocationFilter] = useState("");
   const [search, setSearch] = useState("");
   const [toast, setToast] = useState(null);
   const [showCreate, setShowCreate] = useState(false);
@@ -898,6 +912,7 @@ function CoLab() {
   const [taskUpdatePendingById, setTaskUpdatePendingById] = useState({});
   const [hideFirstTimeGuide, setHideFirstTimeGuide] = useState(false);
   const [projectLastReadAt, setProjectLastReadAt] = useState({});
+
   const messagesEndRef = useRef(null);
   const dmEndRef = useRef(null);
   const taskMutationSeqRef = useRef({});
@@ -974,7 +989,7 @@ function CoLab() {
   const myInitials = initials(profile?.name, "ME");
   const getMatchScore = (p) => (profile?.skills || []).filter(s => (p.skills || []).includes(s)).length;
   const unreadDms = dmThreads.filter(t => t.unread && t.id !== activeDmThread?.id).length;
-  const unreadNotifs = notifications.filter(n => !n.read).length + mentionNotifications.length;
+  const unreadNotifs = notifications.filter((n) => !n.read).length + mentionNotifications.length;
   const acceptedProjectApplicants = useMemo(() => (
     activeProject
       ? applications.filter((a) => a.project_id === activeProject.id && a.status === "accepted")
@@ -999,6 +1014,14 @@ function CoLab() {
     if (!activeProject) return [];
     return Object.values(projectMemberMap);
   }, [activeProject, projectMemberMap]);
+
+  const shouldShowPluginsTab = Boolean(activeProject?.owner_id === authUser?.id || activeProject?.github_repo || (activeProject?.plugins || []).length > 0);
+
+  useEffect(() => {
+    if (projectTab === "plugins" && !shouldShowPluginsTab) {
+      setProjectTab("kanban");
+    }
+  }, [projectTab, shouldShowPluginsTab]);
 
   const hasTaskDescriptionField = useMemo(() => {
     if (!activeProject) return false;
@@ -1216,6 +1239,8 @@ function CoLab() {
     activeProject,
     activeDmThread,
     projects,
+    users,
+    posts,
     messagesEndRef,
     dmEndRef,
     setMessages,
@@ -1225,6 +1250,7 @@ function CoLab() {
     setNotifications,
     setProjects,
     setPosts,
+    setFollowers,
     onIncomingPost: (incomingPost) => {
       setPendingFeedPosts((prev) => {
         if (prev.find((p) => p.id === incomingPost.id)) return prev;
@@ -1363,10 +1389,13 @@ function CoLab() {
   const appliedProjectIds = applications.filter(a => a.applicant_id === authUser?.id).map(a => a.project_id);
   const browseBase = projects.filter(p => p.owner_id !== authUser?.id && !p.archived && !p.is_private);
   const forYou = browseBase.map(p => ({ ...p, _s: getMatchScore(p) })).filter(p => p._s > 0).sort((a, b) => b._s - a._s);
-  const allP = browseBase.map(p => ({ ...p, _s: getMatchScore(p) })).filter(p =>
-    (!filterSkill || (p.skills || []).includes(filterSkill)) &&
-    (!search || p.title?.toLowerCase().includes(search.toLowerCase()))
-  ).sort((a, b) => b._s - a._s);
+  const allP = browseBase.map((p) => ({ ...p, _s: getMatchScore(p) })).filter((p) => {
+    const locationMatches = !locationFilter || (p.location || "").toLowerCase().includes(locationFilter.toLowerCase());
+    return (!filterSkill || (p.skills || []).includes(filterSkill))
+      && (!industryFilter || p.category === industryFilter)
+      && (!search || p.title?.toLowerCase().includes(search.toLowerCase()))
+      && locationMatches;
+  }).sort((a, b) => b._s - a._s);
 
   const todayNextUp = useMemo(() => {
     if (!activeProject) return null;
@@ -1971,6 +2000,7 @@ function CoLab() {
     setProjectActivity,
     setApplications,
     setPosts,
+    setFollowers,
     newProject,
     setNewProject,
     setShowCreate,
@@ -2113,6 +2143,20 @@ function CoLab() {
     showToast(`Role updated to ${role}.`);
   };
 
+  const handleMarkProjectCompleted = async (projectId) => {
+    const project = projects.find((entry) => entry.id === projectId);
+    if (!project || project.shipped) return;
+    const updatePayload = { status: "completed", progress: 100, completed_at: new Date().toISOString() };
+    const { error } = await supabase.from("projects").update(updatePayload).eq("id", projectId);
+    if (error) {
+      showToast("Could not mark project as completed.");
+      return;
+    }
+    setProjects((prev) => prev.map((entry) => (entry.id === projectId ? { ...entry, ...updatePayload } : entry)));
+    setActiveProject((prev) => (prev?.id === projectId ? { ...prev, ...updatePayload } : prev));
+    showToast("Project marked as completed. Ready to ship.");
+  };
+
   const handleLike = async (postId) => {
     const myLikes = postLikes.myLikes || [];
     const isLiked = myLikes.includes(postId);
@@ -2169,8 +2213,21 @@ function CoLab() {
         const { error } = await supabase.from("post_reposts").delete().eq("user_id", authUser.id).eq("post_id", postId);
         if (error) throw error;
       } else {
-        const { error } = await supabase.from("post_reposts").insert({ user_id: authUser.id, post_id: postId });
+        const { data: repostRow, error } = await supabase.from("post_reposts").insert({ user_id: authUser.id, post_id: postId }).select().single();
         if (error) throw error;
+        const targetPost = posts.find((entry) => entry.id === postId);
+        if (targetPost?.user_id === authUser.id) {
+          setNotifications((prev) => [{
+            id: `repost:${repostRow?.id || `${authUser.id}-${postId}`}`,
+            entityId: repostRow?.id || `${authUser.id}-${postId}`,
+            type: "repost",
+            text: "You reposted your own post",
+            sub: targetPost.content ? targetPost.content.slice(0, 68) : "",
+            time: "just now",
+            read: false,
+            postId,
+          }, ...prev]);
+        }
       }
     } catch (error) {
       setPostReposts({ myReposts: previousMyReposts });
@@ -2728,7 +2785,7 @@ function CoLab() {
           ))}
           <button onClick={() => { setShowNotifications(!showNotifications); if (!showNotifications) setNotifications(prev => prev.map(n => ({ ...n, read: true }))); }}
             style={{ position: "relative", background: showNotifications ? bg3 : "none", border: "none", borderRadius: 6, padding: "5px 4px", cursor: "pointer", color: textMuted, fontSize: 12, fontFamily: "inherit", flexShrink: 0 }}>
-            ◎{unreadNotifs > 0 && <span style={{ position: "absolute", top: 3, right: 3, width: 5, height: 5, borderRadius: "50%", background: text, border: `1px solid ${bg}` }} />}
+            ◎{unreadNotifs > 0 && <span style={{ position: "absolute", top: -2, right: -2, minWidth: 14, height: 14, borderRadius: 999, background: text, color: bg, border: `1px solid ${bg}`, fontSize: 9, display: "inline-flex", alignItems: "center", justifyContent: "center", padding: "0 3px", lineHeight: 1 }}>{Math.min(unreadNotifs, 99)}</span>}
           </button>
           <button onClick={() => setDark(!dark)} style={{ background: "none", border: `1px solid ${border}`, borderRadius: 6, padding: "3px 5px", cursor: "pointer", fontSize: 10, color: textMuted, fontFamily: "inherit", flexShrink: 0, marginLeft: 2 }}>{dark ? "☀" : "☾"}</button>
           <button onClick={() => setShowSettings(true)}
@@ -2764,6 +2821,13 @@ function CoLab() {
                     <div style={{ fontSize: 12, color: text }}>{n.text}</div>
                     <button className="hb" onClick={() => setNotifications(prev => prev.filter(x => x.id !== n.id))} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontSize: 12, fontFamily: "inherit", marginLeft: 8 }}>✕</button>
                   </div>
+                  {n.type === "application_status" && (
+                    <div style={{ marginBottom: 8 }}>
+                      <span style={{ fontSize: 10, color: applicationStatusStyles[n.status]?.color || textMuted, border: `1px solid ${applicationStatusStyles[n.status]?.color || border}`, borderRadius: 999, padding: "2px 8px" }}>
+                        {applicationStatusStyles[n.status]?.label || n.status}
+                      </span>
+                    </div>
+                  )}
                   <div style={{ marginBottom: n.type === "application" ? 10 : 0 }}>
                     {n.projectId && (
                       <button className="hb" onClick={() => {
@@ -2967,9 +3031,16 @@ function CoLab() {
                 <div>
                   <div style={{ padding: "14px 0 12px", display: "flex", flexDirection: "column", gap: 10 }}>
                     <input placeholder="search projects..." value={search} onChange={e => setSearch(e.target.value)} style={inputStyle} />
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                      <select value={industryFilter || ""} onChange={(e) => setIndustryFilter(e.target.value || null)} style={{ ...inputStyle, maxWidth: 220, fontSize: 11, padding: "7px 10px" }}>
+                        <option value="">all industries</option>
+                        {CATEGORIES.map((category) => <option key={category} value={category}>{category}</option>)}
+                      </select>
+                      <input placeholder="filter by location" value={locationFilter} onChange={(e) => setLocationFilter(e.target.value)} style={{ ...inputStyle, flex: 1, minWidth: 150, fontSize: 11, padding: "7px 10px" }} />
+                    </div>
                     <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
                       {["Design","Engineering","Marketing","Music","Video","Finance","AI/ML","Writing","Product"].map(s => { const sel = filterSkill === s; return <button key={s} className="hb" onClick={() => setFilterSkill(sel ? null : s)} style={{ padding: "3px 10px", borderRadius: 3, fontSize: 10, cursor: "pointer", fontFamily: "inherit", background: sel ? text : "none", color: sel ? bg : textMuted, border: `1px solid ${sel ? text : border}`, transition: "all 0.15s" }}>{s}</button>; })}
-                      {filterSkill && <button className="hb" onClick={() => setFilterSkill(null)} style={{ padding: "3px 10px", borderRadius: 3, fontSize: 10, cursor: "pointer", fontFamily: "inherit", background: "none", color: textMuted, border: `1px solid ${border}` }}>clear</button>}
+                      {(filterSkill || industryFilter || locationFilter) && <button className="hb" onClick={() => { setFilterSkill(null); setIndustryFilter(null); setLocationFilter(""); }} style={{ padding: "3px 10px", borderRadius: 3, fontSize: 10, cursor: "pointer", fontFamily: "inherit", background: "none", color: textMuted, border: `1px solid ${border}` }}>clear</button>}
                     </div>
                     {/* Region filter */}
                     <div style={{ display: "flex", gap: 5, flexWrap: "wrap", alignItems: "center" }}>
@@ -3276,6 +3347,16 @@ function CoLab() {
             {/* Applications + recent activity */}
             <div>
               <div style={{ fontSize: 10, color: textMuted, letterSpacing: "1.5px", marginBottom: 14 }}>APPLICATIONS</div>
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 12 }}>
+                {Object.entries(applicationStatusStyles).map(([statusKey, config]) => {
+                  const count = applications.filter((application) => application.applicant_id === authUser?.id && normalizeApplicationStatus(application.status) === statusKey).length;
+                  return (
+                    <span key={statusKey} style={{ fontSize: 10, color: config.color, border: `1px solid ${config.color}66`, borderRadius: 999, padding: "2px 8px" }}>
+                      {config.label}: {count}
+                    </span>
+                  );
+                })}
+              </div>
               {appliedProjectIds.length === 0
                 ? <div style={{ fontSize: 12, color: textMuted, marginBottom: 24 }}>no applications yet.</div>
                 : <div style={{ display: "flex", flexDirection: "column", gap: 1, marginBottom: 24 }}>
@@ -3285,8 +3366,8 @@ function CoLab() {
                         <div key={p.id} style={{ background: bg2, borderRadius: i === 0 && arr.length === 1 ? 8 : i === 0 ? "8px 8px 0 0" : i === arr.length - 1 ? "0 0 8px 8px" : 0, border: `1px solid ${border}`, borderBottom: i < arr.length - 1 ? "none" : `1px solid ${border}`, padding: "10px 16px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
                           <div style={{ minWidth: 0 }}><div style={{ fontSize: 12, color: text, marginBottom: 1 }}>{p.title}</div><div style={{ fontSize: 10, color: textMuted }}>{p.owner_name}</div></div>
                           <div style={{ display: "flex", gap: 6, alignItems: "center", flexShrink: 0 }}>
-                            <span style={{ fontSize: 10, color: myApp?.status === "accepted" ? text : textMuted, border: `1px solid ${border}`, borderRadius: 3, padding: "1px 6px" }}>{myApp?.status || "pending"}</span>
-                            {myApp?.status === "declined" && <button className="hb" onClick={() => handleRemoveDeniedApp(myApp.id)} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontSize: 10, fontFamily: "inherit" }}>✕</button>}
+                            <span style={{ fontSize: 10, color: normalizeApplicationStatus(myApp?.status) === "accepted" ? text : textMuted, border: `1px solid ${border}`, borderRadius: 3, padding: "1px 6px" }}>{normalizeApplicationStatus(myApp?.status || "pending")}</span>
+                            {normalizeApplicationStatus(myApp?.status) === "rejected" && <button className="hb" onClick={() => handleRemoveDeniedApp(myApp.id)} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontSize: 10, fontFamily: "inherit" }}>✕</button>}
                           </div>
                         </div>
                       );
@@ -3347,10 +3428,16 @@ function CoLab() {
                 <span style={{ fontSize: 10, padding: "2px 8px", borderRadius: 3, border: "1px solid #22c55e", color: "#22c55e" }}>shipped</span>
               )}
               {activeProject.owner_id === authUser?.id && !activeProject.shipped && (
-                <button className="hb" onClick={() => { setShipPostContent(`just shipped: ${activeProject.title}. built it with the team on CoLab.`); setShowShipModal(true); }}
-                  style={{ background: "none", border: `1px solid ${border}`, borderRadius: 6, padding: "4px 10px", fontSize: 10, cursor: "pointer", color: textMuted, fontFamily: "inherit" }}>
-                  ship it
-                </button>
+                <>
+                  <button className="hb" onClick={() => handleMarkProjectCompleted(activeProject.id)}
+                    style={{ background: "none", border: `1px solid ${border}`, borderRadius: 6, padding: "4px 10px", fontSize: 10, cursor: "pointer", color: textMuted, fontFamily: "inherit" }}>
+                    mark completed
+                  </button>
+                  <button className="hb" onClick={() => { setShipPostContent(`just shipped: ${activeProject.title}. built it with the team on CoLab.`); setShowShipModal(true); }}
+                    style={{ background: "none", border: `1px solid ${border}`, borderRadius: 6, padding: "4px 10px", fontSize: 10, cursor: "pointer", color: textMuted, fontFamily: "inherit" }}>
+                    ship it
+                  </button>
+                </>
               )}
               {activeProject.owner_id === authUser?.id && (
                 <button className="hb" onClick={() => handleToggleFeatured(activeProject.id, !activeProject.featured)}
@@ -3530,7 +3617,7 @@ function CoLab() {
             <TabBtn id="docs" label="docs" count={0} setter={setProjectTab} current={projectTab} />
             <TabBtn id="updates" label="updates" count={projectUpdates.length} setter={setProjectTab} current={projectTab} />
             <TabBtn id="team" label="team" count={0} setter={setProjectTab} current={projectTab} />
-            <TabBtn id="plugins" label="plugins" count={(activeProject.plugins || []).length} setter={(id) => { setProjectTab(id); if (id === "plugins" && activeProject.github_repo) { setGithubRepoInput(activeProject.github_repo); loadGithubCommits(activeProject.github_repo); } }} current={projectTab} />
+            {shouldShowPluginsTab && <TabBtn id="plugins" label="plugins" count={(activeProject.plugins || []).length} setter={(id) => { setProjectTab(id); if (id === "plugins" && activeProject.github_repo) { setGithubRepoInput(activeProject.github_repo); loadGithubCommits(activeProject.github_repo); } }} current={projectTab} />}
             <TabBtn id="activity" label="activity" count={0} setter={setProjectTab} current={projectTab} />
           </div>
 
@@ -4000,7 +4087,7 @@ function CoLab() {
             )}
 
             {/* PLUGINS */}
-            {projectTab === "plugins" && (
+            {projectTab === "plugins" && shouldShowPluginsTab && (
               <div>
                 {/* GitHub — real integration */}
                 <div style={{ marginBottom: 24 }}>
@@ -4393,7 +4480,7 @@ function CoLab() {
                         return p ? (
                           <div key={a.id} style={{ padding: "10px 14px", background: bg2, borderRadius: 8, border: `1px solid ${border}`, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
                             <div><div style={{ fontSize: 12, color: text, marginBottom: 2 }}>Applied to {p.title}</div><div style={{ fontSize: 10, color: textMuted }}>{new Date(a.created_at).toLocaleDateString()}</div></div>
-                            <span style={{ fontSize: 10, color: a.status === "accepted" ? text : textMuted, border: `1px solid ${border}`, borderRadius: 3, padding: "1px 6px", flexShrink: 0 }}>{a.status}</span>
+                            <span style={{ fontSize: 10, color: normalizeApplicationStatus(a.status) === "accepted" ? text : textMuted, border: `1px solid ${border}`, borderRadius: 3, padding: "1px 6px", flexShrink: 0 }}>{normalizeApplicationStatus(a.status)}</span>
                           </div>
                         ) : null;
                       })}
