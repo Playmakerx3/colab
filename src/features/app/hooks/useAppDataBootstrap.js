@@ -149,7 +149,9 @@ export function useAppDataBootstrap({
         })
         .filter(Boolean);
 
+      const dismissedIds = new Set(JSON.parse(localStorage.getItem("dismissedNotifIds") || "[]"));
       const combinedNotifications = [...ownerNotifications, ...applicantNotifications, ...followerNotifications, ...repostNotifications]
+        .filter((n) => !dismissedIds.has(n.id))
         .sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
       setNotifications(combinedNotifications);
 

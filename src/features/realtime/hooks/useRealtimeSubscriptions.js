@@ -101,6 +101,8 @@ export function useRealtimeSubscriptions({
           setNotifications((prev) => {
             const notificationId = `application:new:${payload.new.id}`;
             if (prev.find((n) => n.id === notificationId)) return prev;
+            const dismissed = new Set(JSON.parse(localStorage.getItem("dismissedNotifIds") || "[]"));
+            if (dismissed.has(notificationId)) return prev;
             return [{
               id: notificationId, entityId: payload.new.id, type: "application",
               text: `${payload.new.applicant_name} applied to your project`,
@@ -121,6 +123,8 @@ export function useRealtimeSubscriptions({
             setNotifications((prev) => {
               const notificationId = `application:status:${payload.new.id}`;
               if (prev.find((notification) => notification.id === notificationId)) return prev;
+              const dismissed = new Set(JSON.parse(localStorage.getItem("dismissedNotifIds") || "[]"));
+              if (dismissed.has(notificationId)) return prev;
               return [{
                 id: notificationId,
                 entityId: payload.new.id,
@@ -140,8 +144,12 @@ export function useRealtimeSubscriptions({
         if (payload.new.following_id !== authUser?.id) return;
         setFollowers((prev) => (prev.includes(payload.new.follower_id) ? prev : [...prev, payload.new.follower_id]));
         const follower = usersRef.current.find((user) => user.id === payload.new.follower_id);
-        setNotifications((prev) => [{
-          id: `follow:${payload.new.id || payload.new.follower_id}`,
+        setNotifications((prev) => {
+          const notifId = `follow:${payload.new.id || payload.new.follower_id}`;
+          const dismissed = new Set(JSON.parse(localStorage.getItem("dismissedNotifIds") || "[]"));
+          if (dismissed.has(notifId)) return prev;
+          return [{
+          id: notifId,
           entityId: payload.new.id || payload.new.follower_id,
           type: "follow",
           text: `${follower?.name || "Someone"} followed you`,
@@ -149,22 +157,28 @@ export function useRealtimeSubscriptions({
           time: "just now",
           read: false,
           userId: payload.new.follower_id,
-        }, ...prev]);
+        }, ...prev];
+        });
       })
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "post_reposts" }, (payload) => {
         const post = postsRef.current.find((entry) => entry.id === payload.new.post_id);
         if (!post || post.user_id !== authUser?.id || payload.new.user_id === authUser?.id) return;
         const actor = usersRef.current.find((user) => user.id === payload.new.user_id);
-        setNotifications((prev) => [{
-          id: `repost:${payload.new.id || `${payload.new.user_id}-${payload.new.post_id}`}`,
-          entityId: payload.new.id || `${payload.new.user_id}-${payload.new.post_id}`,
-          type: "repost",
-          text: `${actor?.name || "Someone"} reposted your post`,
-          sub: post.content ? post.content.slice(0, 68) : "",
-          time: "just now",
-          read: false,
-          postId: post.id,
-        }, ...prev]);
+        setNotifications((prev) => {
+          const notifId = `repost:${payload.new.id || `${payload.new.user_id}-${payload.new.post_id}`}`;
+          const dismissed = new Set(JSON.parse(localStorage.getItem("dismissedNotifIds") || "[]"));
+          if (dismissed.has(notifId)) return prev;
+          return [{
+            id: notifId,
+            entityId: payload.new.id || `${payload.new.user_id}-${payload.new.post_id}`,
+            type: "repost",
+            text: `${actor?.name || "Someone"} reposted your post`,
+            sub: post.content ? post.content.slice(0, 68) : "",
+            time: "just now",
+            read: false,
+            postId: post.id,
+          }, ...prev];
+        });
       })
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "projects" }, (payload) => {
         setProjects((prev) => {
