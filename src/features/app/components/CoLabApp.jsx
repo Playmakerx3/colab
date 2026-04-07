@@ -3134,7 +3134,7 @@ const setViewingProfile = (user) => {
       {!viewFullProfile && appScreen === "network" && renderNetwork()}
 
       {/* MESSAGES */}
-      {appScreen === "messages" && (
+      {!viewFullProfile && appScreen === "messages" && (
         <div className={activeDmThread ? "msgs-has-thread" : "msgs-no-thread"} style={{ width: "100%", padding: "0", display: "flex", height: "calc(100vh - 50px)" }}>
           {/* Left panel — thread list */}
           <div className="msgs-left" style={{ width: 260, flexShrink: 0, borderRight: `1px solid ${border}`, overflowY: "auto", display: "flex", flexDirection: "column" }}>
@@ -3262,7 +3262,7 @@ const setViewingProfile = (user) => {
       )}
 
       {/* WORKSPACE */}
-      {appScreen === "workspace" && !activeProject && (
+      {!viewFullProfile && appScreen === "workspace" && !activeProject && (
         <div className="pad fu" style={{ width: "100%", padding: "44px 32px" }}>
           {showFirstTimeGuide && renderFirstTimeGuide()}
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 32, flexWrap: "wrap", gap: 14 }}>
@@ -3411,7 +3411,7 @@ const setViewingProfile = (user) => {
       )}
 
       {/* PROJECT SPACE */}
-      {appScreen === "workspace" && activeProject && (
+      {!viewFullProfile && appScreen === "workspace" && activeProject && (
         <div style={{ width: "100%", display: "flex", flexDirection: "column", height: "calc(100vh - 50px)" }}>
           {/* Project header */}
           <div className="pad" style={{ padding: "16px 28px", borderBottom: `1px solid ${border}`, display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap", flexShrink: 0 }}>
