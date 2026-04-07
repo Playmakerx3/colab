@@ -1,13 +1,5 @@
 import { useState, useEffect } from "react";
 
-const initials = (name) =>
-  (name || "?")
-    .split(" ")
-    .map((w) => w[0])
-    .join("")
-    .slice(0, 2)
-    .toUpperCase();
-
 export default function LandingPage({ dark, setDark, onLogin, onSignup, supabase }) {
   const bg = dark ? "#0a0a0a" : "#ffffff";
   const bg2 = dark ? "#111111" : "#f5f5f5";
@@ -63,7 +55,6 @@ export default function LandingPage({ dark, setDark, onLogin, onSignup, supabase
   const [liveStats, setLiveStats] = useState({ builders: "...", projects: "..." });
   const [skillCategoryCount, setSkillCategoryCount] = useState("...");
   const [liveProjects, setLiveProjects] = useState(null);
-  const [liveBuilders, setLiveBuilders] = useState(null);
 
   useEffect(() => {
     (async () => {
@@ -72,19 +63,16 @@ export default function LandingPage({ dark, setDark, onLogin, onSignup, supabase
         { count: projectCount },
         { data: projSkills },
         { data: projects },
-        { data: builders },
       ] = await Promise.all([
         supabase.from("profiles").select("*", { count: "exact", head: true }),
         supabase.from("projects").select("*", { count: "exact", head: true }),
         supabase.from("projects").select("skills"),
         supabase.from("projects").select("id, title, category, skills, owner_id").limit(4),
-        supabase.from("profiles").select("id, name, role, skills").limit(4),
       ]);
       setLiveStats({ builders: builderCount ?? "...", projects: projectCount ?? "..." });
       const uniqueSkills = new Set((projSkills || []).flatMap((p) => p.skills || []));
       setSkillCategoryCount(uniqueSkills.size || 48);
       setLiveProjects(projects || []);
-      setLiveBuilders(builders || []);
     })();
   }, []);
 
@@ -402,125 +390,6 @@ export default function LandingPage({ dark, setDark, onLogin, onSignup, supabase
             </div>
           ))}
         </div>
-      </div>
-
-      {/* Meet the builders */}
-      <div
-        className="pad"
-        style={{ padding: "72px 40px", borderBottom: `1px solid ${border}` }}
-      >
-        <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px", marginBottom: 36 }}>
-          WHO'S BUILDING
-        </div>
-        {liveBuilders === null ? (
-          <div style={{ fontSize: 12, color: textMuted }}>Loading builders...</div>
-        ) : liveBuilders.length === 0 ? (
-          <div style={{ fontSize: 12, color: textMuted }}>No builders yet.</div>
-        ) : (
-          <div
-            className="lp-card-grid"
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(2, 1fr)",
-              gap: 16,
-              marginBottom: 32,
-            }}
-          >
-            {liveBuilders.map((builder) => (
-              <div
-                key={builder.id}
-                className="card-h"
-                style={{
-                  background: bg2,
-                  border: `1px solid ${border}`,
-                  borderRadius: 10,
-                  padding: "16px 20px",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 14,
-                  transition: "border 0.2s",
-                }}
-              >
-                <div
-                  style={{
-                    width: 40,
-                    height: 40,
-                    borderRadius: "50%",
-                    background: text,
-                    color: bg,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    fontSize: 13,
-                    fontWeight: 500,
-                    flexShrink: 0,
-                  }}
-                >
-                  {initials(builder.name)}
-                </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div
-                    style={{
-                      fontSize: 13,
-                      fontWeight: 500,
-                      color: text,
-                      marginBottom: 2,
-                      whiteSpace: "nowrap",
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                    }}
-                  >
-                    {builder.name || "Anonymous"}
-                  </div>
-                  <div
-                    style={{
-                      fontSize: 11,
-                      color: textMuted,
-                      marginBottom: 8,
-                      whiteSpace: "nowrap",
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                    }}
-                  >
-                    {builder.role || "Builder"}
-                  </div>
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
-                    {(builder.skills || []).slice(0, 3).map((skill, si) => (
-                      <span
-                        key={si}
-                        style={{
-                          border: `1px solid ${border}`,
-                          borderRadius: 999,
-                          padding: "2px 10px",
-                          fontSize: 10,
-                          color: textMuted,
-                        }}
-                      >
-                        {skill}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-        <button
-          className="hb"
-          onClick={onSignup}
-          style={{
-            background: "none",
-            color: textMuted,
-            border: `1px solid ${border}`,
-            borderRadius: 8,
-            padding: "10px 20px",
-            fontSize: 12,
-            cursor: "pointer",
-            fontFamily: "inherit",
-          }}
-        >
-          See all builders →
-        </button>
       </div>
 
       {/* Final CTA */}
