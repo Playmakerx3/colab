@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
+import LandingPage from "../../landing/LandingPage";
 import { supabase } from "../../../supabase";
 import { AVAILABILITY, CATEGORIES, COLS, PLUGINS, PRESETS, ROWS, SKILLS } from "../../../constants/appConstants";
 import { initials, matchesRegion, relativeTime } from "../../../utils/appHelpers";
@@ -836,7 +837,7 @@ function CoLab() {
   const [activeDmThread, setActiveDmThread] = useState(null);
   const [portfolioItems, setPortfolioItems] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [liveStats, setLiveStats] = useState({ builders: "...", projects: "..." });
+
   const [globalSearch, setGlobalSearch] = useState("");
   const [showGlobalSearch, setShowGlobalSearch] = useState(false);
   const [posts, setPosts] = useState([]);
@@ -861,7 +862,7 @@ function CoLab() {
   const [editMessageText, setEditMessageText] = useState("");
   const [mentionNotifications, setMentionNotifications] = useState([]);
   const [trendingProjects, setTrendingProjects] = useState([]);
-  const [skillCategoryCount, setSkillCategoryCount] = useState(48);
+
 
   // UI
   const [showNotifications, setShowNotifications] = useState(false);
@@ -1154,20 +1155,6 @@ const setViewingProfile = (user) => {
   `;
 
   // Force body background + mobile browser chrome color on mode switch
-  useEffect(() => {
-    if (screen !== "landing") return;
-    (async () => {
-      const [{ count: builderCount }, { count: projectCount }, { data: projSkills }] = await Promise.all([
-        supabase.from("profiles").select("*", { count: "exact", head: true }),
-        supabase.from("projects").select("*", { count: "exact", head: true }),
-        supabase.from("projects").select("skills"),
-      ]);
-      setLiveStats({ builders: builderCount ?? "...", projects: projectCount ?? "..." });
-      const uniqueSkills = new Set((projSkills || []).flatMap(p => p.skills || []));
-      setSkillCategoryCount(uniqueSkills.size || 48);
-    })();
-  }, [screen]);
-
   useEffect(() => {
     const color = dark ? "#0a0a0a" : "#ffffff";
     document.body.style.backgroundColor = color;
@@ -2478,59 +2465,13 @@ const setViewingProfile = (user) => {
 
   // ── LANDING ──
   if (screen === "landing") return (
-    <div style={{ minHeight: "100vh", width: "100%", background: bg, color: text, fontFamily: "'DM Mono', monospace", overflowX: "hidden" }}>
-      <style>{CSS}</style>
-      <nav style={{ width: "100%", borderBottom: `1px solid ${border}`, position: "sticky", top: 0, background: bg, backdropFilter: "blur(12px)", zIndex: 50 }}>
-        <div className="pad" style={{ padding: "0 40px", height: 52, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <div style={{ fontSize: 15, fontWeight: 500, letterSpacing: "-0.5px", color: text }}>[CoLab]</div>
-          <div style={{ display: "flex", gap: 8 }}>
-            <button className="hb" onClick={() => setDark(!dark)} style={{ background: "none", border: `1px solid ${border}`, borderRadius: 6, padding: "4px 10px", cursor: "pointer", fontSize: 11, color: textMuted, fontFamily: "inherit" }}>{dark ? "☀" : "☾"}</button>
-            <button className="hb" onClick={() => { setAuthMode("login"); setScreen("auth"); }} style={{ ...btnG, padding: "7px 16px", fontSize: 12 }}>Log in</button>
-            <button className="hb" onClick={() => { setAuthMode("signup"); setScreen("auth"); }} style={{ ...btnP, padding: "7px 16px", fontSize: 12 }}>Get started</button>
-          </div>
-        </div>
-      </nav>
-      <div className="pad fu" style={{ padding: "80px 40px 64px", borderBottom: `1px solid ${border}` }}>
-        <div style={{ fontSize: 10, color: textMuted, letterSpacing: "3px", marginBottom: 20 }}>THE COLLABORATIVE WORKSPACE</div>
-        <h1 className="hero-h1" style={{ fontSize: "clamp(52px, 9vw, 96px)", fontWeight: 400, lineHeight: 0.92, letterSpacing: "-4px", marginBottom: 28, color: text }}>
-          Don't just<br />connect.<br /><span style={{ color: textMuted }}>Build together.</span>
-        </h1>
-        <p style={{ fontSize: 14, color: textMuted, maxWidth: 500, lineHeight: 1.85, marginBottom: 36 }}>CoLab is where founders, creatives, engineers, and makers find each other and actually get work done — in one place.</p>
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-          <button className="hb" onClick={() => { setAuthMode("signup"); setScreen("auth"); }} style={{ background: text, color: bg, border: "none", borderRadius: 8, padding: "13px 28px", fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}>Start building →</button>
-          <button className="hb" onClick={() => { setAuthMode("login"); setScreen("auth"); }} style={{ background: "none", color: textMuted, border: `1px solid ${border}`, borderRadius: 8, padding: "13px 28px", fontSize: 13, cursor: "pointer", fontFamily: "inherit" }}>Log in</button>
-        </div>
-      </div>
-      <div className="stat-grid" style={{ display: "flex", width: "100%", borderBottom: `1px solid ${border}` }}>
-        {[[liveStats.builders,"builders"],[liveStats.projects,"active projects"],[skillCategoryCount,"skill categories"],["100%","free to start"]].map(([v,l],i) => (
-          <div key={i} className="stat-item" style={{ flex: 1, borderRight: i < 3 ? `1px solid ${border}` : "none", padding: "24px 40px", textAlign: "center" }}>
-            <div style={{ fontSize: 28, color: text, letterSpacing: "-1px" }}>{v}</div>
-            <div style={{ fontSize: 10, color: textMuted, marginTop: 4 }}>{l}</div>
-          </div>
-        ))}
-      </div>
-      <div className="pad" style={{ padding: "72px 40px", borderBottom: `1px solid ${border}` }}>
-        <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px", marginBottom: 36 }}>HOW IT WORKS</div>
-        <div className="how-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)" }}>
-          {[["01","Build your profile","List your skills and what you're looking to work on."],["02","Find your match","Post a project or browse and apply to something that excites you."],["03","Build together","Tasks, updates, messaging, and plugin integrations — all in one place."]].map(([n,t,d],i) => (
-            <div key={i} className="how-card card-h" style={{ padding: "32px 36px", background: bg2, border: `1px solid ${border}`, borderRight: i < 2 ? "none" : `1px solid ${border}`, transition: "border 0.2s" }}>
-              <div style={{ fontSize: 11, color: textMuted, marginBottom: 14 }}>{n}</div>
-              <div style={{ fontSize: 15, fontWeight: 500, color: text, marginBottom: 8 }}>{t}</div>
-              <div style={{ fontSize: 12, color: textMuted, lineHeight: 1.75 }}>{d}</div>
-            </div>
-          ))}
-        </div>
-      </div>
-      <div className="pad" style={{ padding: "80px 40px", background: bg2, textAlign: "center" }}>
-        <h2 style={{ fontSize: "clamp(30px, 5vw, 54px)", fontWeight: 400, letterSpacing: "-2px", marginBottom: 14, color: text }}>Ready to build?</h2>
-        <p style={{ fontSize: 13, color: textMuted, marginBottom: 28 }}>Join hundreds of builders already collaborating on CoLab.</p>
-        <button className="hb" onClick={() => { setAuthMode("signup"); setScreen("auth"); }} style={{ background: text, color: bg, border: "none", borderRadius: 8, padding: "14px 36px", fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}>Create your profile →</button>
-      </div>
-      <div className="pad" style={{ padding: "18px 40px", borderTop: `1px solid ${border}`, background: bg, display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
-        <div style={{ fontSize: 12, color: textMuted }}>[CoLab] — build together.</div>
-        <div style={{ fontSize: 11, color: textMuted }}>© 2026</div>
-      </div>
-    </div>
+    <LandingPage
+      dark={dark}
+      setDark={setDark}
+      onLogin={() => { setAuthMode("login"); setScreen("auth"); }}
+      onSignup={() => { setAuthMode("signup"); setScreen("auth"); }}
+      supabase={supabase}
+    />
   );
 
   // ── AUTH ──
