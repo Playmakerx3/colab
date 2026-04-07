@@ -3070,7 +3070,7 @@ const setViewingProfile = (user) => {
       )}
 
       {/* EXPLORE DETAIL */}
-      {appScreen === "explore" && activeProject && (
+      {!viewFullProfile && appScreen === "explore" && activeProject && (
         <div className="pad fu" style={{ width: "100%", maxWidth: 700, margin: "0 auto", padding: "36px 24px" }}>
           <div style={{ display: "flex", gap: 8, marginBottom: 22 }}>
             <button className="hb" onClick={() => setActiveProject(null)} style={{ ...btnG, padding: "6px 14px", fontSize: 11 }}>← back</button>
