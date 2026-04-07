@@ -1155,6 +1155,20 @@ const setViewingProfile = (user) => {
 
   // Force body background + mobile browser chrome color on mode switch
   useEffect(() => {
+    if (screen !== "landing") return;
+    (async () => {
+      const [{ count: builderCount }, { count: projectCount }, { data: projSkills }] = await Promise.all([
+        supabase.from("profiles").select("*", { count: "exact", head: true }),
+        supabase.from("projects").select("*", { count: "exact", head: true }),
+        supabase.from("projects").select("skills"),
+      ]);
+      setLiveStats({ builders: builderCount ?? "...", projects: projectCount ?? "..." });
+      const uniqueSkills = new Set((projSkills || []).flatMap(p => p.skills || []));
+      setSkillCategoryCount(uniqueSkills.size || 48);
+    })();
+  }, [screen]);
+
+  useEffect(() => {
     const color = dark ? "#0a0a0a" : "#ffffff";
     document.body.style.backgroundColor = color;
     document.body.style.transition = "background-color 0.3s ease";
