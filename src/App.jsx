@@ -613,28 +613,26 @@ export default function CoLab() {
   // ── AUTH ──
   const handleSignUp = async () => {
     setAuthError("");
-    const { data, error } = await supabase.auth.signUp({ email: authEmail, password: authPassword });
+    const { data, error } = await signUpWithEmailPassword(supabase, authEmail, authPassword);
     if (error) { setAuthError(error.message); return; }
     if (data.user) { setAuthUser(data.user); setScreen("onboard"); }
   };
 
   const handleLogin = async () => {
     setAuthError("");
-    const { error } = await supabase.auth.signInWithPassword({ email: authEmail, password: authPassword });
+    const { error } = await signInWithEmailPassword(supabase, authEmail, authPassword);
     if (error) setAuthError(error.message);
   };
 
   const handlePasswordReset = async () => {
     if (!authEmail) { setAuthError("Enter your email first."); return; }
-    const { error } = await supabase.auth.resetPasswordForEmail(authEmail, {
-      redirectTo: `${window.location.origin}/reset-password`,
-    });
+    const { error } = await sendPasswordResetEmail(supabase, authEmail, `${window.location.origin}/reset-password`);
     if (error) setAuthError(error.message);
     else setResetSent(true);
   };
 
   const handleSignOut = async () => {
-    await supabase.auth.signOut();
+    await signOutCurrentUser(supabase);
     setProfile(null); setProjects([]); setUsers([]); setFollowing([]);
     setScreen("landing");
   };
