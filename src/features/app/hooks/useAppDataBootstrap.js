@@ -16,8 +16,6 @@ export function useAppDataBootstrap({
   setPostReposts,
   setMentionNotifications,
   setTrendingProjects,
-  setSkillCategoryCount,
-  setLiveStats,
   setNotifications,
   setShowApplicationForm,
 }) {
@@ -65,10 +63,6 @@ export function useAppDataBootstrap({
         return bCount - aCount;
       }).slice(0, 3);
       setTrendingProjects(trending);
-
-      const allSkills = new Set((projs || []).flatMap(p => p.skills || []));
-      setSkillCategoryCount(allSkills.size || 48);
-      setLiveStats({ builders: (usrs || []).length, projects: (projs || []).length });
 
       const myProjectIds = (projs || []).filter((p) => p.owner_id === userId).map((p) => p.id);
       const incoming = (apps || []).filter((a) => myProjectIds.includes(a.project_id) && normalizeApplicationStatus(a.status) === "pending");
@@ -177,7 +171,6 @@ export function useAppDataBootstrap({
     setDmThreads,
     setFollowers,
     setFollowing,
-    setLiveStats,
     setLoading,
     setMentionNotifications,
     setNotifications,
@@ -187,7 +180,6 @@ export function useAppDataBootstrap({
     setPosts,
     setProjects,
     setShowApplicationForm,
-    setSkillCategoryCount,
     setTrendingProjects,
     setUsers,
   ]);

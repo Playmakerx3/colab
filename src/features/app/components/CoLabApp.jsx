@@ -1184,8 +1184,6 @@ const setViewingProfile = (user) => {
     setPostReposts,
     setMentionNotifications,
     setTrendingProjects,
-    setSkillCategoryCount,
-    setLiveStats,
     setNotifications,
     setShowApplicationForm,
   });
