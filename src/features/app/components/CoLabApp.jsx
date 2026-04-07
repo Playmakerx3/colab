@@ -887,6 +887,8 @@ function CoLab() {
   const [settingsNewPassword, setSettingsNewPassword] = useState("");
   const [projectActivity, setProjectActivity] = useState([]);
   const [docPreviewMode, setDocPreviewMode] = useState(false);
+  const [newDocTitle, setNewDocTitle] = useState("");
+  const [showNewDocInput, setShowNewDocInput] = useState(false);
   const [inviteLink, setInviteLink] = useState(null);
   const [showInvitePanel, setShowInvitePanel] = useState(false);
   const [inviteLoading, setInviteLoading] = useState(false);
@@ -931,29 +933,7 @@ function CoLab() {
   const btnG = { background: "none", color: textMuted, border: `1px solid ${border}`, borderRadius: 8, padding: "10px 20px", fontSize: 12, cursor: "pointer", fontFamily: "inherit" };
 
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(null), 3000); };
-  const _openUserProfile = async (user, event) => {
-    event?.stopPropagation?.();
-    if (!user) return;
-    let username = (user.username || "").trim();
-    if (!username && user.id) {
-      const { data } = await supabase
-        .from("profiles")
-        .select("username")
-        .eq("id", user.id)
-        .maybeSingle();
-      username = (data?.username || "").trim();
-    }
-    if (!username) {
-      if (user.id) {
-        window.location.assign(`/profile/id/${user.id}`);
-      } else {
-        showToast("This user has no public profile yet.");
-      }
-      return;
-    }
-    window.location.assign(`/profile/${encodeURIComponent(username)}`);
-  };
-  const setViewingProfile = (user) => {
+const setViewingProfile = (user) => {
     setViewingProfileState(user || null);
   };
   const setViewFullProfile = (user) => {
@@ -1088,11 +1068,18 @@ function CoLab() {
   const renderWithMentions = (text) => {
     if (!text) return text;
     const parts = text.split(/(@\w[\w\s]*)/g);
-    return parts.map((part, i) =>
-      part.startsWith("@")
-        ? <span key={i} style={{ color: dark ? "#fff" : "#000", fontWeight: 600 }}>{part}</span>
-        : part
-    );
+    return parts.map((part, i) => {
+      if (!part.startsWith("@")) return part;
+      const handle = part.slice(1).trim().toLowerCase();
+      const mentionedUser = users.find(u => (u.username || u.name || "").toLowerCase() === handle);
+      return (
+        <span
+          key={i}
+          style={{ color: dark ? "#fff" : "#000", fontWeight: 600, cursor: mentionedUser ? "pointer" : "default" }}
+          onClick={() => mentionedUser && setViewFullProfile(mentionedUser)}
+        >{part}</span>
+      );
+    });
   };
   const renderMessageBody = (msgText, isMe, compact = false) => {
     const lines = (msgText || "").split("\n");
@@ -1163,20 +1150,6 @@ function CoLab() {
       .profile-banner-shell { width: 100% !important; }
       .profile-banner-card { min-height: 120px !important; }
       .profile-banner-canvas { height: 120px !important; }
-    }
-      .nav-label { font-size: 10px !important; padding: 4px 4px !important; }
-      .hero-h1 { font-size: 44px !important; letter-spacing: -2px !important; }
-      .stat-grid { flex-direction: column !important; }
-      .stat-item { border-right: none !important; border-bottom: 1px solid ${border} !important; padding: 16px 20px !important; }
-      .how-grid { grid-template-columns: 1fr !important; }
-      .how-card { border-right: 1px solid ${border} !important; border-bottom: none !important; }
-      .how-card:last-child { border-bottom: 1px solid ${border} !important; }
-      .pad { padding-left: 16px !important; padding-right: 16px !important; }
-      .network-grid { grid-template-columns: 1fr !important; }
-      .notif-w { width: calc(100vw - 24px) !important; right: 12px !important; }
-      .proj-tabs { overflow-x: auto !important; }
-      .profile-layout { grid-template-columns: 1fr !important; }
-      .msg-layout { grid-template-columns: 1fr !important; }
     }
   `;
 
@@ -1386,7 +1359,7 @@ function CoLab() {
   const isFirstTimeUser = Boolean(authUser?.id) && myProjects.length === 0 && !hasCollaborations;
   const showFirstTimeGuide = isFirstTimeUser && !hideFirstTimeGuide;
   const [showCollaborators, setShowCollaborators] = useState(null); // userId whose collaborators to show
-  const appliedProjectIds = applications.filter(a => a.applicant_id === authUser?.id).map(a => a.project_id);
+  const appliedProjectIds = applications.filter(a => a.applicant_id === authUser?.id && a.status !== "left").map(a => a.project_id);
   const browseBase = projects.filter(p => p.owner_id !== authUser?.id && !p.archived && !p.is_private);
   const forYou = browseBase.map(p => ({ ...p, _s: getMatchScore(p) })).filter(p => p._s > 0).sort((a, b) => b._s - a._s);
   const normalizedSearch = search.trim().toLowerCase();
@@ -2828,12 +2801,17 @@ function CoLab() {
             {notifications.length === 0 && mentionNotifications.length === 0 ? <div style={{ padding: "24px 16px", fontSize: 12, color: textMuted }}>no notifications.</div>
               : <>
                 {mentionNotifications.map(n => (
-                  <div key={n.id} style={{ padding: "14px 16px", borderBottom: `1px solid ${border}`, display: "flex", justifyContent: "space-between", gap: 8 }}>
+                  <div key={n.id} style={{ padding: "14px 16px", borderBottom: `1px solid ${border}`, display: "flex", justifyContent: "space-between", gap: 8, cursor: n.project_id ? "pointer" : "default" }}
+                    onClick={() => {
+                      if (!n.project_id) return;
+                      const proj = projects.find(p => p.id === n.project_id);
+                      if (proj) { setActiveProject(proj); loadProjectData(proj.id); setAppScreen("workspace"); setProjectTab("tasks"); setShowNotifications(false); }
+                    }}>
                     <div>
                       <div style={{ fontSize: 12, color: text, marginBottom: 2 }}>{n.from_name} mentioned you</div>
                       <div style={{ fontSize: 11, color: textMuted, fontStyle: "italic" }}>"{n.context}..."</div>
                     </div>
-                    <button className="hb" onClick={async () => { await supabase.from("mention_notifications").update({ read: true }).eq("id", n.id); setMentionNotifications(prev => prev.filter(x => x.id !== n.id)); }} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontSize: 12, fontFamily: "inherit", flexShrink: 0 }}>✕</button>
+                    <button className="hb" onClick={async (e) => { e.stopPropagation(); await supabase.from("mention_notifications").update({ read: true }).eq("id", n.id); setMentionNotifications(prev => prev.filter(x => x.id !== n.id)); }} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontSize: 12, fontFamily: "inherit", flexShrink: 0 }}>✕</button>
                   </div>
                 ))}
                 {notifications.map(n => (
@@ -2858,7 +2836,13 @@ function CoLab() {
                         {n.sub}
                       </button>
                     )}
-                    {!n.projectId && <span style={{ fontSize: 11, color: textMuted }}>{n.sub}</span>}
+                    {!n.projectId && n.userId && (
+                      <button className="hb" onClick={() => { const u = users.find(x => x.id === n.userId); if (u) { setViewFullProfile(u); setShowNotifications(false); } }} style={{ background: "none", border: "none", padding: 0, color: textMuted, cursor: "pointer", fontFamily: "inherit", fontSize: 11, textDecoration: "underline" }}>{n.sub}</button>
+                    )}
+                    {!n.projectId && !n.userId && n.postId && (
+                      <button className="hb" onClick={() => { setAppScreen("network"); setShowNotifications(false); }} style={{ background: "none", border: "none", padding: 0, color: textMuted, cursor: "pointer", fontFamily: "inherit", fontSize: 11, textDecoration: "underline" }}>{n.sub}</button>
+                    )}
+                    {!n.projectId && !n.userId && !n.postId && <span style={{ fontSize: 11, color: textMuted }}>{n.sub}</span>}
                     <span style={{ fontSize: 11, color: textMuted }}> · {n.time}</span>
                   </div>
                   {n.type === "application" && n.applicant && (
@@ -3924,10 +3908,17 @@ function CoLab() {
               <div>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
                   <div style={{ fontSize: 10, color: textMuted, letterSpacing: "1.5px" }}>SHARED DOCUMENTS</div>
-                  <button className="hb" onClick={async () => {
-                    const title = prompt("Document title:");
-                    await handleCreateProjectDoc(activeProject.id, title);
-                  }} style={{ background: "none", border: "none", color: text, cursor: "pointer", fontFamily: "inherit", fontSize: 11, textDecoration: "underline" }}>+ new doc</button>
+                  {showNewDocInput ? (
+                    <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                      <input autoFocus value={newDocTitle} onChange={e => setNewDocTitle(e.target.value)}
+                        onKeyDown={async e => { if (e.key === "Enter" && newDocTitle.trim()) { await handleCreateProjectDoc(activeProject.id, newDocTitle.trim()); setNewDocTitle(""); setShowNewDocInput(false); } else if (e.key === "Escape") { setNewDocTitle(""); setShowNewDocInput(false); } }}
+                        placeholder="Document title..." style={{ ...inputStyle, padding: "4px 8px", fontSize: 11, width: 160 }} />
+                      <button className="hb" onClick={async () => { if (newDocTitle.trim()) { await handleCreateProjectDoc(activeProject.id, newDocTitle.trim()); setNewDocTitle(""); setShowNewDocInput(false); } }} style={{ background: "none", border: "none", color: text, cursor: "pointer", fontFamily: "inherit", fontSize: 11 }}>create</button>
+                      <button className="hb" onClick={() => { setNewDocTitle(""); setShowNewDocInput(false); }} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontFamily: "inherit", fontSize: 11 }}>cancel</button>
+                    </div>
+                  ) : (
+                    <button className="hb" onClick={() => setShowNewDocInput(true)} style={{ background: "none", border: "none", color: text, cursor: "pointer", fontFamily: "inherit", fontSize: 11, textDecoration: "underline" }}>+ new doc</button>
+                  )}
                 </div>
                 {activeDoc ? (
                   <div>
