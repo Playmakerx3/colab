@@ -854,6 +854,7 @@ function CoLab() {
   const [newPostProject, setNewPostProject] = useState("");
   const [newPostMediaUrl, setNewPostMediaUrl] = useState("");
   const [newPostMediaType, setNewPostMediaType] = useState(""); // image|video|audio|youtube|pdf
+  const [autoOpenComposer, setAutoOpenComposer] = useState(false);
   const [expandedComments, setExpandedComments] = useState({});
   const [projectFiles, setProjectFiles] = useState([]);
   const [projectDocs, setProjectDocs] = useState([]);
@@ -915,10 +916,12 @@ function CoLab() {
   const [taskUpdatePendingById, setTaskUpdatePendingById] = useState({});
   const [hideFirstTimeGuide, setHideFirstTimeGuide] = useState(false);
   const [projectLastReadAt, setProjectLastReadAt] = useState({});
+  const [exploreFiltersClearedNotice, setExploreFiltersClearedNotice] = useState(false);
 
   const messagesEndRef = useRef(null);
   const dmEndRef = useRef(null);
   const taskMutationSeqRef = useRef({});
+  const feedComposerRef = useRef(null);
 
   const bg = dark ? "#0a0a0a" : "#ffffff";
   const bg2 = dark ? "#111111" : "#f5f5f5";
@@ -1325,6 +1328,9 @@ const setViewingProfile = (user) => {
   };
 
   const myProjects = projects.filter(p => p.owner_id === authUser?.id && !p.archived);
+  const myPosts = posts.filter((p) => p.user_id === authUser?.id);
+  const hasNoProfileActivity = myProjects.length === 0 && myPosts.length === 0;
+  const suggestedConnectUsers = users.filter((u) => u.id !== authUser?.id).slice(0, 3);
 
   // Derive collaborators from accepted applications (both directions)
   const getCollaborators = (userId) => {
@@ -1389,6 +1395,70 @@ const setViewingProfile = (user) => {
         && regionMatches;
     })
     .sort((a, b) => b._s - a._s);
+
+  const trendingFallbackProjects = useMemo(() => {
+    const hasExplicitStatus = projects.some((project) => typeof project.status === "string" && project.status.trim().length > 0);
+    const openStatusSet = new Set(["open", "active", "in_progress", "in-progress"]);
+    const now = Date.now();
+    const candidates = browseBase
+      .filter((project) => {
+        if (hasExplicitStatus) return openStatusSet.has((project.status || "").toLowerCase());
+        return !project.archived;
+      })
+      .map((project) => ({
+        ...project,
+        _applicantCount: applications.filter((application) => application.project_id === project.id).length,
+        _recentBoost: project.created_at && (now - new Date(project.created_at).getTime()) <= 7 * 24 * 60 * 60 * 1000 ? 2 : 0,
+      }))
+      .map((project) => ({ ...project, _trendScore: project._applicantCount + project._recentBoost }));
+
+    const hasAnyTimestamps = candidates.some((project) => Boolean(project.created_at));
+    const scored = [...candidates].sort((a, b) => b._trendScore - a._trendScore);
+    if (!hasAnyTimestamps) {
+      return scored
+        .slice(0, 10)
+        .sort(() => Math.random() - 0.5)
+        .slice(0, 3);
+    }
+    return scored.slice(0, 3);
+  }, [applications, browseBase, projects]);
+
+  const acceptedCollaboratorCountByProject = useMemo(() => (
+    applications.reduce((acc, application) => {
+      if (application.status !== "accepted") return acc;
+      acc[application.project_id] = (acc[application.project_id] || 0) + 1;
+      return acc;
+    }, {})
+  ), [applications]);
+
+  const getCollaborationHistory = (userId) => {
+    if (!userId) return [];
+    const byProjectId = new Map();
+
+    projects.forEach((project, index) => {
+      if (project.owner_id !== userId) return;
+      byProjectId.set(project.id, { project, role: "Owner", _index: index });
+    });
+
+    applications
+      .filter((application) => application.applicant_id === userId && application.status === "accepted")
+      .forEach((application) => {
+        if (byProjectId.has(application.project_id)) return;
+        const project = projects.find((candidate) => candidate.id === application.project_id);
+        if (!project) return;
+        byProjectId.set(project.id, { project, role: "Collaborator", _index: projects.findIndex((candidate) => candidate.id === project.id) });
+      });
+
+    return Array.from(byProjectId.values()).sort((a, b) => {
+      if (a.role !== b.role) return a.role === "Owner" ? -1 : 1;
+      const aTs = a.project?.created_at ? new Date(a.project.created_at).getTime() : null;
+      const bTs = b.project?.created_at ? new Date(b.project.created_at).getTime() : null;
+      if (aTs && bTs) return bTs - aTs;
+      return (a._index ?? 0) - (b._index ?? 0);
+    });
+  };
+
+  const myCollaborationHistory = getCollaborationHistory(authUser?.id);
 
   const todayNextUp = useMemo(() => {
     if (!activeProject) return null;
@@ -1600,6 +1670,24 @@ const setViewingProfile = (user) => {
     setProjectLastReadAt((prev) => ({ ...prev, [activeProject.id]: Date.now() }));
   }, [activeProject?.id, messages.length, projectTab]);
 
+  useEffect(() => {
+    const shouldAutoOpen = appScreen === "network"
+      && (networkTab === "feed" || networkTab === "feed-following")
+      && posts.length === 0;
+    setAutoOpenComposer(shouldAutoOpen);
+    if (shouldAutoOpen) {
+      requestAnimationFrame(() => {
+        feedComposerRef.current?.focus();
+      });
+    }
+  }, [appScreen, networkTab, posts.length]);
+
+  useEffect(() => {
+    if (!exploreFiltersClearedNotice) return undefined;
+    const timeoutId = setTimeout(() => setExploreFiltersClearedNotice(false), 3000);
+    return () => clearTimeout(timeoutId);
+  }, [exploreFiltersClearedNotice]);
+
   const dismissFirstTimeGuide = () => {
     if (authUser?.id) localStorage.setItem(`onboarding-guide-dismissed:${authUser.id}`, "true");
     setHideFirstTimeGuide(true);
@@ -1609,6 +1697,15 @@ const setViewingProfile = (user) => {
     setAppScreen("workspace");
     setActiveProject(null);
     setShowCreate(true);
+  };
+
+  const clearExploreFilters = () => {
+    setFilterSkill(null);
+    setIndustryFilter(null);
+    setLocationFilter("");
+    setSearch("");
+    setRegionFilter(null);
+    setExploreFiltersClearedNotice(true);
   };
 
   const openJoinProjectFlow = () => {
@@ -2316,13 +2413,14 @@ const setViewingProfile = (user) => {
                 <Avatar initials={myInitials} size={40} dark={dark} />
                 <div style={{ flex: 1 }}>
                   <textarea
-                    placeholder="what are you building? share an update..."
+                    ref={feedComposerRef}
+                    placeholder="Looking for collaborators or building something? Post it."
                     value={newPostContent}
                     onChange={e => setNewPostContent(e.target.value)}
-                    rows={newPostContent ? 4 : 2}
+                    rows={(newPostContent || autoOpenComposer) ? 4 : 2}
                     style={{ ...inputStyle, resize: "none", fontSize: 13, padding: "10px 14px", background: bg3, borderColor: "transparent", lineHeight: 1.65, transition: "height 0.15s" }}
                   />
-                  {newPostContent.trim() && (
+                  {(newPostContent.trim() || autoOpenComposer) && (
                     <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 10 }}>
                       {/* Media preview */}
                       {newPostMediaUrl && (
@@ -2403,10 +2501,19 @@ const setViewingProfile = (user) => {
                     {regionFilter ? `no posts from ${regionFilter} builders yet.` : networkTab === "feed-following"
                       ? <>nothing yet from people you follow. <button className="hb" onClick={() => setNetworkTab("people")} style={{ background: "none", border: "none", color: text, cursor: "pointer", fontFamily: "inherit", fontSize: 13, textDecoration: "underline" }}>find people →</button></>
                       : <div style={{ display: "flex", flexDirection: "column", gap: 10, maxWidth: 560 }}>
-                          <div>no posts yet. be the first.</div>
-                          <div style={{ fontSize: 12, lineHeight: 1.7 }}>
-                            try sharing: <span style={{ color: text }}>“just shipped onboarding v2 — looking for feedback”</span> or <span style={{ color: text }}>“need a designer for landing page polish”</span>.
-                          </div>
+                          <div>Nothing here yet — be the first to post</div>
+                          {suggestedConnectUsers.length > 0 && (
+                            <div style={{ marginTop: 2 }}>
+                              <div style={{ fontSize: 11, color: textMuted, marginBottom: 6 }}>People you may want to connect with</div>
+                              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                                {suggestedConnectUsers.map((user) => (
+                                  <button key={user.id} className="hb" onClick={() => setViewFullProfile(user)} style={{ ...btnG, padding: "6px 10px", fontSize: 11 }}>
+                                    {user.username ? `@${user.username}` : user.name}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          )}
                         </div>}
                   </div>
                 : visibleFeed.map(post => <PostCard key={post.id} post={post} ctx={postCtx} />);
@@ -3007,7 +3114,7 @@ const setViewingProfile = (user) => {
                     </div>
                     <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
                       {["Design","Engineering","Marketing","Music","Video","Finance","AI/ML","Writing","Product"].map(s => { const sel = filterSkill === s; return <button key={s} className="hb" onClick={() => setFilterSkill(sel ? null : s)} style={{ padding: "3px 10px", borderRadius: 3, fontSize: 10, cursor: "pointer", fontFamily: "inherit", background: sel ? text : "none", color: sel ? bg : textMuted, border: `1px solid ${sel ? text : border}`, transition: "all 0.15s" }}>{s}</button>; })}
-                      {(filterSkill || industryFilter || locationFilter || search || regionFilter) && <button className="hb" onClick={() => { setFilterSkill(null); setIndustryFilter(null); setLocationFilter(""); setSearch(""); setRegionFilter(null); }} style={{ padding: "3px 10px", borderRadius: 3, fontSize: 10, cursor: "pointer", fontFamily: "inherit", background: "none", color: textMuted, border: `1px solid ${border}` }}>clear</button>}
+                      {(filterSkill || industryFilter || locationFilter || search || regionFilter) && <button className="hb" onClick={clearExploreFilters} style={{ padding: "3px 10px", borderRadius: 3, fontSize: 10, cursor: "pointer", fontFamily: "inherit", background: "none", color: textMuted, border: `1px solid ${border}` }}>clear</button>}
                     </div>
                     {/* Region filter */}
                     <div style={{ display: "flex", gap: 5, flexWrap: "wrap", alignItems: "center" }}>
@@ -3015,12 +3122,27 @@ const setViewingProfile = (user) => {
                       {["local","city","national","international"].map(r => { const sel = regionFilter === r; return <button key={r} className="hb" onClick={() => setRegionFilter(sel ? null : r)} style={{ padding: "3px 10px", borderRadius: 3, fontSize: 10, cursor: "pointer", fontFamily: "inherit", background: sel ? text : "none", color: sel ? bg : textMuted, border: `1px solid ${sel ? text : border}`, transition: "all 0.15s" }}>{r}</button>; })}
                     </div>
                   </div>
+                  {exploreFiltersClearedNotice && (
+                    <div style={{ margin: "4px 0 8px", fontSize: 11, color: textMuted }}>
+                      Showing trending projects — filters cleared
+                    </div>
+                  )}
                   {allP.length === 0
                     ? (
-                      <div style={{ padding: "36px 0", textAlign: "center", color: textMuted, fontSize: 12, lineHeight: 1.7 }}>
-                        no projects found for these filters.
-                        <br />
-                        try clearing search or filters to see more projects.
+                      <div style={{ padding: "24px 0" }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8, gap: 8, flexWrap: "wrap" }}>
+                          <div style={{ fontSize: 11, color: textMuted, letterSpacing: "1px" }}>Trending right now</div>
+                          <button
+                            className="hb"
+                            onClick={clearExploreFilters}
+                            style={{ background: "none", border: "none", color: text, cursor: "pointer", fontFamily: "inherit", fontSize: 11, textDecoration: "underline", padding: 0 }}
+                          >
+                            Clear filters
+                          </button>
+                        </div>
+                        {trendingFallbackProjects.length > 0
+                          ? trendingFallbackProjects.map((project) => <PRow key={project.id} p={project} />)
+                          : <div style={{ fontSize: 12, color: textMuted }}>No projects available right now.</div>}
                       </div>
                     )
                     : allP.map(p => <PRow key={p.id} p={p} />)}
@@ -4201,6 +4323,24 @@ const setViewingProfile = (user) => {
           </div>
           {viewFullProfile.bio && <p style={{ fontSize: 13, color: textMuted, lineHeight: 1.75, marginBottom: 20 }}>{viewFullProfile.bio}</p>}
           <div style={{ marginBottom: 28, paddingBottom: 28, borderBottom: `1px solid ${border}` }}>
+            <div style={{ ...labelStyle, marginBottom: 10 }}>COLLABORATION HISTORY</div>
+            {getCollaborationHistory(viewFullProfile.id).length === 0 ? (
+              <div style={{ fontSize: 12, color: textMuted }}>no collaboration history yet.</div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {getCollaborationHistory(viewFullProfile.id).map(({ project, role }) => (
+                  <div key={`${viewFullProfile.id}-${project.id}-${role}`} style={{ padding: "10px 12px", border: `1px solid ${border}`, borderRadius: 8, background: bg2, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontSize: 12, color: text, marginBottom: 2 }}>{project.title}</div>
+                      <div style={{ fontSize: 10, color: textMuted }}>{project.category || "General"} · {role} · {acceptedCollaboratorCountByProject[project.id] || 0} collaborators</div>
+                    </div>
+                    <button className="hb" onClick={() => { setActiveProject(project); setViewFullProfile(null); setAppScreen("workspace"); loadProjectData(project.id); }} style={{ ...btnG, padding: "6px 12px", fontSize: 11, flexShrink: 0 }}>View</button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          <div style={{ marginBottom: 28, paddingBottom: 28, borderBottom: `1px solid ${border}` }}>
             <div style={{ ...labelStyle, marginBottom: 10 }}>COLLABORATORS</div>
             {getCollaborators(viewFullProfile.id).length === 0 ? (
               <div style={{ fontSize: 12, color: textMuted }}>no collaborators yet.</div>
@@ -4357,6 +4497,33 @@ const setViewingProfile = (user) => {
                 </div>
               </div>
               {profile?.bio && <p style={{ fontSize: 13, color: textMuted, lineHeight: 1.75, marginBottom: 20 }}>{profile.bio}</p>}
+              {hasNoProfileActivity && (
+                <div style={{ marginBottom: 28, padding: "16px 18px", border: `1px solid ${border}`, borderRadius: 10, background: bg2 }}>
+                  <div style={{ fontSize: 13, color: text, marginBottom: 12 }}>You haven’t built anything yet — start your first project or share what you're working on</div>
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    <button className="hb" onClick={openCreateProjectFlow} style={btnP}>Post a project</button>
+                    <button className="hb" onClick={() => { setAppScreen("network"); setNetworkTab("feed"); }} style={btnG}>Share an update</button>
+                  </div>
+                </div>
+              )}
+              <div style={{ marginBottom: 28, paddingBottom: 28, borderBottom: `1px solid ${border}` }}>
+                <div style={{ ...labelStyle, marginBottom: 10 }}>COLLABORATION HISTORY</div>
+                {myCollaborationHistory.length === 0 ? (
+                  <div style={{ fontSize: 12, color: textMuted }}>no collaboration history yet.</div>
+                ) : (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    {myCollaborationHistory.map(({ project, role }) => (
+                      <div key={`${project.id}-${role}`} style={{ padding: "10px 12px", border: `1px solid ${border}`, borderRadius: 8, background: bg2, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
+                        <div style={{ minWidth: 0 }}>
+                          <div style={{ fontSize: 12, color: text, marginBottom: 2 }}>{project.title}</div>
+                          <div style={{ fontSize: 10, color: textMuted }}>{project.category || "General"} · {role} · {acceptedCollaboratorCountByProject[project.id] || 0} collaborators</div>
+                        </div>
+                        <button className="hb" onClick={() => { setActiveProject(project); setAppScreen("workspace"); loadProjectData(project.id); }} style={{ ...btnG, padding: "6px 12px", fontSize: 11, flexShrink: 0 }}>View</button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
               <div style={{ marginBottom: 28, paddingBottom: 28, borderBottom: `1px solid ${border}` }}>
                 <div style={{ ...labelStyle, marginBottom: 10 }}>COLLABORATORS</div>
                 {myCollaborators.length === 0 ? (
