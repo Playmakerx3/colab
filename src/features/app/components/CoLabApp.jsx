@@ -59,6 +59,34 @@ const toHost = (url = "") => {
   }
 };
 
+const URL_REGEX = /https?:\/\/[^\s<>"]+[^\s<>.,;!?"')\]]/g;
+
+const linkifyText = (text, linkColor) => {
+  if (!text) return null;
+  const parts = [];
+  let last = 0;
+  let match;
+  const re = new RegExp(URL_REGEX.source, "g");
+  while ((match = re.exec(text)) !== null) {
+    if (match.index > last) parts.push(text.slice(last, match.index));
+    parts.push(
+      <a
+        key={match.index}
+        href={match[0]}
+        target="_blank"
+        rel="noopener noreferrer"
+        style={{ color: linkColor, textDecoration: "underline", wordBreak: "break-all" }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {match[0]}
+      </a>
+    );
+    last = match.index + match[0].length;
+  }
+  if (last < text.length) parts.push(text.slice(last));
+  return parts;
+};
+
 const sharedFeedAudio = {
   activeElement: null,
 };
@@ -481,7 +509,7 @@ function PostCard({ post, ctx }) {
       </div>
 
       {/* Content */}
-      <div style={{ fontSize: 14, color: text, lineHeight: 1.75, marginBottom: 14, paddingLeft: 52, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{post.content}</div>
+      <div style={{ fontSize: 14, color: text, lineHeight: 1.75, marginBottom: 14, paddingLeft: 52, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{linkifyText(post.content, text)}</div>
 
       {/* Media */}
       {post.media_url && !isGoogleDriveUrl(post.media_url) && (
@@ -1330,7 +1358,15 @@ const setViewingProfile = (user) => {
   const myProjects = projects.filter(p => p.owner_id === authUser?.id && !p.archived);
   const myPosts = posts.filter((p) => p.user_id === authUser?.id);
   const hasNoProfileActivity = myProjects.length === 0 && myPosts.length === 0;
-  const suggestedConnectUsers = users.filter((u) => u.id !== authUser?.id).slice(0, 3);
+  const suggestedConnectUsers = useMemo(() => {
+    const mySkills = new Set(profile?.skills || []);
+    const alreadyFollowing = new Set(following);
+    return users
+      .filter((u) => u.id !== authUser?.id && !alreadyFollowing.has(u.id))
+      .map((u) => ({ ...u, _score: (u.skills || []).filter((s) => mySkills.has(s)).length }))
+      .sort((a, b) => b._score - a._score)
+      .slice(0, 3);
+  }, [users, authUser?.id, profile?.skills, following]);
 
   // Derive collaborators from accepted applications (both directions)
   const getCollaborators = (userId) => {
@@ -1459,6 +1495,11 @@ const setViewingProfile = (user) => {
   };
 
   const myCollaborationHistory = getCollaborationHistory(authUser?.id);
+  const viewedProfileHistory = useMemo(
+    () => (viewFullProfile ? getCollaborationHistory(viewFullProfile.id) : []),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [viewFullProfile?.id, projects, applications]
+  );
 
   const todayNextUp = useMemo(() => {
     if (!activeProject) return null;
@@ -1675,11 +1716,6 @@ const setViewingProfile = (user) => {
       && (networkTab === "feed" || networkTab === "feed-following")
       && posts.length === 0;
     setAutoOpenComposer(shouldAutoOpen);
-    if (shouldAutoOpen) {
-      requestAnimationFrame(() => {
-        feedComposerRef.current?.focus();
-      });
-    }
   }, [appScreen, networkTab, posts.length]);
 
   useEffect(() => {
@@ -4324,11 +4360,11 @@ const setViewingProfile = (user) => {
           {viewFullProfile.bio && <p style={{ fontSize: 13, color: textMuted, lineHeight: 1.75, marginBottom: 20 }}>{viewFullProfile.bio}</p>}
           <div style={{ marginBottom: 28, paddingBottom: 28, borderBottom: `1px solid ${border}` }}>
             <div style={{ ...labelStyle, marginBottom: 10 }}>COLLABORATION HISTORY</div>
-            {getCollaborationHistory(viewFullProfile.id).length === 0 ? (
+            {viewedProfileHistory.length === 0 ? (
               <div style={{ fontSize: 12, color: textMuted }}>no collaboration history yet.</div>
             ) : (
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                {getCollaborationHistory(viewFullProfile.id).map(({ project, role }) => (
+                {viewedProfileHistory.map(({ project, role }) => (
                   <div key={`${viewFullProfile.id}-${project.id}-${role}`} style={{ padding: "10px 12px", border: `1px solid ${border}`, borderRadius: 8, background: bg2, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
                     <div style={{ minWidth: 0 }}>
                       <div style={{ fontSize: 12, color: text, marginBottom: 2 }}>{project.title}</div>
@@ -4794,7 +4830,12 @@ const setViewingProfile = (user) => {
         <div onClick={() => setShowShipModal(false)} style={{ position: "fixed", inset: 0, background: dark ? "rgba(0,0,0,0.92)" : "rgba(200,200,200,0.88)", zIndex: 300, display: "flex", alignItems: "center", justifyContent: "center", backdropFilter: "blur(12px)", padding: 16 }}>
           <div onClick={e => e.stopPropagation()} style={{ background: bg, border: `1px solid ${border}`, borderRadius: 16, padding: "28px", width: "100%", maxWidth: 460 }}>
             <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px", marginBottom: 8 }}>SHIP IT</div>
-            <div style={{ fontSize: 18, fontWeight: 400, letterSpacing: "-0.5px", color: text, marginBottom: 6 }}>All tasks complete.</div>
+            {(() => {
+              const openCount = tasks.filter(t => t.project_id === activeProject?.id && !t.done).length;
+              return openCount === 0
+                ? <div style={{ fontSize: 18, fontWeight: 400, letterSpacing: "-0.5px", color: text, marginBottom: 6 }}>All tasks complete.</div>
+                : <div style={{ fontSize: 18, fontWeight: 400, letterSpacing: "-0.5px", color: text, marginBottom: 6 }}>{openCount} task{openCount !== 1 ? "s" : ""} still open.</div>;
+            })()}
             <div style={{ fontSize: 12, color: textMuted, marginBottom: 20 }}>Mark this project as shipped and share what you built with your network.</div>
             <textarea
               value={shipPostContent}
