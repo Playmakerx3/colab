@@ -56,31 +56,72 @@ export function useRealtimeSubscriptions({
     postsRef.current = posts;
   }, [posts]);
 
+  useEffect(() => {
+    if (!authUser || !activeProject?.id) return;
+    const projectChannel = supabase
+      .channel(`messages:project:${activeProject.id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "messages",
+          filter: `project_id=eq.${activeProject.id}`,
+        },
+        (payload) => {
+          const canScroll = shouldAutoScroll(messagesEndRef);
+          setMessages((prev) => upsertIncoming(prev, payload.new));
+          if (canScroll) messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(projectChannel);
+    };
+  }, [authUser, activeProject?.id, messagesEndRef, setMessages]);
+
+  useEffect(() => {
+    if (!authUser || !activeDmThread?.id) return;
+    const dmChannel = supabase
+      .channel(`messages:dm:${activeDmThread.id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "dm_messages",
+          filter: `thread_id=eq.${activeDmThread.id}`,
+        },
+        (payload) => {
+          setDmMessages((prev) => {
+            const threadId = payload.new.thread_id;
+            const existing = prev[threadId] || [];
+            return { ...prev, [threadId]: upsertIncoming(existing, payload.new) };
+          });
+          if (shouldAutoScroll(dmEndRef)) dmEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(dmChannel);
+    };
+  }, [authUser, activeDmThread?.id, dmEndRef, setDmMessages]);
+
   // Keep dependency timing aligned with existing App subscription lifecycle.
   useEffect(() => {
     if (!authUser) return;
     const channel = supabase
       .channel("realtime-colab")
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages" }, (payload) => {
-        if (activeProject && payload.new.project_id === activeProject.id) {
-          const canScroll = shouldAutoScroll(messagesEndRef);
-          setMessages((prev) => {
-            return upsertIncoming(prev, payload.new);
-          });
-          if (canScroll) messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-        }
-      })
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "dm_messages" }, (payload) => {
+        if (activeDmThread?.id === payload.new.thread_id) return;
         // Always update DM messages — works even when not on messages tab
         setDmMessages((prev) => {
           const threadId = payload.new.thread_id;
           const existing = prev[threadId] || [];
           return { ...prev, [threadId]: upsertIncoming(existing, payload.new) };
         });
-        // If this thread is active, scroll to bottom
-        if (activeDmThread?.id === payload.new.thread_id) {
-          if (shouldAutoScroll(dmEndRef)) dmEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-        }
         // Show notification dot if message is from someone else and we're not on messages tab
         if (payload.new.sender_id !== authUser?.id && activeDmThread?.id !== payload.new.thread_id) {
           setDmThreads((prev) =>
