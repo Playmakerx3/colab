@@ -4501,15 +4501,16 @@ const setViewingProfile = (user) => {
                   {viewFullProfile.username && <div style={{ fontSize: 11, color: textMuted, marginTop: 1 }}>@{viewFullProfile.username}</div>}
                   <div style={{ fontSize: 12, color: textMuted, marginTop: 2 }}>{viewFullProfile.role}</div>
                   {viewFullProfile.location && <div style={{ fontSize: 11, color: textMuted, marginTop: 1 }}>{viewFullProfile.location}</div>}
-                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8 }}>
-                    <button className="hb" onClick={() => setShowProjectsFor(viewFullProfile.id)} style={{ fontSize: 11, padding: "3px 10px", borderRadius: 20, border: `1px solid ${border}`, background: "none", color: text, cursor: "pointer", fontFamily: "inherit", fontWeight: 500 }}>
+                  <div style={{ fontSize: 10, color: textMuted, marginTop: 4 }}>
+                    <button className="hb" onClick={() => setShowProjectsFor(viewFullProfile.id)} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontFamily: "inherit", fontSize: 10, padding: 0 }}>
                       {projects.filter(p => p.owner_id === viewFullProfile.id).length} project{projects.filter(p => p.owner_id === viewFullProfile.id).length !== 1 ? "s" : ""}
                     </button>
-                    <button className="hb" onClick={() => setShowCollaborators(viewFullProfile.id)} style={{ fontSize: 11, padding: "3px 10px", borderRadius: 20, border: `1px solid ${border}`, background: "none", color: text, cursor: "pointer", fontFamily: "inherit", fontWeight: 500 }}>
+                    {" · "}
+                    <button className="hb" onClick={() => setShowCollaborators(viewFullProfile.id)} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontFamily: "inherit", fontSize: 10, padding: 0 }}>
                       {getCollaborators(viewFullProfile.id).length} collaborator{getCollaborators(viewFullProfile.id).length !== 1 ? "s" : ""}
                     </button>
                   </div>
-                  <div style={{ fontSize: 10, color: textMuted, marginTop: 4 }}>{getCapacityStatus(viewFullProfile.id)}</div>
+                  <div style={{ fontSize: 10, color: textMuted, marginTop: 2 }}>{getCapacityStatus(viewFullProfile.id)}</div>
                 </div>
               </div>
             </div>
@@ -4600,15 +4601,16 @@ const setViewingProfile = (user) => {
                       }
                       <div style={{ fontSize: 12, color: textMuted, marginTop: 2 }}>{profile?.role}</div>
                       {profile?.location && <div style={{ fontSize: 11, color: textMuted, marginTop: 1 }}>{profile.location}</div>}
-                      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8 }}>
-                        <button className="hb" onClick={() => setShowProjectsFor(authUser?.id)} style={{ fontSize: 11, padding: "3px 10px", borderRadius: 20, border: `1px solid ${border}`, background: "none", color: text, cursor: "pointer", fontFamily: "inherit", fontWeight: 500 }}>
+                      <div style={{ fontSize: 10, color: textMuted, marginTop: 4 }}>
+                        <button className="hb" onClick={() => setShowProjectsFor(authUser?.id)} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontFamily: "inherit", fontSize: 10, padding: 0 }}>
                           {myProjects.length} project{myProjects.length !== 1 ? "s" : ""}
                         </button>
-                        <button className="hb" onClick={() => setShowCollaboratorsList(true)} style={{ fontSize: 11, padding: "3px 10px", borderRadius: 20, border: `1px solid ${border}`, background: "none", color: text, cursor: "pointer", fontFamily: "inherit", fontWeight: 500 }}>
+                        {" · "}
+                        <button className="hb" onClick={() => setShowCollaboratorsList(true)} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontFamily: "inherit", fontSize: 10, padding: 0 }}>
                           {myCollaborators.length} collaborator{myCollaborators.length !== 1 ? "s" : ""}
                         </button>
                       </div>
-                      <div style={{ fontSize: 10, color: textMuted, marginTop: 4 }}>{followers.length} follower{followers.length !== 1 ? "s" : ""} · {following.length} following</div>
+                      <div style={{ fontSize: 10, color: textMuted, marginTop: 2 }}>{followers.length} follower{followers.length !== 1 ? "s" : ""} · {following.length} following</div>
                       <div style={{ fontSize: 10, color: textMuted, marginTop: 2 }}>{getCapacityStatus(authUser?.id)}</div>
                     </div>
                   </div>
