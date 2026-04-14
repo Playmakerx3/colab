@@ -1892,16 +1892,16 @@ const setViewingProfile = (user) => {
       <div onClick={() => setViewFullProfile(u)} style={{ background: bg2, border: `1px solid ${border}`, borderRadius: 12, padding: "18px 18px 16px", cursor: "pointer", transition: "border 0.2s" }}
         onMouseEnter={e => e.currentTarget.style.borderColor = text} onMouseLeave={e => e.currentTarget.style.borderColor = border}>
         <div style={{ display: "flex", gap: 12, alignItems: "flex-start", marginBottom: 10 }}>
-          <Avatar initials={initials(u.name)} size={44} dark={dark} />
+          <div style={{ position: "relative", flexShrink: 0 }}>
+            <Avatar initials={initials(u.name)} size={44} dark={dark} />
+            <span style={{ position: "absolute", top: 1, right: 1, width: 7, height: 7, borderRadius: "50%", background: capacityStatus === "On Project" ? "#f97316" : "#22c55e", border: `1.5px solid ${bg2}` }} />
+          </div>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "center" }}>
               <div style={{ fontSize: 14, fontWeight: 500, color: text, lineHeight: 1.2 }}>{u.name}</div>
               {isRecentlyActive && <span style={{ fontSize: 9, color: textMuted, border: `1px solid ${border}`, borderRadius: 20, padding: "1px 7px" }}>active</span>}
             </div>
             <div style={{ fontSize: 11, color: textMuted, marginTop: 2 }}>{u.role || "Builder"}</div>
-            <div style={{ marginTop: 4 }}>
-              <span style={CAPACITY_BADGE_STYLES[capacityStatus]}>{capacityStatus}</span>
-            </div>
             {u.location && <div style={{ fontSize: 10, color: textMuted, marginTop: 2 }}>{u.location}</div>}
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap", fontSize: 10, color: textMuted, marginTop: 5 }}>
               <span>{userProjects.length} project{userProjects.length !== 1 ? "s" : ""}</span>
@@ -4492,20 +4492,21 @@ const setViewingProfile = (user) => {
           <div className="profile-identity-banner" style={{ display: "flex", gap: 24, alignItems: "flex-start", marginBottom: 20 }}>
             <div style={{ flexShrink: 0 }}>
               <div className="profile-identity-row" style={{ display: "flex", gap: 16, alignItems: "center", marginBottom: 12 }}>
-                <Avatar initials={initials(viewFullProfile.name)} size={52} dark={dark} />
+                <div style={{ position: "relative", flexShrink: 0 }}>
+                  <Avatar initials={initials(viewFullProfile.name)} size={52} dark={dark} />
+                  <span style={{ position: "absolute", top: 2, right: 2, width: 8, height: 8, borderRadius: "50%", background: getCapacityStatus(viewFullProfile.id) === "On Project" ? "#f97316" : "#22c55e", border: `1.5px solid ${bg}` }} />
+                </div>
                 <div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                    <div style={{ fontSize: 20, fontWeight: 400, color: text, letterSpacing: "-0.5px" }}>{viewFullProfile.name}</div>
-                    <span style={CAPACITY_BADGE_STYLES[getCapacityStatus(viewFullProfile.id)]}>{getCapacityStatus(viewFullProfile.id)}</span>
-                  </div>
+                  <div style={{ fontSize: 20, fontWeight: 400, color: text, letterSpacing: "-0.5px" }}>{viewFullProfile.name}</div>
                   {viewFullProfile.username && <div style={{ fontSize: 11, color: textMuted, marginTop: 1 }}>@{viewFullProfile.username}</div>}
                   <div style={{ fontSize: 12, color: textMuted, marginTop: 2 }}>{viewFullProfile.role}</div>
                   {viewFullProfile.location && <div style={{ fontSize: 11, color: textMuted, marginTop: 1 }}>{viewFullProfile.location}</div>}
-                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8 }}>
-                    <button className="hb" onClick={() => setShowProjectsFor(viewFullProfile.id)} style={{ fontSize: 11, padding: "3px 10px", borderRadius: 20, border: `1px solid ${border}`, background: "none", color: text, cursor: "pointer", fontFamily: "inherit", fontWeight: 500 }}>
+                  <div style={{ fontSize: 10, color: textMuted, marginTop: 4, display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+                    <button className="hb" onClick={() => setShowProjectsFor(viewFullProfile.id)} style={{ background: "none", border: "none", color: "#fff", cursor: "pointer", fontFamily: "inherit", fontSize: 10, padding: 0 }}>
                       {projects.filter(p => p.owner_id === viewFullProfile.id).length} project{projects.filter(p => p.owner_id === viewFullProfile.id).length !== 1 ? "s" : ""}
                     </button>
-                    <button className="hb" onClick={() => setShowCollaborators(viewFullProfile.id)} style={{ fontSize: 11, padding: "3px 10px", borderRadius: 20, border: `1px solid ${border}`, background: "none", color: text, cursor: "pointer", fontFamily: "inherit", fontWeight: 500 }}>
+                    <span style={{ opacity: 0.4 }}>·</span>
+                    <button className="hb" onClick={() => setShowCollaborators(viewFullProfile.id)} style={{ background: "none", border: "none", color: "#fff", cursor: "pointer", fontFamily: "inherit", fontSize: 10, padding: 0 }}>
                       {getCollaborators(viewFullProfile.id).length} collaborator{getCollaborators(viewFullProfile.id).length !== 1 ? "s" : ""}
                     </button>
                   </div>
@@ -4587,27 +4588,29 @@ const setViewingProfile = (user) => {
                 {/* Left: identity */}
                 <div style={{ flexShrink: 0 }}>
                   <div className="profile-identity-row" style={{ display: "flex", gap: 16, alignItems: "center", marginBottom: 12 }}>
-                    <Avatar initials={myInitials} size={52} dark={dark} />
+                    <div style={{ position: "relative", flexShrink: 0 }}>
+                      <Avatar initials={myInitials} size={52} dark={dark} />
+                      <span style={{ position: "absolute", top: 2, right: 2, width: 8, height: 8, borderRadius: "50%", background: getCapacityStatus(authUser?.id) === "On Project" ? "#f97316" : "#22c55e", border: `1.5px solid ${bg}` }} />
+                    </div>
                     <div>
-                      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                        <div style={{ fontSize: 20, fontWeight: 400, color: text, letterSpacing: "-0.5px" }}>{profile?.name || "Anonymous"}</div>
-                        <span style={CAPACITY_BADGE_STYLES[getCapacityStatus(authUser?.id)]}>{getCapacityStatus(authUser?.id)}</span>
-                      </div>
+                      <div style={{ fontSize: 20, fontWeight: 400, color: text, letterSpacing: "-0.5px" }}>{profile?.name || "Anonymous"}</div>
                       {profile?.username
                         ? <div style={{ fontSize: 11, color: textMuted, marginTop: 1, cursor: "pointer" }} onClick={() => { navigator.clipboard.writeText(`${window.location.origin}/u/${profile.username}`).catch(() => {}); showToast("Profile link copied!"); }} title="click to copy profile link">@{profile.username} ↗</div>
                         : <div style={{ fontSize: 11, color: textMuted, marginTop: 1, cursor: "pointer", textDecoration: "underline" }} onClick={() => setEditProfile(true)}>set a username →</div>
                       }
                       <div style={{ fontSize: 12, color: textMuted, marginTop: 2 }}>{profile?.role}</div>
                       {profile?.location && <div style={{ fontSize: 11, color: textMuted, marginTop: 1 }}>{profile.location}</div>}
-                      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8 }}>
-                        <button className="hb" onClick={() => setShowProjectsFor(authUser?.id)} style={{ fontSize: 11, padding: "3px 10px", borderRadius: 20, border: `1px solid ${border}`, background: "none", color: text, cursor: "pointer", fontFamily: "inherit", fontWeight: 500 }}>
+                      <div style={{ fontSize: 10, color: textMuted, marginTop: 4, display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+                        <button className="hb" onClick={() => setShowProjectsFor(authUser?.id)} style={{ background: "none", border: "none", color: "#fff", cursor: "pointer", fontFamily: "inherit", fontSize: 10, padding: 0 }}>
                           {myProjects.length} project{myProjects.length !== 1 ? "s" : ""}
                         </button>
-                        <button className="hb" onClick={() => setShowCollaboratorsList(true)} style={{ fontSize: 11, padding: "3px 10px", borderRadius: 20, border: `1px solid ${border}`, background: "none", color: text, cursor: "pointer", fontFamily: "inherit", fontWeight: 500 }}>
+                        <span style={{ opacity: 0.4 }}>·</span>
+                        <button className="hb" onClick={() => setShowCollaboratorsList(true)} style={{ background: "none", border: "none", color: "#fff", cursor: "pointer", fontFamily: "inherit", fontSize: 10, padding: 0 }}>
                           {myCollaborators.length} collaborator{myCollaborators.length !== 1 ? "s" : ""}
                         </button>
+                        <span style={{ opacity: 0.4 }}>·</span>
+                        <span>{followers.length} follower{followers.length !== 1 ? "s" : ""} · {following.length} following</span>
                       </div>
-                      <div style={{ fontSize: 10, color: textMuted, marginTop: 4 }}>{followers.length} follower{followers.length !== 1 ? "s" : ""} · {following.length} following</div>
                     </div>
                   </div>
                 </div>
