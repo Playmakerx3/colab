@@ -8,7 +8,7 @@ import ProgressBar from "../../../components/ui/ProgressBar";
 import Spinner from "../../../components/ui/Spinner";
 import PixelBannerDisplay from "../../../components/ui/PixelBannerDisplay";
 import { useAuthBootstrap } from "../../../hooks/useAuthBootstrap";
-import { resetPassword, signIn, signOut, signUp } from "../../../services/authService";
+import { signIn, signOut, signUp } from "../../../services/authService";
 import { useProfileState } from "../../profile/hooks/useProfileState";
 import { useAppDataBootstrap } from "../hooks/useAppDataBootstrap";
 import { useRealtimeSubscriptions } from "../../realtime/hooks/useRealtimeSubscriptions";
@@ -842,7 +842,7 @@ function CoLab() {
   const [authUser, setAuthUser] = useState(null);
   const [profile, setProfile] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
-  const [authMode, setAuthMode] = useState("login");
+  const [authSubMode, setAuthSubMode] = useState("login");
   const [authEmail, setAuthEmail] = useState("");
   const [authPassword, setAuthPassword] = useState("");
   const [authError, setAuthError] = useState("");
@@ -1280,8 +1280,11 @@ const setViewingProfile = (user) => {
   };
 
   const handlePasswordReset = async () => {
+    setAuthError("");
     if (!authEmail) { setAuthError("Enter your email first."); return; }
-    const { error } = await resetPassword({ email: authEmail, redirectTo: `${window.location.origin}/reset-password` });
+    const { error } = await supabase.auth.resetPasswordForEmail(authEmail, {
+      redirectTo: window.location.origin,
+    });
     if (error) setAuthError(error.message);
     else setResetSent(true);
   };
@@ -2609,8 +2612,8 @@ const setViewingProfile = (user) => {
     <LandingPage
       dark={dark}
       setDark={setDark}
-      onLogin={() => { setAuthMode("login"); setScreen("auth"); }}
-      onSignup={() => { setAuthMode("signup"); setScreen("auth"); }}
+      onLogin={() => { setAuthSubMode("login"); setAuthError(""); setResetSent(false); setScreen("auth"); }}
+      onSignup={() => { setAuthSubMode("signup"); setAuthError(""); setResetSent(false); setScreen("auth"); }}
       supabase={supabase}
     />
   );
@@ -2621,16 +2624,16 @@ const setViewingProfile = (user) => {
       <style>{CSS}</style>
       <div style={{ width: "100%", maxWidth: 400 }}>
         <button onClick={() => setScreen("landing")} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontFamily: "inherit", fontSize: 12, marginBottom: 32 }}>← back</button>
-        <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px", marginBottom: 14 }}>{authMode === "signup" ? "CREATE ACCOUNT" : authMode === "reset" ? "RESET PASSWORD" : "WELCOME BACK"}</div>
+        <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px", marginBottom: 14 }}>{authSubMode === "signup" ? "CREATE ACCOUNT" : authSubMode === "forgot" ? "RESET PASSWORD" : "WELCOME BACK"}</div>
         <h2 style={{ fontSize: 26, fontWeight: 400, letterSpacing: "-1px", marginBottom: 28, color: text }}>
-          {authMode === "signup" ? "Join CoLab." : authMode === "reset" ? "Reset your password." : "Log in."}
+          {authSubMode === "signup" ? "Join CoLab." : authSubMode === "forgot" ? "Reset your password." : "Log in."}
         </h2>
-        {authMode === "reset" ? (
+        {authSubMode === "forgot" ? (
           resetSent ? (
             <div style={{ fontSize: 13, color: textMuted, lineHeight: 1.7 }}>
-              Check your email — we sent a reset link to <strong style={{ color: text }}>{authEmail}</strong>.
+              Check your email for a reset link.
               <div style={{ marginTop: 20 }}>
-                <button onClick={() => { setAuthMode("login"); setResetSent(false); }} style={{ background: "none", border: "none", color: text, cursor: "pointer", fontFamily: "inherit", fontSize: 12, textDecoration: "underline" }}>← back to login</button>
+                <button onClick={() => { setAuthSubMode("login"); setResetSent(false); setAuthError(""); }} style={{ background: "none", border: "none", color: text, cursor: "pointer", fontFamily: "inherit", fontSize: 12, textDecoration: "underline" }}>← back to login</button>
               </div>
             </div>
           ) : (
@@ -2641,27 +2644,31 @@ const setViewingProfile = (user) => {
               </div>
               {authError && <div style={{ fontSize: 12, color: "#ef4444", marginBottom: 14 }}>{authError}</div>}
               <button className="hb" onClick={handlePasswordReset} style={{ ...btnP, width: "100%", padding: "13px", marginBottom: 16 }}>Send reset link →</button>
-              <button onClick={() => setAuthMode("login")} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontFamily: "inherit", fontSize: 12 }}>← back to login</button>
+              <button onClick={() => { setAuthSubMode("login"); setAuthError(""); }} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontFamily: "inherit", fontSize: 12 }}>← back to login</button>
             </div>
           )
         ) : (
           <div>
             <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 20 }}>
-              <div><label style={labelStyle}>EMAIL</label><input style={inputStyle} type="email" placeholder="you@example.com" value={authEmail} onChange={e => setAuthEmail(e.target.value)} onKeyDown={e => e.key === "Enter" && (authMode === "signup" ? handleSignUp() : handleLogin())} /></div>
-              <div><label style={labelStyle}>PASSWORD</label><input style={inputStyle} type="password" placeholder="••••••••" value={authPassword} onChange={e => setAuthPassword(e.target.value)} onKeyDown={e => e.key === "Enter" && (authMode === "signup" ? handleSignUp() : handleLogin())} /></div>
+              <div><label style={labelStyle}>EMAIL</label><input style={inputStyle} type="email" placeholder="you@example.com" value={authEmail} onChange={e => setAuthEmail(e.target.value)} onKeyDown={e => e.key === "Enter" && (authSubMode === "signup" ? handleSignUp() : handleLogin())} /></div>
+              <div><label style={labelStyle}>PASSWORD</label><input style={inputStyle} type="password" placeholder="••••••••" value={authPassword} onChange={e => setAuthPassword(e.target.value)} onKeyDown={e => e.key === "Enter" && (authSubMode === "signup" ? handleSignUp() : handleLogin())} /></div>
             </div>
             {authError && <div style={{ fontSize: 12, color: "#ef4444", marginBottom: 14 }}>{authError}</div>}
-            <button className="hb" onClick={authMode === "signup" ? handleSignUp : handleLogin} style={{ ...btnP, width: "100%", padding: "13px", marginBottom: 16 }}>
-              {authMode === "signup" ? "Create account →" : "Log in →"}
+            <button className="hb" onClick={authSubMode === "signup" ? handleSignUp : handleLogin} style={{ ...btnP, width: "100%", padding: "13px", marginBottom: 16 }}>
+              {authSubMode === "signup" ? "Create account →" : "Log in →"}
             </button>
+            {authSubMode === "login" && (
+              <button onClick={() => { setAuthSubMode("forgot"); setAuthError(""); setResetSent(false); }} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontFamily: "inherit", fontSize: 11, textDecoration: "underline", marginBottom: 16, padding: 0 }}>
+                Forgot password?
+              </button>
+            )}
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <div style={{ fontSize: 12, color: textMuted }}>
-                {authMode === "signup" ? "Already have an account?" : "Don't have an account?"}
-                <button onClick={() => setAuthMode(authMode === "signup" ? "login" : "signup")} style={{ background: "none", border: "none", color: text, cursor: "pointer", fontFamily: "inherit", fontSize: 12, textDecoration: "underline", marginLeft: 6 }}>
-                  {authMode === "signup" ? "Log in" : "Sign up"}
+                {authSubMode === "signup" ? "Already have an account?" : "Don't have an account?"}
+                <button onClick={() => { setAuthSubMode(authSubMode === "signup" ? "login" : "signup"); setAuthError(""); setResetSent(false); }} style={{ background: "none", border: "none", color: text, cursor: "pointer", fontFamily: "inherit", fontSize: 12, textDecoration: "underline", marginLeft: 6 }}>
+                  {authSubMode === "signup" ? "Log in" : "Sign up"}
                 </button>
               </div>
-              {authMode === "login" && <button onClick={() => setAuthMode("reset")} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontFamily: "inherit", fontSize: 11, textDecoration: "underline" }}>forgot password?</button>}
             </div>
           </div>
         )}
