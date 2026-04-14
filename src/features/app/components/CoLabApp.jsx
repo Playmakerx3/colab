@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import LandingPage from "../../landing/LandingPage";
 import { supabase } from "../../../supabase";
-import { AVAILABILITY, CATEGORIES, COLS, PLUGINS, PRESETS, ROWS, SKILLS } from "../../../constants/appConstants";
+import { AVAILABILITY, BANNER_PIXELS_COUNT, CATEGORIES, COLS, normalizeBannerPixels, PLUGINS, PRESETS, ROWS, SKILLS } from "../../../constants/appConstants";
 import { initials, matchesRegion, relativeTime } from "../../../utils/appHelpers";
 import Avatar from "../../../components/ui/Avatar";
 import ProgressBar from "../../../components/ui/ProgressBar";
@@ -739,7 +739,7 @@ function MentionInput({ value, onChange, onKeyDown, placeholder, users, style, r
 }
 
 function BannerEditor({ pixels, onSave, onClose, dark, bg, border, text, textMuted }) {
-  const [grid, setGrid] = React.useState([...pixels]);
+  const [grid, setGrid] = React.useState(normalizeBannerPixels(pixels));
   const [drawing, setDrawing] = React.useState(false);
   const [drawMode, setDrawMode] = React.useState(1); // 1 = fill, 0 = erase
   const [activePreset, setActivePreset] = React.useState(null);
@@ -788,7 +788,7 @@ function BannerEditor({ pixels, onSave, onClose, dark, bg, border, text, textMut
           <div style={{ fontSize: 10, color: textMuted, letterSpacing: "1.5px" }}>TOOL</div>
           <button onClick={() => setDrawMode(1)} style={{ padding: "3px 10px", borderRadius: 4, fontSize: 11, cursor: "pointer", fontFamily: "inherit", background: drawMode === 1 ? text : "none", color: drawMode === 1 ? bg : textMuted, border: `1px solid ${drawMode === 1 ? text : border}` }}>draw</button>
           <button onClick={() => setDrawMode(0)} style={{ padding: "3px 10px", borderRadius: 4, fontSize: 11, cursor: "pointer", fontFamily: "inherit", background: drawMode === 0 ? text : "none", color: drawMode === 0 ? bg : textMuted, border: `1px solid ${drawMode === 0 ? text : border}` }}>erase</button>
-          <button onClick={() => { setGrid(new Array(COLS * ROWS).fill(0)); setActivePreset(null); }} style={{ padding: "3px 10px", borderRadius: 4, fontSize: 11, cursor: "pointer", fontFamily: "inherit", background: "none", color: textMuted, border: `1px solid ${border}`, marginLeft: "auto" }}>clear</button>
+          <button onClick={() => { setGrid(new Array(BANNER_PIXELS_COUNT).fill(0)); setActivePreset(null); }} style={{ padding: "3px 10px", borderRadius: 4, fontSize: 11, cursor: "pointer", fontFamily: "inherit", background: "none", color: textMuted, border: `1px solid ${border}`, marginLeft: "auto" }}>clear</button>
         </div>
 
         {/* Grid */}
@@ -957,7 +957,7 @@ function CoLab() {
   const [githubError, setGithubError] = useState(null);
   const [editProfile, setEditProfile] = useState(false);
   const [showBannerEditor, setShowBannerEditor] = useState(false);
-  const [bannerPixels, setBannerPixels] = useState(new Array(48 * 12).fill(0));
+  const [bannerPixels, setBannerPixels] = useState(new Array(BANNER_PIXELS_COUNT).fill(0));
   const [showApplicationForm, setShowApplicationForm] = useState(null);
   const [showNewDm, setShowNewDm] = useState(false);
   const [newDmSearch, setNewDmSearch] = useState("");
@@ -4553,7 +4553,7 @@ const setViewingProfile = (user) => {
             {viewFullProfile.banner_pixels && (
               <div className="profile-banner-shell" style={{ flex: 1, minWidth: 0, border: `1px solid ${border}`, borderRadius: 8, overflow: "hidden", background: dark ? "#000" : "#fff", minHeight: 110 }}>
                 <div className="profile-banner-canvas">
-                  <PixelBannerDisplay pixels={(() => { try { return JSON.parse(viewFullProfile.banner_pixels); } catch { return []; } })()} dark={dark} height={110} />
+                  <PixelBannerDisplay pixels={(() => { try { return normalizeBannerPixels(JSON.parse(viewFullProfile.banner_pixels)); } catch { return []; } })()} dark={dark} height={110} />
                 </div>
               </div>
             )}

@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { supabase } from "../supabase";
+import { normalizeBannerPixels } from "../constants/appConstants";
 import { initials } from "../utils/appHelpers";
 
 const getMediaType = (url = "") => {
@@ -216,7 +217,7 @@ export default function PublicProfilePage({ username, userId }) {
     </div>
   );
 
-  const bannerPixels = (() => { try { return user.banner_pixels ? JSON.parse(user.banner_pixels) : null; } catch { return null; } })();
+  const bannerPixels = (() => { try { return user.banner_pixels ? normalizeBannerPixels(JSON.parse(user.banner_pixels)) : null; } catch { return null; } })();
   const sortedProjects = [...projects].sort((a, b) => Number(b.featured) - Number(a.featured) || new Date(b.created_at) - new Date(a.created_at));
   const pinnedProjects = sortedProjects.filter((p) => p.featured);
   const hasActivity = applications.length > 0 || projects.some((p) => p.shipped);
