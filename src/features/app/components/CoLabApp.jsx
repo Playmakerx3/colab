@@ -1295,7 +1295,7 @@ const setViewingProfile = (user) => {
     setAuthError("");
     if (!authEmail) { setAuthError("Enter your email first."); return; }
     const { error } = await supabase.auth.resetPasswordForEmail(authEmail, {
-      redirectTo: window.location.origin,
+      redirectTo: "https://www.collaborativelaboratories.com",
     });
     if (error) setAuthError(error.message);
     else setResetSent(true);
