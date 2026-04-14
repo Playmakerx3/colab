@@ -2997,11 +2997,10 @@ const setViewingProfile = (user) => {
           <div className="notif-w" style={{ position: "fixed", top: 58, right: 16, width: 340, background: bg, border: `1px solid ${border}`, borderRadius: 12, zIndex: 200, animation: "slideIn 0.2s ease", boxShadow: dark ? "0 8px 32px rgba(0,0,0,0.6)" : "0 8px 32px rgba(0,0,0,0.1)", maxHeight: "80vh", overflowY: "auto" }}>
             <div style={{ padding: "12px 16px", borderBottom: `1px solid ${border}`, fontSize: 11, color: textMuted, letterSpacing: "1px", display: "flex", justifyContent: "space-between" }}>
               NOTIFICATIONS
-              {notifications.length > 0 && <button className="hb" onClick={() => {
+              {notifications.length > 0 && <button className="hb" onClick={async () => {
                 const ids = notifications.map(n => n.id);
-                const existing = JSON.parse(localStorage.getItem("dismissedNotifIds") || "[]");
-                localStorage.setItem("dismissedNotifIds", JSON.stringify([...new Set([...existing, ...ids])]));
                 setNotifications([]);
+                await supabase.from("notifications").update({ read: true }).in("id", ids);
               }} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontFamily: "inherit", fontSize: 10 }}>clear all</button>}
             </div>
             {notifications.length === 0 && mentionNotifications.length === 0 ? <div style={{ padding: "24px 16px", fontSize: 12, color: textMuted }}>no notifications.</div>
@@ -3024,10 +3023,9 @@ const setViewingProfile = (user) => {
                 <div key={n.id} style={{ padding: "14px 16px", borderBottom: `1px solid ${border}` }}>
                   <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 3 }}>
                     <div style={{ fontSize: 12, color: text }}>{n.text}</div>
-                    <button className="hb" onClick={() => {
-                      const existing = JSON.parse(localStorage.getItem("dismissedNotifIds") || "[]");
-                      localStorage.setItem("dismissedNotifIds", JSON.stringify([...new Set([...existing, n.id])]));
+                    <button className="hb" onClick={async () => {
                       setNotifications(prev => prev.filter(x => x.id !== n.id));
+                      await supabase.from("notifications").update({ read: true }).eq("id", n.id);
                     }} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontSize: 12, fontFamily: "inherit", marginLeft: 8 }}>✕</button>
                   </div>
                   {n.type === "application_status" && (

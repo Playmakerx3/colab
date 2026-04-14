@@ -136,89 +136,48 @@ export function useRealtimeSubscriptions({
           if (prev.find((a) => a.id === payload.new.id)) return prev;
           return [...prev, payload.new];
         });
-        const myProjectIds = projectsRef.current.filter((p) => p.owner_id === authUser?.id).map((p) => p.id);
-        if (myProjectIds.includes(payload.new.project_id)) {
-          const proj = projectsRef.current.find((p) => p.id === payload.new.project_id);
-          setNotifications((prev) => {
-            const notificationId = `application:new:${payload.new.id}`;
-            if (prev.find((n) => n.id === notificationId)) return prev;
-            const dismissed = new Set(JSON.parse(localStorage.getItem("dismissedNotifIds") || "[]"));
-            if (dismissed.has(notificationId)) return prev;
-            return [{
-              id: notificationId, entityId: payload.new.id, type: "application",
-              text: `${payload.new.applicant_name} applied to your project`,
-              sub: proj?.title || "", time: "just now", read: false,
-              projectId: payload.new.project_id,
-              applicant: { id: payload.new.applicant_id, initials: payload.new.applicant_initials, name: payload.new.applicant_name, role: payload.new.applicant_role, bio: payload.new.applicant_bio, skills: payload.new.applicant_skills || [], availability: payload.new.availability, motivation: payload.new.motivation }
-            }, ...prev];
-          });
-        }
       })
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "applications" }, (payload) => {
-        setApplications((prev) => prev.map((application) => (application.id === payload.new.id ? payload.new : application)));
-        if (payload.new.applicant_id === authUser?.id) {
-          const oldStatus = payload.old.status === "declined" ? "rejected" : payload.old.status;
-          const newStatus = payload.new.status === "declined" ? "rejected" : payload.new.status;
-          if (oldStatus !== newStatus && ["accepted", "rejected"].includes(newStatus)) {
-            const project = projectsRef.current.find((p) => p.id === payload.new.project_id);
-            setNotifications((prev) => {
-              const notificationId = `application:status:${payload.new.id}`;
-              if (prev.find((notification) => notification.id === notificationId)) return prev;
-              const dismissed = new Set(JSON.parse(localStorage.getItem("dismissedNotifIds") || "[]"));
-              if (dismissed.has(notificationId)) return prev;
-              return [{
-                id: notificationId,
-                entityId: payload.new.id,
-                type: "application_status",
-                text: `Your application was ${newStatus}`,
-                sub: project?.title || "Project",
-                time: "just now",
-                read: false,
-                projectId: payload.new.project_id,
-                status: newStatus,
-              }, ...prev];
-            });
-          }
-        }
+        setApplications((prev) => prev.map((a) => (a.id === payload.new.id ? payload.new : a)));
       })
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "follows" }, (payload) => {
         if (payload.new.following_id !== authUser?.id) return;
         setFollowers((prev) => (prev.includes(payload.new.follower_id) ? prev : [...prev, payload.new.follower_id]));
-        const follower = usersRef.current.find((user) => user.id === payload.new.follower_id);
-        setNotifications((prev) => {
-          const notifId = `follow:${payload.new.id || payload.new.follower_id}`;
-          const dismissed = new Set(JSON.parse(localStorage.getItem("dismissedNotifIds") || "[]"));
-          if (dismissed.has(notifId)) return prev;
-          return [{
-          id: notifId,
-          entityId: payload.new.id || payload.new.follower_id,
-          type: "follow",
-          text: `${follower?.name || "Someone"} followed you`,
-          sub: follower?.role || "",
-          time: "just now",
-          read: false,
-          userId: payload.new.follower_id,
-        }, ...prev];
-        });
       })
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "post_reposts" }, (payload) => {
-        const post = postsRef.current.find((entry) => entry.id === payload.new.post_id);
-        if (!post || post.user_id !== authUser?.id || payload.new.user_id === authUser?.id) return;
-        const actor = usersRef.current.find((user) => user.id === payload.new.user_id);
+      .on("postgres_changes", {
+        event: "INSERT", schema: "public", table: "notifications",
+        filter: `user_id=eq.${authUser.id}`,
+      }, (payload) => {
+        const n = payload.new;
         setNotifications((prev) => {
-          const notifId = `repost:${payload.new.id || `${payload.new.user_id}-${payload.new.post_id}`}`;
-          const dismissed = new Set(JSON.parse(localStorage.getItem("dismissedNotifIds") || "[]"));
-          if (dismissed.has(notifId)) return prev;
-          return [{
-            id: notifId,
-            entityId: payload.new.id || `${payload.new.user_id}-${payload.new.post_id}`,
-            type: "repost",
-            text: `${actor?.name || "Someone"} reposted your post`,
-            sub: post.content ? post.content.slice(0, 68) : "",
+          if (prev.find((x) => x.id === n.id)) return prev;
+          const mapped = {
+            id: n.id,
+            entityId: n.entity_id,
+            type: n.type,
+            text: n.text,
+            sub: n.sub || "",
             time: "just now",
+            createdAt: n.created_at,
             read: false,
-            postId: post.id,
-          }, ...prev];
+            projectId: n.project_id,
+            ...(n.type === "application" && n.metadata ? {
+              applicant: {
+                id: n.metadata.applicant_id,
+                initials: n.metadata.applicant_initials,
+                name: n.metadata.applicant_name,
+                role: n.metadata.applicant_role,
+                bio: n.metadata.applicant_bio,
+                skills: n.metadata.applicant_skills || [],
+                availability: n.metadata.availability,
+                motivation: n.metadata.motivation,
+              },
+            } : {}),
+            ...(n.type === "application_status" ? { status: n.metadata?.status } : {}),
+            ...(n.type === "follow" ? { userId: n.entity_id } : {}),
+            ...(n.type === "repost" ? { postId: n.entity_id } : {}),
+          };
+          return [mapped, ...prev];
         });
       })
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "projects" }, (payload) => {
