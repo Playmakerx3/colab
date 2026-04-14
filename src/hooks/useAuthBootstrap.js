@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { supabase } from "../supabase";
+import { normalizeBannerPixels } from "../constants/appConstants";
 
 export function useAuthBootstrap({
   setAuthUser,
@@ -16,7 +17,7 @@ export function useAuthBootstrap({
         setProfile(data);
         if (data?.banner_pixels) {
           try {
-            setBannerPixels(JSON.parse(data.banner_pixels));
+            setBannerPixels(normalizeBannerPixels(JSON.parse(data.banner_pixels)));
           } catch (error) {
             console.warn("Failed to parse banner_pixels", error);
           }

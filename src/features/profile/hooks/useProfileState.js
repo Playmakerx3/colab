@@ -5,6 +5,7 @@ import {
   saveBannerPixels,
   saveProfile,
 } from "../services/profileService";
+import { normalizeBannerPixels } from "../../../constants/appConstants";
 
 export function useProfileState({
   authUser,
@@ -29,9 +30,10 @@ export function useProfileState({
   };
 
   const saveBanner = async (pixels) => {
-    const pixelStr = await saveBannerPixels(authUser.id, pixels);
+    const normalizedPixels = normalizeBannerPixels(pixels);
+    const pixelStr = await saveBannerPixels(authUser.id, normalizedPixels);
     setProfile(prev => ({ ...prev, banner_pixels: pixelStr }));
-    setBannerPixels(pixels);
+    setBannerPixels(normalizedPixels);
     showToast("Banner saved.");
   };
 
@@ -59,7 +61,7 @@ export function useProfileState({
       setProfile(data);
       if (data?.banner_pixels) {
         try {
-          setBannerPixels(JSON.parse(data.banner_pixels));
+          setBannerPixels(normalizeBannerPixels(JSON.parse(data.banner_pixels)));
         } catch (error) {
           console.warn("Failed to parse banner_pixels", error);
         }
