@@ -953,6 +953,7 @@ function CoLab() {
   const [hideFirstTimeGuide, setHideFirstTimeGuide] = useState(false);
   const [projectLastReadAt, setProjectLastReadAt] = useState({});
   const [exploreFiltersClearedNotice, setExploreFiltersClearedNotice] = useState(false);
+  const [showCollaboratorsList, setShowCollaboratorsList] = useState(false);
 
   const messagesEndRef = useRef(null);
   const dmEndRef = useRef(null);
@@ -983,6 +984,10 @@ const setViewingProfile = (user) => {
   useEffect(() => {
     setProfileProjectsTab(PROFILE_PROJECTS_TABS.owned);
   }, [viewFullProfile]);
+
+  useEffect(() => {
+    setShowCollaboratorsList(false);
+  }, [viewFullProfile?.id]);
   const markRecentActivity = (postId) => {
     setRecentActivityByPost((prev) => ({ ...prev, [postId]: true }));
     setTimeout(() => {
@@ -1430,7 +1435,6 @@ const setViewingProfile = (user) => {
   });
   const isFirstTimeUser = Boolean(authUser?.id) && myProjects.length === 0 && !hasCollaborations;
   const showFirstTimeGuide = isFirstTimeUser && !hideFirstTimeGuide;
-  const [showCollaborators, setShowCollaborators] = useState(null); // userId whose collaborators to show
   const appliedProjectIds = applications.filter(a => a.applicant_id === authUser?.id && a.status !== "left").map(a => a.project_id);
   const browseBase = projects.filter(p => p.owner_id !== authUser?.id && !p.archived && !p.is_private);
   const forYou = browseBase.map(p => ({ ...p, _s: getMatchScore(p) })).filter(p => p._s > 0).sort((a, b) => b._s - a._s);
@@ -3087,49 +3091,39 @@ const setViewingProfile = (user) => {
       )}
       {showBannerEditor && <BannerEditor pixels={bannerPixels} onSave={saveBanner} onClose={() => setShowBannerEditor(false)} dark={dark} bg={bg} border={border} text={text} textMuted={textMuted} />}
 
-      {/* COLLABORATORS MODAL */}
-      {showCollaborators && (() => {
-        const collabs = getCollaborators(showCollaborators);
-        const isMe = showCollaborators === authUser?.id;
-        const subjectUser = isMe ? profile : users.find(u => u.id === showCollaborators);
+      {/* COLLABORATORS LIST */}
+      {showCollaboratorsList && (() => {
+        const subjectUser = viewFullProfile || profile;
+        const collabs = getCollaborators(subjectUser?.id);
         return (
-          <div onClick={() => setShowCollaborators(null)} style={{ position: "fixed", inset: 0, background: dark ? "rgba(0,0,0,0.92)" : "rgba(200,200,200,0.88)", zIndex: 300, display: "flex", alignItems: "center", justifyContent: "center", backdropFilter: "blur(12px)", padding: 16 }}>
-            <div onClick={e => e.stopPropagation()} style={{ background: bg, border: `1px solid ${border}`, borderRadius: 16, padding: "28px", width: "100%", maxWidth: 480, maxHeight: "80vh", overflowY: "auto" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24 }}>
-                <div>
-                  <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px", marginBottom: 6 }}>COLLABORATORS</div>
-                  <div style={{ fontSize: 16, color: text, fontWeight: 400 }}>{isMe ? "your" : `${subjectUser?.name?.split(" ")[0]}'s`} network</div>
-                  <div style={{ fontSize: 12, color: textMuted, marginTop: 3 }}>{collabs.length} people {isMe ? "you've" : "they've"} built with</div>
-                </div>
-                <button onClick={() => setShowCollaborators(null)} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontSize: 16, fontFamily: "inherit" }}>✕</button>
+          <div onClick={() => setShowCollaboratorsList(false)} style={{ position: "fixed", inset: 0, background: dark ? "rgba(0,0,0,0.92)" : "rgba(200,200,200,0.88)", zIndex: 300, display: "flex", alignItems: "center", justifyContent: "center", backdropFilter: "blur(12px)", padding: 16 }}>
+            <div onClick={e => e.stopPropagation()} style={{ background: bg, border: `1px solid ${border}`, borderRadius: 16, padding: "24px", width: "100%", maxWidth: 540, maxHeight: "80vh", overflowY: "auto" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }}>
+                <button onClick={() => setShowCollaboratorsList(false)} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontFamily: "inherit", fontSize: 12, padding: 0 }}>← back</button>
+                <button onClick={() => setShowCollaboratorsList(false)} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontFamily: "inherit", fontSize: 16 }}>✕</button>
               </div>
+              <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px", marginBottom: 6 }}>COLLABORATORS</div>
+              <div style={{ fontSize: 16, color: text, marginBottom: 16 }}>{subjectUser?.name || "Profile"} · {collabs.length} collaborator{collabs.length !== 1 ? "s" : ""}</div>
               {collabs.length === 0 ? (
-                <div style={{ fontSize: 13, color: textMuted, padding: "20px 0", textAlign: "center" }}>
-                  {isMe ? "no collaborators yet. accept someone into a project to start building your network." : "no collaborators yet."}
-                </div>
+                <div style={{ fontSize: 12, color: textMuted }}>no collaborators yet.</div>
               ) : (
-                <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
-                  {collabs.map((c, i) => (
-                    <div key={c.user.id} onClick={() => { setShowCollaborators(null); setViewFullProfile(c.user); }} style={{ display: "flex", gap: 14, alignItems: "center", padding: "14px 16px", background: bg2, borderRadius: i === 0 && collabs.length === 1 ? 10 : i === 0 ? "10px 10px 0 0" : i === collabs.length - 1 ? "0 0 10px 10px" : 0, border: `1px solid ${border}`, borderBottom: i < collabs.length - 1 ? "none" : `1px solid ${border}`, cursor: "pointer", transition: "opacity 0.15s" }}
-                      onMouseEnter={e => e.currentTarget.style.opacity = "0.7"} onMouseLeave={e => e.currentTarget.style.opacity = "1"}>
-                      <Avatar initials={initials(c.user.name)} size={40} dark={dark} />
+                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                  {collabs.map((c) => (
+                    <div key={c.user.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 12px", border: `1px solid ${border}`, borderRadius: 10, background: bg2 }}>
+                      <Avatar initials={initials(c.user.name)} size={34} dark={dark} />
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: 14, color: text, fontWeight: 400, marginBottom: 2 }}>{c.user.name}</div>
-                        {c.user.username && <div style={{ fontSize: 11, color: textMuted, marginBottom: 3 }}>@{c.user.username}</div>}
-                        <div style={{ fontSize: 11, color: textMuted }}>{c.user.role}</div>
+                        <div style={{ fontSize: 13, color: text }}>{c.user.name}</div>
+                        <div style={{ fontSize: 11, color: textMuted }}>{c.user.role || "collaborator"}</div>
                       </div>
-                      <div style={{ textAlign: "right", flexShrink: 0 }}>
-                        <div style={{ fontSize: 10, color: textMuted, marginBottom: 2 }}>via</div>
-                        <div style={{ fontSize: 11, color: text, maxWidth: 120, textAlign: "right", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.project?.title}</div>
-                      </div>
+                      <button
+                        className="hb"
+                        onClick={() => { setShowCollaboratorsList(false); setViewFullProfile(c.user); }}
+                        style={{ ...btnG, padding: "6px 10px", fontSize: 11, color: text }}
+                      >
+                        View profile
+                      </button>
                     </div>
                   ))}
-                </div>
-              )}
-              {isMe && collabs.length > 0 && (
-                <div style={{ marginTop: 20, padding: "14px 16px", background: bg3, borderRadius: 8, border: `1px solid ${border}` }}>
-                  <div style={{ fontSize: 12, color: text, marginBottom: 4 }}>grow your network</div>
-                  <div style={{ fontSize: 11, color: textMuted }}>every accepted collaboration adds to your profile. the more you build, the stronger your reputation on CoLab.</div>
                 </div>
               )}
             </div>
@@ -4406,15 +4400,14 @@ const setViewingProfile = (user) => {
               <div className="profile-identity-row" style={{ display: "flex", gap: 16, alignItems: "center", marginBottom: 12 }}>
                 <Avatar initials={initials(viewFullProfile.name)} size={52} dark={dark} />
                 <div>
+                  <button onClick={() => setShowCollaboratorsList(true)} style={{ background: "none", border: "none", color: text, cursor: "pointer", fontFamily: "inherit", fontSize: 11, padding: 0, marginBottom: 4, textDecoration: "underline" }}>
+                    {getCollaborators(viewFullProfile.id).length} collaborator{getCollaborators(viewFullProfile.id).length !== 1 ? "s" : ""} →
+                  </button>
                   <div style={{ fontSize: 20, fontWeight: 400, color: text, letterSpacing: "-0.5px" }}>{viewFullProfile.name}</div>
                   {viewFullProfile.username && <div style={{ fontSize: 11, color: textMuted, marginTop: 1 }}>@{viewFullProfile.username}</div>}
                   <div style={{ fontSize: 12, color: textMuted, marginTop: 2 }}>{viewFullProfile.role}</div>
                   {viewFullProfile.location && <div style={{ fontSize: 11, color: textMuted, marginTop: 1 }}>{viewFullProfile.location}</div>}
                   <div style={{ fontSize: 11, color: textMuted, marginTop: 3, display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-                    <button onClick={() => setShowCollaborators(viewFullProfile.id)} style={{ background: "none", border: "none", color: getCollaborators(viewFullProfile.id).length > 0 ? text : textMuted, cursor: getCollaborators(viewFullProfile.id).length > 0 ? "pointer" : "default", fontFamily: "inherit", fontSize: 11, padding: 0, fontWeight: getCollaborators(viewFullProfile.id).length > 0 ? 500 : 400 }}>
-                      {getCollaborators(viewFullProfile.id).length} collaborator{getCollaborators(viewFullProfile.id).length !== 1 ? "s" : ""}
-                    </button>
-                    <span style={{ opacity: 0.4 }}>·</span>
                     <span>{projects.filter(p => p.owner_id === viewFullProfile.id).length} project{projects.filter(p => p.owner_id === viewFullProfile.id).length !== 1 ? "s" : ""}</span>
                   </div>
                 </div>
@@ -4453,32 +4446,6 @@ const setViewingProfile = (user) => {
               </div>
             )}
           </div>
-          <div style={{ marginBottom: 28, paddingBottom: 28, borderBottom: `1px solid ${border}` }}>
-            <div style={{ ...labelStyle, marginBottom: 10 }}>COLLABORATORS</div>
-            {getCollaborators(viewFullProfile.id).length === 0 ? (
-              <div style={{ fontSize: 12, color: textMuted }}>no collaborators yet.</div>
-            ) : (
-              <>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: 10 }}>
-                  {getCollaborators(viewFullProfile.id).slice(0, 8).map((c) => (
-                    <button key={c.user.id} className="hb" onClick={() => setViewFullProfile(c.user)} style={{ display: "flex", alignItems: "center", gap: 10, border: `1px solid ${border}`, borderRadius: 8, background: bg2, padding: "10px 12px", textAlign: "left", cursor: "pointer", fontFamily: "inherit" }}>
-                      <Avatar initials={initials(c.user.name)} size={28} dark={dark} />
-                      <div style={{ minWidth: 0 }}>
-                        <div style={{ fontSize: 12, color: text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.user.name}</div>
-                        <div style={{ fontSize: 10, color: textMuted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.user.username ? `@${c.user.username}` : c.user.role || "collaborator"}</div>
-                      </div>
-                    </button>
-                  ))}
-                </div>
-                {getCollaborators(viewFullProfile.id).length > 8 && (
-                  <button className="hb" onClick={() => setShowCollaborators(viewFullProfile.id)} style={{ marginTop: 10, background: "none", border: "none", color: text, fontSize: 11, textDecoration: "underline", cursor: "pointer", fontFamily: "inherit", padding: 0 }}>
-                    view all {getCollaborators(viewFullProfile.id).length} collaborators →
-                  </button>
-                )}
-              </>
-            )}
-          </div>
-
           {/* Skills */}
           <div style={{ marginBottom: 28, paddingBottom: 28, borderBottom: `1px solid ${border}` }}>
             <div style={{ ...labelStyle, marginBottom: 8 }}>SKILLS</div>
@@ -4577,6 +4544,9 @@ const setViewingProfile = (user) => {
                   <div className="profile-identity-row" style={{ display: "flex", gap: 16, alignItems: "center", marginBottom: 12 }}>
                     <Avatar initials={myInitials} size={52} dark={dark} />
                     <div>
+                      <button onClick={() => setShowCollaboratorsList(true)} style={{ background: "none", border: "none", color: text, cursor: "pointer", fontFamily: "inherit", fontSize: 11, padding: 0, marginBottom: 4, textDecoration: "underline" }}>
+                        {myCollaborators.length} collaborator{myCollaborators.length !== 1 ? "s" : ""} →
+                      </button>
                       <div style={{ fontSize: 20, fontWeight: 400, color: text, letterSpacing: "-0.5px" }}>{profile?.name || "Anonymous"}</div>
                       {profile?.username
                         ? <div style={{ fontSize: 11, color: textMuted, marginTop: 1, cursor: "pointer" }} onClick={() => { navigator.clipboard.writeText(`${window.location.origin}/u/${profile.username}`).catch(() => {}); showToast("Profile link copied!"); }} title="click to copy profile link">@{profile.username} ↗</div>
@@ -4585,10 +4555,6 @@ const setViewingProfile = (user) => {
                       <div style={{ fontSize: 12, color: textMuted, marginTop: 2 }}>{profile?.role}</div>
                       {profile?.location && <div style={{ fontSize: 11, color: textMuted, marginTop: 1 }}>{profile.location}</div>}
                       <div style={{ fontSize: 11, color: textMuted, marginTop: 3, display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-                        <button onClick={() => setShowCollaborators(authUser?.id)} style={{ background: "none", border: "none", color: myCollaborators.length > 0 ? text : textMuted, cursor: myCollaborators.length > 0 ? "pointer" : "default", fontFamily: "inherit", fontSize: 11, padding: 0, fontWeight: myCollaborators.length > 0 ? 500 : 400 }}>
-                          {myCollaborators.length} collaborator{myCollaborators.length !== 1 ? "s" : ""}
-                        </button>
-                        <span style={{ opacity: 0.4 }}>·</span>
                         <span>{myProjects.length} project{myProjects.length !== 1 ? "s" : ""}</span>
                       </div>
                       <div style={{ fontSize: 10, color: textMuted, marginTop: 4 }}>{followers.length} follower{followers.length !== 1 ? "s" : ""} · {following.length} following</div>
@@ -4641,29 +4607,6 @@ const setViewingProfile = (user) => {
                       </div>
                     ))}
                   </div>
-                )}
-              </div>
-              <div style={{ marginBottom: 28, paddingBottom: 28, borderBottom: `1px solid ${border}` }}>
-                <div style={{ ...labelStyle, marginBottom: 10 }}>COLLABORATORS</div>
-                {myCollaborators.length === 0 ? (
-                  <div style={{ fontSize: 12, color: textMuted }}>no collaborators yet. accept project applicants to build your network.</div>
-                ) : (
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: 10 }}>
-                    {myCollaborators.slice(0, 8).map((c) => (
-                      <button key={c.user.id} className="hb" onClick={() => setViewFullProfile(c.user)} style={{ display: "flex", alignItems: "center", gap: 10, border: `1px solid ${border}`, borderRadius: 8, background: bg2, padding: "10px 12px", textAlign: "left", cursor: "pointer", fontFamily: "inherit" }}>
-                        <Avatar initials={initials(c.user.name)} size={28} dark={dark} />
-                        <div style={{ minWidth: 0 }}>
-                          <div style={{ fontSize: 12, color: text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.user.name}</div>
-                          <div style={{ fontSize: 10, color: textMuted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.user.username ? `@${c.user.username}` : c.user.role || "collaborator"}</div>
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                )}
-                {myCollaborators.length > 8 && (
-                  <button className="hb" onClick={() => setShowCollaborators(authUser?.id)} style={{ marginTop: 10, background: "none", border: "none", color: text, fontSize: 11, textDecoration: "underline", cursor: "pointer", fontFamily: "inherit", padding: 0 }}>
-                    view all {myCollaborators.length} collaborators →
-                  </button>
                 )}
               </div>
               <div style={{ marginBottom: 28, paddingBottom: 28, borderBottom: `1px solid ${border}` }}>
