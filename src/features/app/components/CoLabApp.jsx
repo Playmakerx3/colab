@@ -1455,6 +1455,7 @@ const setViewingProfile = (user) => {
   const showFirstTimeGuide = isFirstTimeUser && !hideFirstTimeGuide;
   const [showCollaborators, setShowCollaborators] = useState(null); // userId whose collaborators to show
   const [showProjectsFor, setShowProjectsFor] = useState(null); // userId whose projects to show
+  const [showFollowList, setShowFollowList] = useState(null); // "followers" | "following"
   const appliedProjectIds = applications.filter(a => a.applicant_id === authUser?.id && a.status !== "left").map(a => a.project_id);
   const browseBase = projects.filter(p => p.owner_id !== authUser?.id && !p.archived && !p.is_private);
   const forYou = browseBase.map(p => ({ ...p, _s: getMatchScore(p) })).filter(p => p._s > 0).sort((a, b) => b._s - a._s);
@@ -3225,6 +3226,43 @@ const setViewingProfile = (user) => {
         );
       })()}
 
+      {/* FOLLOWERS / FOLLOWING MODAL */}
+      {showFollowList && (() => {
+        const isFollowers = showFollowList === "followers";
+        const listIds = isFollowers ? followers : following;
+        const listUsers = listIds.map(id => users.find(u => u.id === id)).filter(Boolean);
+        return (
+          <div onClick={() => setShowFollowList(null)} style={{ position: "fixed", inset: 0, background: dark ? "rgba(0,0,0,0.92)" : "rgba(200,200,200,0.88)", zIndex: 300, display: "flex", alignItems: "center", justifyContent: "center", backdropFilter: "blur(12px)", padding: 16 }}>
+            <div onClick={e => e.stopPropagation()} style={{ background: bg, border: `1px solid ${border}`, borderRadius: 16, padding: "28px", width: "100%", maxWidth: 480, maxHeight: "80vh", overflowY: "auto" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24 }}>
+                <div>
+                  <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px", marginBottom: 6 }}>{isFollowers ? "FOLLOWERS" : "FOLLOWING"}</div>
+                  <div style={{ fontSize: 16, color: text, fontWeight: 400 }}>{isFollowers ? `${followers.length} follower${followers.length !== 1 ? "s" : ""}` : `${following.length} following`}</div>
+                </div>
+                <button onClick={() => setShowFollowList(null)} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontSize: 16, fontFamily: "inherit" }}>✕</button>
+              </div>
+              {listUsers.length === 0 ? (
+                <div style={{ fontSize: 13, color: textMuted, padding: "20px 0", textAlign: "center" }}>{isFollowers ? "no followers yet." : "not following anyone yet."}</div>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
+                  {listUsers.map((u, i) => (
+                    <div key={u.id} onClick={() => { setShowFollowList(null); setViewFullProfile(u); }} style={{ display: "flex", gap: 14, alignItems: "center", padding: "14px 16px", background: bg2, borderRadius: i === 0 && listUsers.length === 1 ? 10 : i === 0 ? "10px 10px 0 0" : i === listUsers.length - 1 ? "0 0 10px 10px" : 0, border: `1px solid ${border}`, borderBottom: i < listUsers.length - 1 ? "none" : `1px solid ${border}`, cursor: "pointer", transition: "opacity 0.15s" }}
+                      onMouseEnter={e => e.currentTarget.style.opacity = "0.7"} onMouseLeave={e => e.currentTarget.style.opacity = "1"}>
+                      <Avatar initials={initials(u.name)} size={40} dark={dark} />
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 14, color: text, marginBottom: 2 }}>{u.name}</div>
+                        {u.username && <div style={{ fontSize: 11, color: textMuted }}>@{u.username}</div>}
+                        {u.role && <div style={{ fontSize: 11, color: textMuted }}>{u.role}</div>}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })()}
+
       {/* EXPLORE */}
       {!viewFullProfile && appScreen === "explore" && !activeProject && (
         <div className="pad fu" style={{ width: "100%", padding: "48px 32px" }}>
@@ -4501,16 +4539,16 @@ const setViewingProfile = (user) => {
                   {viewFullProfile.username && <div style={{ fontSize: 11, color: textMuted, marginTop: 1 }}>@{viewFullProfile.username}</div>}
                   <div style={{ fontSize: 12, color: textMuted, marginTop: 2 }}>{viewFullProfile.role}</div>
                   {viewFullProfile.location && <div style={{ fontSize: 11, color: textMuted, marginTop: 1 }}>{viewFullProfile.location}</div>}
-                  <div style={{ fontSize: 10, color: textMuted, marginTop: 4 }}>
-                    <button className="hb" onClick={() => setShowProjectsFor(viewFullProfile.id)} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontFamily: "inherit", fontSize: 10, padding: 0 }}>
+                  <div style={{ fontSize: 10, color: text, marginTop: 4 }}>
+                    <button className="hb" onClick={() => setShowProjectsFor(viewFullProfile.id)} style={{ background: "none", border: "none", color: text, cursor: "pointer", fontFamily: "inherit", fontSize: 10, padding: 0 }}>
                       {projects.filter(p => p.owner_id === viewFullProfile.id).length} project{projects.filter(p => p.owner_id === viewFullProfile.id).length !== 1 ? "s" : ""}
                     </button>
                     {" · "}
-                    <button className="hb" onClick={() => setShowCollaborators(viewFullProfile.id)} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontFamily: "inherit", fontSize: 10, padding: 0 }}>
+                    <button className="hb" onClick={() => setShowCollaborators(viewFullProfile.id)} style={{ background: "none", border: "none", color: text, cursor: "pointer", fontFamily: "inherit", fontSize: 10, padding: 0 }}>
                       {getCollaborators(viewFullProfile.id).length} collaborator{getCollaborators(viewFullProfile.id).length !== 1 ? "s" : ""}
                     </button>
                   </div>
-                  <div style={{ fontSize: 10, color: textMuted, marginTop: 2 }}>{getCapacityStatus(viewFullProfile.id)}</div>
+                  <div style={{ fontSize: 10, marginTop: 2, color: getCapacityStatus(viewFullProfile.id) === "On Project" ? "#f97316" : "#22c55e" }}>{getCapacityStatus(viewFullProfile.id)}</div>
                 </div>
               </div>
             </div>
@@ -4601,17 +4639,24 @@ const setViewingProfile = (user) => {
                       }
                       <div style={{ fontSize: 12, color: textMuted, marginTop: 2 }}>{profile?.role}</div>
                       {profile?.location && <div style={{ fontSize: 11, color: textMuted, marginTop: 1 }}>{profile.location}</div>}
-                      <div style={{ fontSize: 10, color: textMuted, marginTop: 4 }}>
-                        <button className="hb" onClick={() => setShowProjectsFor(authUser?.id)} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontFamily: "inherit", fontSize: 10, padding: 0 }}>
+                      <div style={{ fontSize: 10, color: text, marginTop: 4 }}>
+                        <button className="hb" onClick={() => setShowProjectsFor(authUser?.id)} style={{ background: "none", border: "none", color: text, cursor: "pointer", fontFamily: "inherit", fontSize: 10, padding: 0 }}>
                           {myProjects.length} project{myProjects.length !== 1 ? "s" : ""}
                         </button>
                         {" · "}
-                        <button className="hb" onClick={() => setShowCollaboratorsList(true)} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontFamily: "inherit", fontSize: 10, padding: 0 }}>
+                        <button className="hb" onClick={() => setShowCollaboratorsList(true)} style={{ background: "none", border: "none", color: text, cursor: "pointer", fontFamily: "inherit", fontSize: 10, padding: 0 }}>
                           {myCollaborators.length} collaborator{myCollaborators.length !== 1 ? "s" : ""}
                         </button>
+                        {" · "}
+                        <button className="hb" onClick={() => setShowFollowList("followers")} style={{ background: "none", border: "none", color: text, cursor: "pointer", fontFamily: "inherit", fontSize: 10, padding: 0 }}>
+                          {followers.length} follower{followers.length !== 1 ? "s" : ""}
+                        </button>
+                        {" · "}
+                        <button className="hb" onClick={() => setShowFollowList("following")} style={{ background: "none", border: "none", color: text, cursor: "pointer", fontFamily: "inherit", fontSize: 10, padding: 0 }}>
+                          {following.length} following
+                        </button>
                       </div>
-                      <div style={{ fontSize: 10, color: textMuted, marginTop: 2 }}>{followers.length} follower{followers.length !== 1 ? "s" : ""} · {following.length} following</div>
-                      <div style={{ fontSize: 10, color: textMuted, marginTop: 2 }}>{getCapacityStatus(authUser?.id)}</div>
+                      <div style={{ fontSize: 10, marginTop: 2, color: getCapacityStatus(authUser?.id) === "On Project" ? "#f97316" : "#22c55e" }}>{getCapacityStatus(authUser?.id)}</div>
                     </div>
                   </div>
                 </div>
