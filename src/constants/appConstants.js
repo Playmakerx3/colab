@@ -76,14 +76,20 @@ export const PRESETS = {
     return p;
   })(),
 
-  pulse: (() => {
+  // Row of flowers with stems at varying heights
+  flowers: (() => {
     const p = new Array(BANNER_PIXELS_COUNT).fill(0);
-    const bars = [5, 9, 12, 8, 14, 11, 6, 13, 10, 15, 12, 7, 11, 9, 14, 16,
-                  13, 10, 7, 12, 15, 11, 8, 13, 6, 10, 14, 9, 12, 7, 11, 5];
-    bars.forEach((h, i) => {
-      const c = i * 2;
-      for (let r = ROWS - h; r < ROWS; r++) p[r * COLS + c] = 1;
-    });
+    const set = (r, c) => { if (r >= 0 && r < ROWS && c >= 0 && c < COLS) p[r * COLS + c] = 1; };
+    const flower = (cx, cy) => {
+      set(cy - 2, cx);
+      set(cy - 1, cx - 1); set(cy - 1, cx); set(cy - 1, cx + 1);
+      set(cy,     cx - 2); set(cy, cx - 1); set(cy, cx); set(cy, cx + 1); set(cy, cx + 2);
+      set(cy + 1, cx - 1); set(cy + 1, cx); set(cy + 1, cx + 1);
+      set(cy + 2, cx);
+      for (let r = cy + 3; r < ROWS; r++) set(r, cx);
+    };
+    [{ cx: 4, cy: 5 }, { cx: 13, cy: 4 }, { cx: 22, cy: 6 }, { cx: 32, cy: 4 },
+     { cx: 42, cy: 5 }, { cx: 51, cy: 3 }, { cx: 60, cy: 6 }].forEach(({ cx, cy }) => flower(cx, cy));
     return p;
   })(),
 
@@ -115,20 +121,26 @@ export const PRESETS = {
     return p;
   })(),
 
-  // Sun rising above a flat horizon
-  horizon: (() => {
+  // Sailboat with main sail, jib, and hull
+  boat: (() => {
     const p = new Array(BANNER_PIXELS_COUNT).fill(0);
-    // Ground: bottom 4 rows
-    for (let r = 12; r < ROWS; r++) for (let c = 0; c < COLS; c++) p[r * COLS + c] = 1;
-    // Large sun arc above horizon (ellipse centered at horizon line)
-    const cx = 32, cy = 12, rx = 22, ry = 8;
-    for (let r = 0; r < 12; r++) {
-      const dy = (r - cy) / ry;
-      const dxMax = Math.sqrt(Math.max(0, 1 - dy * dy));
-      const cMin = Math.round(cx - rx * dxMax);
-      const cMax = Math.round(cx + rx * dxMax);
-      for (let c = Math.max(0, cMin); c <= Math.min(COLS - 1, cMax); c++) p[r * COLS + c] = 1;
+    const set = (r, c) => { if (r >= 0 && r < ROWS && c >= 0 && c < COLS) p[r * COLS + c] = 1; };
+    const mx = 28; // mast column
+    // Mast
+    for (let r = 1; r <= 10; r++) set(r, mx);
+    // Main sail (large left triangle)
+    for (let r = 1; r <= 10; r++) {
+      const cLeft = mx - (r - 1) * 2;
+      for (let c = cLeft; c <= mx; c++) set(r, c);
     }
+    // Jib (small right triangle)
+    for (let r = 5; r <= 10; r++) {
+      for (let c = mx; c <= mx + (r - 5); c++) set(r, c);
+    }
+    // Hull
+    [[11, 8, 52], [12, 7, 54], [13, 7, 54], [14, 9, 52], [15, 13, 48]].forEach(([r, l, rr]) => {
+      for (let c = l; c <= rr && c < COLS; c++) set(r, c);
+    });
     return p;
   })(),
 };
