@@ -66,6 +66,7 @@ export function useMessaging({
     }
     const optimisticIdx = list.findIndex((m) =>
       String(m.id || "").startsWith("temp-") &&
+      ((m.thread_id && m.thread_id === nextMsg.thread_id) || (m.project_id && m.project_id === nextMsg.project_id)) &&
       m.sender_id === nextMsg.sender_id &&
       m.from_user === nextMsg.from_user &&
       m.text === nextMsg.text
