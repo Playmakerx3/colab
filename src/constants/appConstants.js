@@ -43,21 +43,6 @@ export const PRESETS = {
     return p;
   })(),
 
-  mountains: (() => {
-    const p = new Array(BANNER_PIXELS_COUNT).fill(0);
-    const peaks = [
-      { c: 8,  h: 12, s: 0.70 },
-      { c: 24, h: 16, s: 0.55 },
-      { c: 42, h: 14, s: 0.65 },
-      { c: 56, h: 15, s: 0.60 },
-    ];
-    const heights = Array.from({ length: COLS }, (_, c) => {
-      const h = Math.max(...peaks.map(pk => Math.max(0, pk.h - Math.abs(c - pk.c) * pk.s)));
-      return Math.min(ROWS, Math.round(h));
-    });
-    for (let c = 0; c < COLS; c++) for (let r = ROWS - heights[c]; r < ROWS; r++) p[r * COLS + c] = 1;
-    return p;
-  })(),
 
   // Full skyline, edge-to-edge, buildings with punched windows
   city: (() => {
@@ -123,29 +108,10 @@ export const PRESETS = {
     return p;
   })(),
 
-  // Pixel person / meeple centered in banner
-  meeple: (() => {
+  diagonal: (() => {
     const p = new Array(BANNER_PIXELS_COUNT).fill(0);
-    const shape = [
-      [3,4,5,6,7,8],
-      [2,3,4,5,6,7,8,9],
-      [2,3,4,5,6,7,8,9],
-      [2,3,4,5,6,7,8,9],
-      [3,4,5,6,7,8],
-      [5,6],
-      [1,2,3,4,5,6,7,8,9,10,11,12],
-      [1,2,3,4,5,6,7,8,9,10,11,12],
-      [1,2,3,4,5,6,7,8,9,10,11,12],
-      [1,2,3,4,5,6,7,8,9,10,11,12],
-      [0,1,12,13],
-      [0,1,12,13],
-      [0,1,12,13],
-      [0,1,12,13],
-      [0,1,12,13],
-      [0,1,2,11,12,13],
-    ];
-    const ox = 25; // centers 14-wide figure in 64 cols
-    shape.forEach((cs, r) => cs.forEach(c => { p[r * COLS + (ox + c)] = 1; }));
+    for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++)
+      if (((Math.floor(c / 2) + Math.floor(r / 2)) % 2) === 0) p[r * COLS + c] = 1;
     return p;
   })(),
 
