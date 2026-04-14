@@ -35,7 +35,13 @@ export function useAuthBootstrap({
       if (session?.user) loadProfile(session.user.id);
       else setAuthLoading(false);
     });
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === "PASSWORD_RECOVERY") {
+        setAuthUser(session?.user || null);
+        setAuthLoading(false);
+        setScreen("reset-password");
+        return;
+      }
       setAuthUser(session?.user || null);
       if (session?.user) loadProfile(session.user.id);
       else {
