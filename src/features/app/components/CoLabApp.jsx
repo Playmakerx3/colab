@@ -753,8 +753,6 @@ function BannerEditor({ pixels, onSave, onClose, dark, bg, border, text, textMut
     setActivePreset(name);
   };
 
-  const cellSize = Math.floor(Math.min(600, window.innerWidth - 80) / COLS);
-
   return (
     <div onClick={onClose} style={{ position: "fixed", inset: 0, background: dark ? "rgba(0,0,0,0.95)" : "rgba(200,200,200,0.9)", zIndex: 300, display: "flex", alignItems: "center", justifyContent: "center", backdropFilter: "blur(12px)", padding: 16 }}>
       <div onClick={e => e.stopPropagation()} style={{ background: bg, border: `1px solid ${border}`, borderRadius: 16, padding: 24, width: "100%", maxWidth: 680, maxHeight: "92vh", overflowY: "auto" }}>
@@ -793,13 +791,13 @@ function BannerEditor({ pixels, onSave, onClose, dark, bg, border, text, textMut
 
         {/* Grid */}
         <div
-          style={{ display: "grid", gridTemplateColumns: `repeat(${COLS}, ${cellSize}px)`, gap: 0, userSelect: "none", border: `1px solid ${border}`, borderRadius: 6, overflow: "hidden", cursor: "crosshair" }}
+          style={{ display: "grid", gridTemplateColumns: `repeat(${COLS}, 1fr)`, gridTemplateRows: `repeat(${ROWS}, 1fr)`, width: "100%", aspectRatio: `${COLS} / ${ROWS}`, userSelect: "none", border: `1px solid ${border}`, borderRadius: 6, overflow: "hidden", cursor: "crosshair" }}
           onMouseLeave={() => setDrawing(false)}
         >
           {grid.map((v, i) => (
             <div
               key={i}
-              style={{ width: cellSize, height: Math.max(6, cellSize * 0.75), background: v ? (dark ? "#fff" : "#000") : (dark ? "#111" : "#f5f5f5"), borderRight: `0.5px solid ${dark ? "#1a1a1a" : "#e8e8e8"}`, borderBottom: `0.5px solid ${dark ? "#1a1a1a" : "#e8e8e8"}`, boxSizing: "border-box" }}
+              style={{ background: v ? (dark ? "#fff" : "#000") : (dark ? "#111" : "#f5f5f5"), borderRight: `0.5px solid ${dark ? "#1a1a1a" : "#e8e8e8"}`, borderBottom: `0.5px solid ${dark ? "#1a1a1a" : "#e8e8e8"}`, boxSizing: "border-box" }}
               onMouseDown={() => { setDrawing(true); toggle(i, drawMode); }}
               onMouseEnter={() => { if (drawing) toggle(i, drawMode); }}
               onMouseUp={() => setDrawing(false)}
