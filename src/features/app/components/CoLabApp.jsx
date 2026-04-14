@@ -33,6 +33,10 @@ const applicationStatusStyles = {
   accepted: { label: "accepted", color: "#22c55e" },
   rejected: { label: "rejected", color: "#ef4444" },
 };
+const PROFILE_PROJECTS_TABS = {
+  owned: "owned",
+  collaborated: "collaborated",
+};
 
 const getMediaType = (url = "") => {
   if (!url) return "none";
@@ -836,6 +840,7 @@ function CoLab() {
   const [activeProject, setActiveProject] = useState(null);
   const [viewingProfile, setViewingProfileState] = useState(null);
   const [viewFullProfile, setViewFullProfileState] = useState(null);
+  const [profileProjectsTab, setProfileProjectsTab] = useState(PROFILE_PROJECTS_TABS.owned);
   const [projectTab, setProjectTab] = useState("tasks");
 
   // Auth
@@ -974,6 +979,10 @@ const setViewingProfile = (user) => {
   const setViewFullProfile = (user) => {
     setViewFullProfileState(user || null);
   };
+
+  useEffect(() => {
+    setProfileProjectsTab(PROFILE_PROJECTS_TABS.owned);
+  }, [viewFullProfile]);
   const markRecentActivity = (postId) => {
     setRecentActivityByPost((prev) => ({ ...prev, [postId]: true }));
     setTimeout(() => {
@@ -1489,38 +1498,36 @@ const setViewingProfile = (user) => {
     }, {})
   ), [applications]);
 
-  const getCollaborationHistory = (userId) => {
-    if (!userId) return [];
-    const byProjectId = new Map();
+  const getProfileProjects = (profileUserId) => {
+    const ownedProjects = [...projects.filter((project) => project.owner_id === profileUserId)]
+      .sort((a, b) => Number(b.featured) - Number(a.featured) || new Date(b.created_at) - new Date(a.created_at));
 
-    projects.forEach((project, index) => {
-      if (project.owner_id !== userId) return;
-      byProjectId.set(project.id, { project, role: "Owner", _index: index });
-    });
-
+    const collaboratedProjectsById = new Map();
     applications
-      .filter((application) => application.applicant_id === userId && application.status === "accepted")
+      .filter((application) => application.applicant_id === profileUserId && application.status === "accepted")
       .forEach((application) => {
-        if (byProjectId.has(application.project_id)) return;
         const project = projects.find((candidate) => candidate.id === application.project_id);
-        if (!project) return;
-        byProjectId.set(project.id, { project, role: "Collaborator", _index: projects.findIndex((candidate) => candidate.id === project.id) });
+        if (!project || project.owner_id === profileUserId || collaboratedProjectsById.has(project.id)) return;
+        collaboratedProjectsById.set(project.id, project);
       });
+    const collaboratedProjects = [...collaboratedProjectsById.values()]
+      .sort((a, b) => Number(b.featured) - Number(a.featured) || new Date(b.created_at) - new Date(a.created_at));
 
-    return Array.from(byProjectId.values()).sort((a, b) => {
-      if (a.role !== b.role) return a.role === "Owner" ? -1 : 1;
-      const aTs = a.project?.created_at ? new Date(a.project.created_at).getTime() : null;
-      const bTs = b.project?.created_at ? new Date(b.project.created_at).getTime() : null;
-      if (aTs && bTs) return bTs - aTs;
-      return (a._index ?? 0) - (b._index ?? 0);
-    });
+    return {
+      ownedProjects,
+      collaboratedProjects,
+      activeProjects: profileProjectsTab === PROFILE_PROJECTS_TABS.collaborated ? collaboratedProjects : ownedProjects,
+    };
   };
-
-  const myCollaborationHistory = getCollaborationHistory(authUser?.id);
-  const viewedProfileHistory = useMemo(
-    () => (viewFullProfile ? getCollaborationHistory(viewFullProfile.id) : []),
+  const viewedProfileProjects = useMemo(
+    () => (viewFullProfile?.id ? getProfileProjects(viewFullProfile.id) : { ownedProjects: [], collaboratedProjects: [], activeProjects: [] }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [viewFullProfile?.id, projects, applications]
+    [viewFullProfile?.id, projects, applications, profileProjectsTab]
+  );
+  const myProfileProjects = useMemo(
+    () => getProfileProjects(authUser?.id),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [authUser?.id, projects, applications, profileProjectsTab]
   );
 
   const todayNextUp = useMemo(() => {
@@ -4423,16 +4430,22 @@ const setViewingProfile = (user) => {
           </div>
           {viewFullProfile.bio && <p style={{ fontSize: 13, color: textMuted, lineHeight: 1.75, marginBottom: 20 }}>{viewFullProfile.bio}</p>}
           <div style={{ marginBottom: 28, paddingBottom: 28, borderBottom: `1px solid ${border}` }}>
-            <div style={{ ...labelStyle, marginBottom: 10 }}>COLLABORATION HISTORY</div>
-            {viewedProfileHistory.length === 0 ? (
-              <div style={{ fontSize: 12, color: textMuted }}>no collaboration history yet.</div>
+            <div style={{ ...labelStyle, marginBottom: 10 }}>PROJECTS & COLLABORATIONS</div>
+            <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+              <button className="hb" onClick={() => setProfileProjectsTab(PROFILE_PROJECTS_TABS.owned)} style={{ padding: "6px 10px", borderRadius: 6, border: `1px solid ${profileProjectsTab === PROFILE_PROJECTS_TABS.owned ? text : border}`, background: profileProjectsTab === PROFILE_PROJECTS_TABS.owned ? text : "none", color: profileProjectsTab === PROFILE_PROJECTS_TABS.owned ? bg : textMuted, fontSize: 11, cursor: "pointer", fontFamily: "inherit" }}>Your Projects</button>
+              <button className="hb" onClick={() => setProfileProjectsTab(PROFILE_PROJECTS_TABS.collaborated)} style={{ padding: "6px 10px", borderRadius: 6, border: `1px solid ${profileProjectsTab === PROFILE_PROJECTS_TABS.collaborated ? text : border}`, background: profileProjectsTab === PROFILE_PROJECTS_TABS.collaborated ? text : "none", color: profileProjectsTab === PROFILE_PROJECTS_TABS.collaborated ? bg : textMuted, fontSize: 11, cursor: "pointer", fontFamily: "inherit" }}>Collaborated On</button>
+            </div>
+            {viewedProfileProjects.activeProjects.length === 0 ? (
+              <div style={{ fontSize: 12, color: textMuted }}>
+                {profileProjectsTab === PROFILE_PROJECTS_TABS.owned ? "no projects yet." : "no collaborations yet."}
+              </div>
             ) : (
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                {viewedProfileHistory.map(({ project, role }) => (
-                  <div key={`${viewFullProfile.id}-${project.id}-${role}`} style={{ padding: "10px 12px", border: `1px solid ${border}`, borderRadius: 8, background: bg2, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
+                {viewedProfileProjects.activeProjects.map((project) => (
+                  <div key={`${viewFullProfile.id}-${project.id}`} style={{ padding: "10px 12px", border: `1px solid ${border}`, borderRadius: 8, background: bg2, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
                     <div style={{ minWidth: 0 }}>
                       <div style={{ fontSize: 12, color: text, marginBottom: 2 }}>{project.title}</div>
-                      <div style={{ fontSize: 10, color: textMuted }}>{project.category || "General"} · {role} · {acceptedCollaboratorCountByProject[project.id] || 0} collaborators</div>
+                      <div style={{ fontSize: 10, color: textMuted }}>{project.category || "General"} · {acceptedCollaboratorCountByProject[project.id] || 0} collaborators</div>
                     </div>
                     <button className="hb" onClick={() => { setActiveProject(project); setViewFullProfile(null); setAppScreen("workspace"); loadProjectData(project.id); }} style={{ ...btnG, padding: "6px 12px", fontSize: 11, flexShrink: 0 }}>View</button>
                   </div>
@@ -4607,16 +4620,22 @@ const setViewingProfile = (user) => {
                 </div>
               )}
               <div style={{ marginBottom: 28, paddingBottom: 28, borderBottom: `1px solid ${border}` }}>
-                <div style={{ ...labelStyle, marginBottom: 10 }}>COLLABORATION HISTORY</div>
-                {myCollaborationHistory.length === 0 ? (
-                  <div style={{ fontSize: 12, color: textMuted }}>no collaboration history yet.</div>
+                <div style={{ ...labelStyle, marginBottom: 10 }}>PROJECTS & COLLABORATIONS</div>
+                <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+                  <button className="hb" onClick={() => setProfileProjectsTab(PROFILE_PROJECTS_TABS.owned)} style={{ padding: "6px 10px", borderRadius: 6, border: `1px solid ${profileProjectsTab === PROFILE_PROJECTS_TABS.owned ? text : border}`, background: profileProjectsTab === PROFILE_PROJECTS_TABS.owned ? text : "none", color: profileProjectsTab === PROFILE_PROJECTS_TABS.owned ? bg : textMuted, fontSize: 11, cursor: "pointer", fontFamily: "inherit" }}>Your Projects</button>
+                  <button className="hb" onClick={() => setProfileProjectsTab(PROFILE_PROJECTS_TABS.collaborated)} style={{ padding: "6px 10px", borderRadius: 6, border: `1px solid ${profileProjectsTab === PROFILE_PROJECTS_TABS.collaborated ? text : border}`, background: profileProjectsTab === PROFILE_PROJECTS_TABS.collaborated ? text : "none", color: profileProjectsTab === PROFILE_PROJECTS_TABS.collaborated ? bg : textMuted, fontSize: 11, cursor: "pointer", fontFamily: "inherit" }}>Collaborated On</button>
+                </div>
+                {myProfileProjects.activeProjects.length === 0 ? (
+                  <div style={{ fontSize: 12, color: textMuted }}>
+                    {profileProjectsTab === PROFILE_PROJECTS_TABS.owned ? "no projects yet." : "no collaborations yet."}
+                  </div>
                 ) : (
                   <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                    {myCollaborationHistory.map(({ project, role }) => (
-                      <div key={`${project.id}-${role}`} style={{ padding: "10px 12px", border: `1px solid ${border}`, borderRadius: 8, background: bg2, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
+                    {myProfileProjects.activeProjects.map((project) => (
+                      <div key={project.id} style={{ padding: "10px 12px", border: `1px solid ${border}`, borderRadius: 8, background: bg2, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
                         <div style={{ minWidth: 0 }}>
                           <div style={{ fontSize: 12, color: text, marginBottom: 2 }}>{project.title}</div>
-                          <div style={{ fontSize: 10, color: textMuted }}>{project.category || "General"} · {role} · {acceptedCollaboratorCountByProject[project.id] || 0} collaborators</div>
+                          <div style={{ fontSize: 10, color: textMuted }}>{project.category || "General"} · {acceptedCollaboratorCountByProject[project.id] || 0} collaborators</div>
                         </div>
                         <button className="hb" onClick={() => { setActiveProject(project); setAppScreen("workspace"); loadProjectData(project.id); }} style={{ ...btnG, padding: "6px 12px", fontSize: 11, flexShrink: 0 }}>View</button>
                       </div>
