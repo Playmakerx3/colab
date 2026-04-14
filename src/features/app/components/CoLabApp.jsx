@@ -4535,7 +4535,10 @@ const setViewingProfile = (user) => {
                   <span style={{ position: "absolute", top: 2, right: 2, width: 8, height: 8, borderRadius: "50%", background: getCapacityStatus(viewFullProfile.id) === "On Project" ? "#f97316" : "#22c55e", border: `1.5px solid ${bg}` }} />
                 </div>
                 <div>
-                  <div style={{ fontSize: 20, fontWeight: 400, color: text, letterSpacing: "-0.5px" }}>{viewFullProfile.name}</div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                    <div style={{ fontSize: 20, fontWeight: 400, color: text, letterSpacing: "-0.5px" }}>{viewFullProfile.name}</div>
+                    <span style={{ fontSize: 10, color: getCapacityStatus(viewFullProfile.id) === "On Project" ? "#f97316" : "#22c55e" }}>{getCapacityStatus(viewFullProfile.id)}</span>
+                  </div>
                   {viewFullProfile.username && <div style={{ fontSize: 11, color: textMuted, marginTop: 1 }}>@{viewFullProfile.username}</div>}
                   <div style={{ fontSize: 12, color: textMuted, marginTop: 2 }}>{viewFullProfile.role}</div>
                   {viewFullProfile.location && <div style={{ fontSize: 11, color: textMuted, marginTop: 1 }}>{viewFullProfile.location}</div>}
@@ -4548,7 +4551,6 @@ const setViewingProfile = (user) => {
                       {getCollaborators(viewFullProfile.id).length} collaborator{getCollaborators(viewFullProfile.id).length !== 1 ? "s" : ""}
                     </button>
                   </div>
-                  <div style={{ fontSize: 10, marginTop: 2, color: getCapacityStatus(viewFullProfile.id) === "On Project" ? "#f97316" : "#22c55e" }}>{getCapacityStatus(viewFullProfile.id)}</div>
                 </div>
               </div>
             </div>
@@ -4632,7 +4634,10 @@ const setViewingProfile = (user) => {
                       <span style={{ position: "absolute", top: 2, right: 2, width: 8, height: 8, borderRadius: "50%", background: getCapacityStatus(authUser?.id) === "On Project" ? "#f97316" : "#22c55e", border: `1.5px solid ${bg}` }} />
                     </div>
                     <div>
-                      <div style={{ fontSize: 20, fontWeight: 400, color: text, letterSpacing: "-0.5px" }}>{profile?.name || "Anonymous"}</div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                        <div style={{ fontSize: 20, fontWeight: 400, color: text, letterSpacing: "-0.5px" }}>{profile?.name || "Anonymous"}</div>
+                        <span style={{ fontSize: 10, color: getCapacityStatus(authUser?.id) === "On Project" ? "#f97316" : "#22c55e" }}>{getCapacityStatus(authUser?.id)}</span>
+                      </div>
                       {profile?.username
                         ? <div style={{ fontSize: 11, color: textMuted, marginTop: 1, cursor: "pointer" }} onClick={() => { navigator.clipboard.writeText(`${window.location.origin}/u/${profile.username}`).catch(() => {}); showToast("Profile link copied!"); }} title="click to copy profile link">@{profile.username} ↗</div>
                         : <div style={{ fontSize: 11, color: textMuted, marginTop: 1, cursor: "pointer", textDecoration: "underline" }} onClick={() => setEditProfile(true)}>set a username →</div>
@@ -4647,7 +4652,8 @@ const setViewingProfile = (user) => {
                         <button className="hb" onClick={() => setShowCollaboratorsList(true)} style={{ background: "none", border: "none", color: text, cursor: "pointer", fontFamily: "inherit", fontSize: 10, padding: 0 }}>
                           {myCollaborators.length} collaborator{myCollaborators.length !== 1 ? "s" : ""}
                         </button>
-                        {" · "}
+                      </div>
+                      <div style={{ fontSize: 10, color: text, marginTop: 2 }}>
                         <button className="hb" onClick={() => setShowFollowList("followers")} style={{ background: "none", border: "none", color: text, cursor: "pointer", fontFamily: "inherit", fontSize: 10, padding: 0 }}>
                           {followers.length} follower{followers.length !== 1 ? "s" : ""}
                         </button>
@@ -4656,7 +4662,6 @@ const setViewingProfile = (user) => {
                           {following.length} following
                         </button>
                       </div>
-                      <div style={{ fontSize: 10, marginTop: 2, color: getCapacityStatus(authUser?.id) === "On Project" ? "#f97316" : "#22c55e" }}>{getCapacityStatus(authUser?.id)}</div>
                     </div>
                   </div>
                 </div>
