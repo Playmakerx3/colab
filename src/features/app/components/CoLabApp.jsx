@@ -1435,6 +1435,8 @@ const setViewingProfile = (user) => {
   });
   const isFirstTimeUser = Boolean(authUser?.id) && myProjects.length === 0 && !hasCollaborations;
   const showFirstTimeGuide = isFirstTimeUser && !hideFirstTimeGuide;
+  const [showCollaborators, setShowCollaborators] = useState(null); // userId whose collaborators to show
+  const [showProjectsFor, setShowProjectsFor] = useState(null); // userId whose projects to show
   const appliedProjectIds = applications.filter(a => a.applicant_id === authUser?.id && a.status !== "left").map(a => a.project_id);
   const browseBase = projects.filter(p => p.owner_id !== authUser?.id && !p.archived && !p.is_private);
   const forYou = browseBase.map(p => ({ ...p, _s: getMatchScore(p) })).filter(p => p._s > 0).sort((a, b) => b._s - a._s);
@@ -3131,6 +3133,71 @@ const setViewingProfile = (user) => {
         );
       })()}
 
+      {/* PROJECTS MODAL */}
+      {showProjectsFor && (() => {
+        const isMe = showProjectsFor === authUser?.id;
+        const subjectUser = isMe ? profile : users.find(u => u.id === showProjectsFor);
+        const subjectProjects = [...projects.filter(p => p.owner_id === showProjectsFor)].sort((a, b) => Number(b.featured) - Number(a.featured) || new Date(b.created_at) - new Date(a.created_at));
+        const collaboratedProjects = applications.filter(a => a.applicant_id === showProjectsFor && a.status === "accepted").map(a => projects.find(p => p.id === a.project_id)).filter(Boolean);
+        return (
+          <div onClick={() => setShowProjectsFor(null)} style={{ position: "fixed", inset: 0, background: dark ? "rgba(0,0,0,0.92)" : "rgba(200,200,200,0.88)", zIndex: 300, display: "flex", alignItems: "center", justifyContent: "center", backdropFilter: "blur(12px)", padding: 16 }}>
+            <div onClick={e => e.stopPropagation()} style={{ background: bg, border: `1px solid ${border}`, borderRadius: 16, padding: "28px", width: "100%", maxWidth: 480, maxHeight: "80vh", overflowY: "auto" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24 }}>
+                <div>
+                  <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px", marginBottom: 6 }}>PROJECTS</div>
+                  <div style={{ fontSize: 16, color: text, fontWeight: 400 }}>{isMe ? "your" : `${subjectUser?.name?.split(" ")[0]}'s`} projects</div>
+                  <div style={{ fontSize: 12, color: textMuted, marginTop: 3 }}>{subjectProjects.length} owned · {collaboratedProjects.length} collaborated</div>
+                </div>
+                <button onClick={() => setShowProjectsFor(null)} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontSize: 16, fontFamily: "inherit" }}>✕</button>
+              </div>
+              {subjectProjects.length === 0 && collaboratedProjects.length === 0 ? (
+                <div style={{ fontSize: 13, color: textMuted, padding: "20px 0", textAlign: "center" }}>no projects yet.</div>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                  {subjectProjects.length > 0 && (
+                    <div>
+                      <div style={{ fontSize: 10, color: textMuted, letterSpacing: "1.5px", marginBottom: 8 }}>OWNED</div>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
+                        {subjectProjects.map((p, i, arr) => (
+                          <div key={p.id} onClick={() => { setShowProjectsFor(null); setActiveProject(p); loadProjectData(p.id); setViewFullProfile(null); setAppScreen("workspace"); }} style={{ padding: "14px 16px", background: bg2, borderRadius: i === 0 && arr.length === 1 ? 10 : i === 0 ? "10px 10px 0 0" : i === arr.length - 1 ? "0 0 10px 10px" : 0, border: `1px solid ${border}`, borderBottom: i < arr.length - 1 ? "none" : `1px solid ${border}`, cursor: "pointer", transition: "opacity 0.15s" }}
+                            onMouseEnter={e => e.currentTarget.style.opacity = "0.7"} onMouseLeave={e => e.currentTarget.style.opacity = "1"}>
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+                              <div style={{ fontSize: 13, color: text, fontWeight: p.featured ? 500 : 400 }}>{p.title}</div>
+                              <span style={{ fontSize: 10, border: `1px solid ${p.shipped ? "#22c55e66" : border}`, borderRadius: 3, padding: "1px 6px", color: p.shipped ? "#22c55e" : textMuted, flexShrink: 0 }}>{p.shipped ? "shipped" : "active"}</span>
+                            </div>
+                            {p.description && <div style={{ fontSize: 11, color: textMuted }}>{p.description.slice(0, 80)}{p.description.length > 80 ? "..." : ""}</div>}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {collaboratedProjects.length > 0 && (
+                    <div>
+                      <div style={{ fontSize: 10, color: textMuted, letterSpacing: "1.5px", marginBottom: 8 }}>COLLABORATED ON</div>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
+                        {collaboratedProjects.map((p, i, arr) => (
+                          <div key={p.id} onClick={() => { setShowProjectsFor(null); setActiveProject(p); loadProjectData(p.id); setViewFullProfile(null); setAppScreen("workspace"); }} style={{ padding: "14px 16px", background: bg2, borderRadius: i === 0 && arr.length === 1 ? 10 : i === 0 ? "10px 10px 0 0" : i === arr.length - 1 ? "0 0 10px 10px" : 0, border: `1px solid ${border}`, borderBottom: i < arr.length - 1 ? "none" : `1px solid ${border}`, cursor: "pointer", transition: "opacity 0.15s" }}
+                            onMouseEnter={e => e.currentTarget.style.opacity = "0.7"} onMouseLeave={e => e.currentTarget.style.opacity = "1"}>
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+                              <div style={{ fontSize: 13, color: text }}>{p.title}</div>
+                              <span style={{ fontSize: 10, border: `1px solid ${p.shipped ? "#22c55e66" : border}`, borderRadius: 3, padding: "1px 6px", color: p.shipped ? "#22c55e" : textMuted, flexShrink: 0 }}>{p.shipped ? "shipped" : "active"}</span>
+                            </div>
+                            {p.description && <div style={{ fontSize: 11, color: textMuted }}>{p.description.slice(0, 80)}{p.description.length > 80 ? "..." : ""}</div>}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+              {isMe && (
+                <button className="hb" onClick={() => { setShowProjectsFor(null); setShowCreate(true); }} style={{ marginTop: 20, width: "100%", padding: "12px", background: "none", border: `1px solid ${border}`, borderRadius: 8, color: text, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>+ create new project</button>
+              )}
+            </div>
+          </div>
+        );
+      })()}
+
       {/* EXPLORE */}
       {!viewFullProfile && appScreen === "explore" && !activeProject && (
         <div className="pad fu" style={{ width: "100%", padding: "48px 32px" }}>
@@ -4407,8 +4474,13 @@ const setViewingProfile = (user) => {
                   {viewFullProfile.username && <div style={{ fontSize: 11, color: textMuted, marginTop: 1 }}>@{viewFullProfile.username}</div>}
                   <div style={{ fontSize: 12, color: textMuted, marginTop: 2 }}>{viewFullProfile.role}</div>
                   {viewFullProfile.location && <div style={{ fontSize: 11, color: textMuted, marginTop: 1 }}>{viewFullProfile.location}</div>}
-                  <div style={{ fontSize: 11, color: textMuted, marginTop: 3, display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-                    <span>{projects.filter(p => p.owner_id === viewFullProfile.id).length} project{projects.filter(p => p.owner_id === viewFullProfile.id).length !== 1 ? "s" : ""}</span>
+                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8 }}>
+                    <button className="hb" onClick={() => setShowProjectsFor(viewFullProfile.id)} style={{ fontSize: 11, padding: "3px 10px", borderRadius: 20, border: `1px solid ${border}`, background: "none", color: text, cursor: "pointer", fontFamily: "inherit", fontWeight: 500 }}>
+                      {projects.filter(p => p.owner_id === viewFullProfile.id).length} project{projects.filter(p => p.owner_id === viewFullProfile.id).length !== 1 ? "s" : ""}
+                    </button>
+                    <button className="hb" onClick={() => setShowCollaborators(viewFullProfile.id)} style={{ fontSize: 11, padding: "3px 10px", borderRadius: 20, border: `1px solid ${border}`, background: "none", color: text, cursor: "pointer", fontFamily: "inherit", fontWeight: 500 }}>
+                      {getCollaborators(viewFullProfile.id).length} collaborator{getCollaborators(viewFullProfile.id).length !== 1 ? "s" : ""}
+                    </button>
                   </div>
                 </div>
               </div>
@@ -4422,30 +4494,6 @@ const setViewingProfile = (user) => {
             )}
           </div>
           {viewFullProfile.bio && <p style={{ fontSize: 13, color: textMuted, lineHeight: 1.75, marginBottom: 20 }}>{viewFullProfile.bio}</p>}
-          <div style={{ marginBottom: 28, paddingBottom: 28, borderBottom: `1px solid ${border}` }}>
-            <div style={{ ...labelStyle, marginBottom: 10 }}>PROJECTS & COLLABORATIONS</div>
-            <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
-              <button className="hb" onClick={() => setProfileProjectsTab(PROFILE_PROJECTS_TABS.owned)} style={{ padding: "6px 10px", borderRadius: 6, border: `1px solid ${profileProjectsTab === PROFILE_PROJECTS_TABS.owned ? text : border}`, background: profileProjectsTab === PROFILE_PROJECTS_TABS.owned ? text : "none", color: profileProjectsTab === PROFILE_PROJECTS_TABS.owned ? bg : textMuted, fontSize: 11, cursor: "pointer", fontFamily: "inherit" }}>Your Projects</button>
-              <button className="hb" onClick={() => setProfileProjectsTab(PROFILE_PROJECTS_TABS.collaborated)} style={{ padding: "6px 10px", borderRadius: 6, border: `1px solid ${profileProjectsTab === PROFILE_PROJECTS_TABS.collaborated ? text : border}`, background: profileProjectsTab === PROFILE_PROJECTS_TABS.collaborated ? text : "none", color: profileProjectsTab === PROFILE_PROJECTS_TABS.collaborated ? bg : textMuted, fontSize: 11, cursor: "pointer", fontFamily: "inherit" }}>Collaborated On</button>
-            </div>
-            {viewedProfileProjects.activeProjects.length === 0 ? (
-              <div style={{ fontSize: 12, color: textMuted }}>
-                {profileProjectsTab === PROFILE_PROJECTS_TABS.owned ? "no projects yet." : "no collaborations yet."}
-              </div>
-            ) : (
-              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                {viewedProfileProjects.activeProjects.map((project) => (
-                  <div key={`${viewFullProfile.id}-${project.id}`} style={{ padding: "10px 12px", border: `1px solid ${border}`, borderRadius: 8, background: bg2, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
-                    <div style={{ minWidth: 0 }}>
-                      <div style={{ fontSize: 12, color: text, marginBottom: 2 }}>{project.title}</div>
-                      <div style={{ fontSize: 10, color: textMuted }}>{project.category || "General"} · {acceptedCollaboratorCountByProject[project.id] || 0} collaborators</div>
-                    </div>
-                    <button className="hb" onClick={() => { setActiveProject(project); setViewFullProfile(null); setAppScreen("workspace"); loadProjectData(project.id); }} style={{ ...btnG, padding: "6px 12px", fontSize: 11, flexShrink: 0 }}>View</button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
           {/* Skills */}
           <div style={{ marginBottom: 28, paddingBottom: 28, borderBottom: `1px solid ${border}` }}>
             <div style={{ ...labelStyle, marginBottom: 8 }}>SKILLS</div>
@@ -4462,36 +4510,6 @@ const setViewingProfile = (user) => {
                     <div style={{ fontSize: 10, color: textMuted }}>★ {viewFullProfile.skills.filter(s => (profile?.skills || []).includes(s)).length} shared skills with you</div>
                   }
                 </div>
-            }
-          </div>
-
-          {/* Projects */}
-          <div style={{ marginBottom: 28, paddingBottom: 28, borderBottom: `1px solid ${border}` }}>
-            <div style={{ ...labelStyle, marginBottom: 12 }}>PROJECTS</div>
-            {projects.filter(p => p.owner_id === viewFullProfile.id).length === 0
-              ? <div style={{ fontSize: 12, color: textMuted }}>no projects yet.</div>
-              : [...projects.filter(p => p.owner_id === viewFullProfile.id)].sort((a, b) => Number(b.featured) - Number(a.featured) || new Date(b.created_at) - new Date(a.created_at)).map(p => (
-                  <div key={p.id} style={{ padding: "12px 0", borderBottom: `1px solid ${border}`, cursor: "pointer" }}
-                    onMouseEnter={e => e.currentTarget.style.opacity = "0.6"} onMouseLeave={e => e.currentTarget.style.opacity = "1"}
-                    onClick={() => { setActiveProject(p); loadProjectData(p.id); setViewFullProfile(null); setAppScreen("workspace"); }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-                      <div style={{ fontSize: 13, color: text, fontWeight: p.featured ? 500 : 400 }}>{p.title}</div>
-                      <div style={{ display: "flex", gap: 6 }}>
-                        {p.featured && <span style={{ fontSize: 10, border: `1px solid ${border}`, borderRadius: 3, padding: "1px 6px", color: text }}>pinned</span>}
-                        <span style={{ fontSize: 10, border: `1px solid ${p.shipped ? "#22c55e66" : border}`, borderRadius: 3, padding: "1px 6px", color: p.shipped ? "#22c55e" : textMuted }}>{p.shipped ? "shipped" : "active"}</span>
-                      </div>
-                    </div>
-                    <div style={{ fontSize: 11, color: textMuted, marginBottom: 6 }}>{p.description?.slice(0, 80)}{p.description?.length > 80 ? "..." : ""}</div>
-                    {applications.filter((a) => a.project_id === p.id && a.status === "accepted").length > 0 && (
-                      <div style={{ fontSize: 10, color: textMuted, marginBottom: 6 }}>
-                        with {applications.filter((a) => a.project_id === p.id && a.status === "accepted").slice(0, 3).map((a) => users.find((u) => u.id === a.applicant_id)?.username ? `@${users.find((u) => u.id === a.applicant_id)?.username}` : users.find((u) => u.id === a.applicant_id)?.name).filter(Boolean).join(", ")}
-                      </div>
-                    )}
-                    <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
-                      {(p.skills || []).map(s => <span key={s} style={{ fontSize: 10, padding: "1px 7px", border: `1px solid ${border}`, borderRadius: 3, color: textMuted }}>{s}</span>)}
-                    </div>
-                  </div>
-                ))
             }
           </div>
 
@@ -4554,8 +4572,13 @@ const setViewingProfile = (user) => {
                       }
                       <div style={{ fontSize: 12, color: textMuted, marginTop: 2 }}>{profile?.role}</div>
                       {profile?.location && <div style={{ fontSize: 11, color: textMuted, marginTop: 1 }}>{profile.location}</div>}
-                      <div style={{ fontSize: 11, color: textMuted, marginTop: 3, display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-                        <span>{myProjects.length} project{myProjects.length !== 1 ? "s" : ""}</span>
+                      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8 }}>
+                        <button className="hb" onClick={() => setShowProjectsFor(authUser?.id)} style={{ fontSize: 11, padding: "3px 10px", borderRadius: 20, border: `1px solid ${border}`, background: "none", color: text, cursor: "pointer", fontFamily: "inherit", fontWeight: 500 }}>
+                          {myProjects.length} project{myProjects.length !== 1 ? "s" : ""}
+                        </button>
+                        <button className="hb" onClick={() => setShowCollaboratorsList(true)} style={{ fontSize: 11, padding: "3px 10px", borderRadius: 20, border: `1px solid ${border}`, background: "none", color: text, cursor: "pointer", fontFamily: "inherit", fontWeight: 500 }}>
+                          {myCollaborators.length} collaborator{myCollaborators.length !== 1 ? "s" : ""}
+                        </button>
                       </div>
                       <div style={{ fontSize: 10, color: textMuted, marginTop: 4 }}>{followers.length} follower{followers.length !== 1 ? "s" : ""} · {following.length} following</div>
                     </div>
@@ -4586,30 +4609,6 @@ const setViewingProfile = (user) => {
                 </div>
               )}
               <div style={{ marginBottom: 28, paddingBottom: 28, borderBottom: `1px solid ${border}` }}>
-                <div style={{ ...labelStyle, marginBottom: 10 }}>PROJECTS & COLLABORATIONS</div>
-                <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
-                  <button className="hb" onClick={() => setProfileProjectsTab(PROFILE_PROJECTS_TABS.owned)} style={{ padding: "6px 10px", borderRadius: 6, border: `1px solid ${profileProjectsTab === PROFILE_PROJECTS_TABS.owned ? text : border}`, background: profileProjectsTab === PROFILE_PROJECTS_TABS.owned ? text : "none", color: profileProjectsTab === PROFILE_PROJECTS_TABS.owned ? bg : textMuted, fontSize: 11, cursor: "pointer", fontFamily: "inherit" }}>Your Projects</button>
-                  <button className="hb" onClick={() => setProfileProjectsTab(PROFILE_PROJECTS_TABS.collaborated)} style={{ padding: "6px 10px", borderRadius: 6, border: `1px solid ${profileProjectsTab === PROFILE_PROJECTS_TABS.collaborated ? text : border}`, background: profileProjectsTab === PROFILE_PROJECTS_TABS.collaborated ? text : "none", color: profileProjectsTab === PROFILE_PROJECTS_TABS.collaborated ? bg : textMuted, fontSize: 11, cursor: "pointer", fontFamily: "inherit" }}>Collaborated On</button>
-                </div>
-                {myProfileProjects.activeProjects.length === 0 ? (
-                  <div style={{ fontSize: 12, color: textMuted }}>
-                    {profileProjectsTab === PROFILE_PROJECTS_TABS.owned ? "no projects yet." : "no collaborations yet."}
-                  </div>
-                ) : (
-                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                    {myProfileProjects.activeProjects.map((project) => (
-                      <div key={project.id} style={{ padding: "10px 12px", border: `1px solid ${border}`, borderRadius: 8, background: bg2, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
-                        <div style={{ minWidth: 0 }}>
-                          <div style={{ fontSize: 12, color: text, marginBottom: 2 }}>{project.title}</div>
-                          <div style={{ fontSize: 10, color: textMuted }}>{project.category || "General"} · {acceptedCollaboratorCountByProject[project.id] || 0} collaborators</div>
-                        </div>
-                        <button className="hb" onClick={() => { setActiveProject(project); setAppScreen("workspace"); loadProjectData(project.id); }} style={{ ...btnG, padding: "6px 12px", fontSize: 11, flexShrink: 0 }}>View</button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-              <div style={{ marginBottom: 28, paddingBottom: 28, borderBottom: `1px solid ${border}` }}>
                 <div style={{ ...labelStyle, marginBottom: 8 }}>SKILLS</div>
                 {(profile?.skills || []).length === 0
                   ? <div style={{ fontSize: 12, color: textMuted }}>no skills. <button onClick={() => setEditProfile(true)} style={{ background: "none", border: "none", color: text, cursor: "pointer", fontFamily: "inherit", fontSize: 12, textDecoration: "underline" }}>add →</button></div>
@@ -4617,32 +4616,6 @@ const setViewingProfile = (user) => {
                       <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginBottom: 8 }}>{(profile?.skills || []).map(s => <span key={s} style={{ fontSize: 11, padding: "3px 10px", border: `1px solid ${border}`, borderRadius: 3, color: textMuted }}>{s}</span>)}</div>
                       <div style={{ fontSize: 11, color: textMuted }}>★ {forYou.length} matching project{forYou.length !== 1 ? "s" : ""} <button className="hb" onClick={() => { setAppScreen("explore"); setExploreTab("for-you"); }} style={{ background: "none", border: "none", color: text, cursor: "pointer", fontFamily: "inherit", fontSize: 11, textDecoration: "underline", marginLeft: 4 }}>view →</button></div>
                   </div>
-                }
-              </div>
-
-              {/* Projects */}
-              <div style={{ marginBottom: 28, paddingBottom: 28, borderBottom: `1px solid ${border}` }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-                  <div style={{ ...labelStyle, marginBottom: 0 }}>PROJECTS</div>
-                  <button className="hb" onClick={() => setShowCreate(true)} style={{ background: "none", border: "none", color: text, cursor: "pointer", fontFamily: "inherit", fontSize: 11, textDecoration: "underline" }}>+ create project</button>
-                </div>
-                {myProjects.length === 0
-                  ? <div style={{ fontSize: 13, color: textMuted, lineHeight: 1.75 }}>you haven’t posted any projects yet.<br />create your first project to showcase what you’re building.</div>
-                  : <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
-                      {[...myProjects].sort((a, b) => Number(b.featured) - Number(a.featured) || new Date(b.created_at) - new Date(a.created_at)).map((p, i, arr) => (
-                        <button key={p.id} className="hb" onClick={() => { setActiveProject(p); loadProjectData(p.id); setAppScreen("workspace"); }} style={{ textAlign: "left", background: bg2, borderRadius: i === 0 && arr.length === 1 ? 8 : i === 0 ? "8px 8px 0 0" : i === arr.length - 1 ? "0 0 8px 8px" : 0, border: `1px solid ${border}`, borderBottom: i < arr.length - 1 ? "none" : `1px solid ${border}`, padding: "14px 16px", cursor: "pointer", fontFamily: "inherit" }}>
-                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 5, gap: 10 }}>
-                            <div style={{ fontSize: 13, color: text, fontWeight: p.featured ? 500 : 400 }}>{p.title}</div>
-                            <div style={{ display: "flex", gap: 6 }}>
-                              {p.featured && <span style={{ fontSize: 10, border: `1px solid ${border}`, borderRadius: 3, padding: "1px 6px", color: text }}>pinned</span>}
-                              <span style={{ fontSize: 10, border: `1px solid ${p.shipped ? "#22c55e66" : border}`, borderRadius: 3, padding: "1px 6px", color: p.shipped ? "#22c55e" : textMuted }}>{p.shipped ? "shipped" : "active"}</span>
-                            </div>
-                          </div>
-                          <div style={{ fontSize: 11, color: textMuted, lineHeight: 1.6, marginBottom: 6 }}>{p.description?.slice(0, 120)}{(p.description || "").length > 120 ? "..." : ""}</div>
-                          {(p.skills || []).length > 0 && <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>{(p.skills || []).slice(0, 4).map((s) => <span key={s} style={{ fontSize: 10, padding: "1px 7px", border: `1px solid ${border}`, borderRadius: 3, color: textMuted }}>{s}</span>)}</div>}
-                        </button>
-                      ))}
-                    </div>
                 }
               </div>
 
