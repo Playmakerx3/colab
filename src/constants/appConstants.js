@@ -36,28 +36,22 @@ export const PRESETS = {
   wave: (() => {
     const p = new Array(BANNER_PIXELS_COUNT).fill(0);
     for (let c = 0; c < COLS; c++) {
-      const h = Math.round(ROWS / 2 + Math.sin(c / 4) * 3);
-      for (let r = h; r < ROWS; r++) p[r * COLS + c] = 1;
+      const h = Math.round(ROWS * 0.45 + Math.sin((c / COLS) * Math.PI * 4) * 5);
+      for (let r = Math.max(0, h); r < ROWS; r++) p[r * COLS + c] = 1;
     }
-    return p;
-  })(),
-  checkerboard: (() => {
-    const p = new Array(BANNER_PIXELS_COUNT).fill(0);
-    for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) if ((r + c) % 2 === 0) p[r * COLS + c] = 1;
-    return p;
-  })(),
-  diagonal: (() => {
-    const p = new Array(BANNER_PIXELS_COUNT).fill(0);
-    for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) if ((c - r * 2 + 96) % 8 < 4) p[r * COLS + c] = 1;
     return p;
   })(),
   mountains: (() => {
     const p = new Array(BANNER_PIXELS_COUNT).fill(0);
+    const peaks = [
+      { c: 8,  h: 12, s: 0.70 },
+      { c: 24, h: 16, s: 0.55 },
+      { c: 42, h: 14, s: 0.65 },
+      { c: 56, h: 15, s: 0.60 },
+    ];
     const heights = Array.from({ length: COLS }, (_, c) => {
-      const m1 = Math.max(0, ROWS - Math.abs(c - 12) * 0.7);
-      const m2 = Math.max(0, ROWS - Math.abs(c - 32) * 0.5);
-      const m3 = Math.max(0, ROWS * 0.6 - Math.abs(c - 22) * 0.9);
-      return Math.min(ROWS, Math.round(Math.max(m1, m2, m3)));
+      const h = Math.max(...peaks.map(pk => Math.max(0, pk.h - Math.abs(c - pk.c) * pk.s)));
+      return Math.min(ROWS, Math.round(h));
     });
     for (let c = 0; c < COLS; c++) for (let r = ROWS - heights[c]; r < ROWS; r++) p[r * COLS + c] = 1;
     return p;
@@ -65,26 +59,48 @@ export const PRESETS = {
   city: (() => {
     const p = new Array(BANNER_PIXELS_COUNT).fill(0);
     const buildings = [
-      { x: 2, w: 5, h: 8 }, { x: 8, w: 4, h: 6 }, { x: 13, w: 6, h: 10 },
-      { x: 20, w: 3, h: 7 }, { x: 24, w: 7, h: 9 }, { x: 32, w: 4, h: 6 },
-      { x: 37, w: 5, h: 11 }, { x: 43, w: 5, h: 7 }, { x: 50, w: 5, h: 9 },
-      { x: 56, w: 6, h: 12 },
+      { x: 0,  w: 4, h: 7  }, { x: 5,  w: 3, h: 10 }, { x: 9,  w: 6, h: 5  },
+      { x: 16, w: 4, h: 13 }, { x: 21, w: 5, h: 8  }, { x: 27, w: 3, h: 6  },
+      { x: 31, w: 6, h: 15 }, { x: 38, w: 4, h: 9  }, { x: 43, w: 5, h: 12 },
+      { x: 49, w: 3, h: 7  }, { x: 53, w: 5, h: 11 }, { x: 59, w: 5, h: 9  },
     ];
     buildings.forEach(({ x, w, h }) => {
-      for (let c = x; c < x + w && c < COLS; c++) {
+      for (let c = x; c < x + w && c < COLS; c++)
         for (let r = ROWS - h; r < ROWS; r++) p[r * COLS + c] = 1;
-      }
     });
+    return p;
+  })(),
+  pulse: (() => {
+    const p = new Array(BANNER_PIXELS_COUNT).fill(0);
+    const bars = [5, 9, 12, 8, 14, 11, 6, 13, 10, 15, 12, 7, 11, 9, 14, 16,
+                  13, 10, 7, 12, 15, 11, 8, 13, 6, 10, 14, 9, 12, 7, 11, 5];
+    bars.forEach((h, i) => {
+      const c = i * 2;
+      for (let r = ROWS - h; r < ROWS; r++) p[r * COLS + c] = 1;
+    });
+    return p;
+  })(),
+  checkerboard: (() => {
+    const p = new Array(BANNER_PIXELS_COUNT).fill(0);
+    for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++)
+      if ((Math.floor(r / 2) + Math.floor(c / 2)) % 2 === 0) p[r * COLS + c] = 1;
+    return p;
+  })(),
+  diagonal: (() => {
+    const p = new Array(BANNER_PIXELS_COUNT).fill(0);
+    for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++)
+      if (((c - r * 2) % 8 + 8) % 8 < 4) p[r * COLS + c] = 1;
     return p;
   })(),
   dots: (() => {
     const p = new Array(BANNER_PIXELS_COUNT).fill(0);
-    for (let r = 1; r < ROWS; r += 3) for (let c = 1; c < COLS; c += 3) p[r * COLS + c] = 1;
+    for (let r = 2; r < ROWS; r += 4) for (let c = 2; c < COLS; c += 4) p[r * COLS + c] = 1;
     return p;
   })(),
   grid: (() => {
     const p = new Array(BANNER_PIXELS_COUNT).fill(0);
-    for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) if (r % 3 === 0 || c % 4 === 0) p[r * COLS + c] = 1;
+    for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++)
+      if (r % 4 === 0 || c % 8 === 0) p[r * COLS + c] = 1;
     return p;
   })(),
 };
