@@ -1215,8 +1215,8 @@ const setViewingProfile = (user) => {
       .profile-identity-banner { flex-direction: column-reverse !important; gap: 14px !important; margin-bottom: 24px !important; }
       .profile-identity-row { margin-bottom: 0 !important; align-items: flex-start !important; }
       .profile-banner-shell { width: 100% !important; }
-      .profile-banner-card { min-height: 120px !important; }
-      .profile-banner-canvas { height: 120px !important; }
+      .profile-banner-card { min-height: 140px !important; }
+      .profile-banner-canvas { height: 140px !important; }
     }
   `;
 
@@ -3265,7 +3265,7 @@ const setViewingProfile = (user) => {
 
       {/* EXPLORE */}
       {!viewFullProfile && appScreen === "explore" && !activeProject && (
-        <div className="pad fu" style={{ width: "100%", padding: "48px 32px" }}>
+        <div className="pad fu" style={{ width: "100%", padding: "28px 32px 48px" }}>
           {showFirstTimeGuide && renderFirstTimeGuide()}
           <div style={{ marginBottom: 32 }}>
             <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px", marginBottom: 14 }}>FIND YOUR PEOPLE. BUILD SOMETHING REAL.</div>
@@ -4522,7 +4522,7 @@ const setViewingProfile = (user) => {
 
       {/* FULL PROFILE VIEW — other users */}
       {viewFullProfile && (
-        <div className="pad fu" style={{ width: "100%", padding: "48px 32px" }}>
+        <div className="pad fu" style={{ width: "100%", padding: "28px 32px 48px" }}>
           <button onClick={() => setViewFullProfile(null)} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontFamily: "inherit", fontSize: 12, marginBottom: 28 }}>← back</button>
 
           {/* Identity — mirrors own profile */}
@@ -4553,9 +4553,9 @@ const setViewingProfile = (user) => {
               </div>
             </div>
             {viewFullProfile.banner_pixels && (
-              <div className="profile-banner-shell" style={{ flex: 1, minWidth: 0, border: `1px solid ${border}`, borderRadius: 8, overflow: "hidden", background: dark ? "#000" : "#fff" }}>
+              <div className="profile-banner-shell" style={{ flex: 1, minWidth: 0, border: `1px solid ${border}`, borderRadius: 8, overflow: "hidden", background: dark ? "#000" : "#fff", minHeight: 110 }}>
                 <div className="profile-banner-canvas">
-                  <PixelBannerDisplay pixels={(() => { try { return JSON.parse(viewFullProfile.banner_pixels); } catch { return []; } })()} dark={dark} height={80} />
+                  <PixelBannerDisplay pixels={(() => { try { return JSON.parse(viewFullProfile.banner_pixels); } catch { return []; } })()} dark={dark} height={110} />
                 </div>
               </div>
             )}
@@ -4618,7 +4618,7 @@ const setViewingProfile = (user) => {
 
       {/* PROFILE */}
       {!viewFullProfile && appScreen === "profile" && (
-        <div className="pad fu" style={{ width: "100%", padding: "48px 32px" }}>
+        <div className="pad fu" style={{ width: "100%", padding: "28px 32px 48px" }}>
           {!editProfile ? (
             <div>
               {/* Identity + Banner side by side */}
@@ -4663,11 +4663,11 @@ const setViewingProfile = (user) => {
                 </div>
                 {/* Right: pixel banner */}
                 <div className="profile-banner-shell" style={{ flex: 1, minWidth: 0 }}>
-                  <div className="profile-banner-card" style={{ position: "relative", border: `1px solid ${border}`, borderRadius: 8, overflow: "hidden", background: dark ? "#000" : "#fff", minHeight: 80, cursor: "pointer" }} onClick={() => setShowBannerEditor(true)}>
+                  <div className="profile-banner-card" style={{ position: "relative", border: `1px solid ${border}`, borderRadius: 8, overflow: "hidden", background: dark ? "#000" : "#fff", minHeight: 110, cursor: "pointer" }} onClick={() => setShowBannerEditor(true)}>
                     {bannerPixels.some(v => v) ? (
-                      <div className="profile-banner-canvas"><PixelBannerDisplay pixels={bannerPixels} dark={dark} height={80} /></div>
+                      <div className="profile-banner-canvas"><PixelBannerDisplay pixels={bannerPixels} dark={dark} height={110} /></div>
                     ) : (
-                      <div className="profile-banner-canvas" style={{ height: 80, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      <div className="profile-banner-canvas" style={{ height: 110, display: "flex", alignItems: "center", justifyContent: "center" }}>
                         <span style={{ fontSize: 11, color: textMuted }}>+ design your banner</span>
                       </div>
                     )}
