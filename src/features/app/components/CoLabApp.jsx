@@ -37,6 +37,24 @@ const PROFILE_PROJECTS_TABS = {
   owned: "owned",
   collaborated: "collaborated",
 };
+const CAPACITY_BADGE_STYLES = {
+  "On Project": {
+    background: "transparent",
+    border: "1px solid #f97316",
+    color: "#f97316",
+    fontSize: 10,
+    borderRadius: 20,
+    padding: "2px 8px",
+  },
+  "Free to Collab": {
+    background: "transparent",
+    border: "1px solid #22c55e",
+    color: "#22c55e",
+    fontSize: 10,
+    borderRadius: 20,
+    padding: "2px 8px",
+  },
+};
 
 const getMediaType = (url = "") => {
   if (!url) return "none";
@@ -1525,6 +1543,11 @@ const setViewingProfile = (user) => {
       activeProjects: profileProjectsTab === PROFILE_PROJECTS_TABS.collaborated ? collaboratedProjects : ownedProjects,
     };
   };
+  const getCapacityStatus = (userId) => {
+    const hasActiveProjects = projects.some((project) => project.owner_id === userId && !project.archived);
+    const hasAcceptedApplications = applications.some((application) => application.applicant_id === userId && application.status === "accepted");
+    return hasActiveProjects || hasAcceptedApplications ? "On Project" : "Free to Collab";
+  };
   const viewedProfileProjects = useMemo(
     () => (viewFullProfile?.id ? getProfileProjects(viewFullProfile.id) : { ownedProjects: [], collaboratedProjects: [], activeProjects: [] }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1858,6 +1881,7 @@ const setViewingProfile = (user) => {
   const UserCard = ({ u }) => {
     const sharedSkills = (profile?.skills || []).filter(s => (u.skills || []).includes(s));
     const userProjects = projects.filter(p => p.owner_id === u.id);
+    const capacityStatus = getCapacityStatus(u.id);
     const userCollaborators = getCollaborators(u.id);
     const mutualCollaborators = userCollaborators.filter((c) => myCollaborators.some((mine) => mine.user.id === c.user.id));
     const lastActiveDays = u.updated_at ? Math.floor((Date.now() - new Date(u.updated_at).getTime()) / (1000 * 60 * 60 * 24)) : null;
@@ -1875,6 +1899,9 @@ const setViewingProfile = (user) => {
               {isRecentlyActive && <span style={{ fontSize: 9, color: textMuted, border: `1px solid ${border}`, borderRadius: 20, padding: "1px 7px" }}>active</span>}
             </div>
             <div style={{ fontSize: 11, color: textMuted, marginTop: 2 }}>{u.role || "Builder"}</div>
+            <div style={{ marginTop: 4 }}>
+              <span style={CAPACITY_BADGE_STYLES[capacityStatus]}>{capacityStatus}</span>
+            </div>
             {u.location && <div style={{ fontSize: 10, color: textMuted, marginTop: 2 }}>{u.location}</div>}
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap", fontSize: 10, color: textMuted, marginTop: 5 }}>
               <span>{userProjects.length} project{userProjects.length !== 1 ? "s" : ""}</span>
@@ -4467,10 +4494,10 @@ const setViewingProfile = (user) => {
               <div className="profile-identity-row" style={{ display: "flex", gap: 16, alignItems: "center", marginBottom: 12 }}>
                 <Avatar initials={initials(viewFullProfile.name)} size={52} dark={dark} />
                 <div>
-                  <button onClick={() => setShowCollaboratorsList(true)} style={{ background: "none", border: "none", color: text, cursor: "pointer", fontFamily: "inherit", fontSize: 11, padding: 0, marginBottom: 4, textDecoration: "underline" }}>
-                    {getCollaborators(viewFullProfile.id).length} collaborator{getCollaborators(viewFullProfile.id).length !== 1 ? "s" : ""} →
-                  </button>
-                  <div style={{ fontSize: 20, fontWeight: 400, color: text, letterSpacing: "-0.5px" }}>{viewFullProfile.name}</div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                    <div style={{ fontSize: 20, fontWeight: 400, color: text, letterSpacing: "-0.5px" }}>{viewFullProfile.name}</div>
+                    <span style={CAPACITY_BADGE_STYLES[getCapacityStatus(viewFullProfile.id)]}>{getCapacityStatus(viewFullProfile.id)}</span>
+                  </div>
                   {viewFullProfile.username && <div style={{ fontSize: 11, color: textMuted, marginTop: 1 }}>@{viewFullProfile.username}</div>}
                   <div style={{ fontSize: 12, color: textMuted, marginTop: 2 }}>{viewFullProfile.role}</div>
                   {viewFullProfile.location && <div style={{ fontSize: 11, color: textMuted, marginTop: 1 }}>{viewFullProfile.location}</div>}
@@ -4562,10 +4589,10 @@ const setViewingProfile = (user) => {
                   <div className="profile-identity-row" style={{ display: "flex", gap: 16, alignItems: "center", marginBottom: 12 }}>
                     <Avatar initials={myInitials} size={52} dark={dark} />
                     <div>
-                      <button onClick={() => setShowCollaboratorsList(true)} style={{ background: "none", border: "none", color: text, cursor: "pointer", fontFamily: "inherit", fontSize: 11, padding: 0, marginBottom: 4, textDecoration: "underline" }}>
-                        {myCollaborators.length} collaborator{myCollaborators.length !== 1 ? "s" : ""} →
-                      </button>
-                      <div style={{ fontSize: 20, fontWeight: 400, color: text, letterSpacing: "-0.5px" }}>{profile?.name || "Anonymous"}</div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                        <div style={{ fontSize: 20, fontWeight: 400, color: text, letterSpacing: "-0.5px" }}>{profile?.name || "Anonymous"}</div>
+                        <span style={CAPACITY_BADGE_STYLES[getCapacityStatus(authUser?.id)]}>{getCapacityStatus(authUser?.id)}</span>
+                      </div>
                       {profile?.username
                         ? <div style={{ fontSize: 11, color: textMuted, marginTop: 1, cursor: "pointer" }} onClick={() => { navigator.clipboard.writeText(`${window.location.origin}/u/${profile.username}`).catch(() => {}); showToast("Profile link copied!"); }} title="click to copy profile link">@{profile.username} ↗</div>
                         : <div style={{ fontSize: 11, color: textMuted, marginTop: 1, cursor: "pointer", textDecoration: "underline" }} onClick={() => setEditProfile(true)}>set a username →</div>
