@@ -291,10 +291,11 @@ export default function NetworkGraph3D({
 
       // Nodes
       ns.forEach(n => {
+        const meColor = dark ? "#ffffff" : "#111111";
         const rgb = hexToRgb(n.color);
         ctx.beginPath();
         ctx.arc(n.x, n.y, n.r, 0, Math.PI * 2);
-        ctx.fillStyle = n.isMe ? n.color
+        ctx.fillStyle = n.isMe ? meColor
           : n.isCollab ? `rgba(${rgb},0.95)`
           : n.isMutual ? `rgba(${rgb},0.65)`
           : `rgba(${rgb},0.4)`;
@@ -302,7 +303,7 @@ export default function NetworkGraph3D({
 
         // Ring for collab / mutual
         if (n.isMe || n.isCollab) {
-          ctx.strokeStyle = n.color;
+          ctx.strokeStyle = n.isMe ? meColor : n.color;
           ctx.lineWidth = n.isMe ? 2 : 1.5;
           ctx.setLineDash([]);
           ctx.stroke();
@@ -317,9 +318,9 @@ export default function NetworkGraph3D({
         if (n.isMe || n.isCollab || n.isMutual) {
           ctx.font = n.isMe ? "bold 11px monospace" : "10px monospace";
           ctx.textAlign = "center";
-          ctx.fillStyle = n.isCollab ? n.color
-            : n.isMutual ? (dark ? "rgba(255,255,255,0.6)" : "rgba(0,0,0,0.5)")
-            : n.color;
+          ctx.fillStyle = n.isMe ? meColor
+            : n.isCollab ? n.color
+            : dark ? "rgba(255,255,255,0.6)" : "rgba(0,0,0,0.5)";
           ctx.fillText(n.name.split(" ")[0], n.x, n.y + n.r + 12);
         }
       });
