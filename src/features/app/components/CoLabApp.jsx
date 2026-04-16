@@ -2868,6 +2868,8 @@ const setViewingProfile = (user) => {
               projects={projects}
               authUser={authUser}
               dark={dark}
+              following={following}
+              followers={followers}
               onNodeClick={(user) => {
                 setViewingProfile(user);
               }}

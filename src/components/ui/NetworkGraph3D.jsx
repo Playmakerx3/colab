@@ -32,15 +32,21 @@ function hexToRgb(hex) {
   return `${r},${g},${b}`;
 }
 
-export default function NetworkGraph3D({ users, applications, projects, authUser, onNodeClick, dark }) {
+export default function NetworkGraph3D({ users, applications, projects, authUser, onNodeClick, dark, following = [], followers = [] }) {
   const canvasRef = useRef();
   const nodesRef = useRef([]);
   const rafRef = useRef();
   const [tooltip, setTooltip] = useState(null);
   const [dims, setDims] = useState({ w: 900, h: 600 });
+  const [showMutualLines, setShowMutualLines] = useState(true);
 
-  const { nodes, links } = useMemo(() => {
-    if (!users?.length || !authUser) return { nodes: [], links: [] };
+  const mutualFollowIds = useMemo(() => {
+    if (!authUser) return new Set();
+    return new Set(following.filter(id => followers.includes(id)));
+  }, [following, followers, authUser]);
+
+  const { nodes, collabLinks, mutualLinks } = useMemo(() => {
+    if (!users?.length || !authUser) return { nodes: [], collabLinks: [], mutualLinks: [] };
 
     const myProjectIds = new Set([
       ...projects.filter(p => p.owner_id === authUser.id).map(p => p.id),
@@ -67,14 +73,15 @@ export default function NetworkGraph3D({ users, applications, projects, authUser
     const nodes = users.filter(u => u.name?.trim()).map(u => {
       const isMe = u.id === authUser.id;
       const isCollab = collaboratorIds.has(u.id);
+      const isMutual = !isCollab && mutualFollowIds.has(u.id);
       const primarySkill = (u.skills || []).find(s => clusterCenters[s]);
       const center = primarySkill ? clusterCenters[primarySkill] : { x: cx + (Math.random() - 0.5) * 200, y: cy + (Math.random() - 0.5) * 200 };
-      const spread = isCollab ? 80 : 140;
+      const spread = isCollab ? 80 : isMutual ? 110 : 140;
       return {
         id: u.id, name: u.name, role: u.role || "", skills: u.skills || [],
         color: isMe ? "#ffffff" : getColor(u.skills),
-        isMe, isCollab,
-        r: isMe ? 10 : isCollab ? 6 : 3,
+        isMe, isCollab, isMutual,
+        r: isMe ? 10 : isCollab ? 6 : isMutual ? 5 : 3,
         x: isMe ? cx : center.x + (Math.random() - 0.5) * spread,
         y: isMe ? cy : center.y + (Math.random() - 0.5) * spread,
         vx: 0, vy: 0,
@@ -83,13 +90,18 @@ export default function NetworkGraph3D({ users, applications, projects, authUser
       };
     });
 
-    const links = [];
+    const collabLinks = [];
     collaboratorIds.forEach(cid => {
-      if (users.find(u => u.id === cid)) links.push({ source: authUser.id, target: cid });
+      if (users.find(u => u.id === cid)) collabLinks.push({ source: authUser.id, target: cid });
     });
 
-    return { nodes, links };
-  }, [users, applications, projects, authUser, dims]);
+    const mutualLinks = [];
+    mutualFollowIds.forEach(uid => {
+      if (users.find(u => u.id === uid)) mutualLinks.push({ source: authUser.id, target: uid });
+    });
+
+    return { nodes, collabLinks, mutualLinks };
+  }, [users, applications, projects, authUser, dims, mutualFollowIds]);
 
   useEffect(() => { nodesRef.current = nodes.map(n => ({ ...n })); }, [nodes]);
 
@@ -140,32 +152,55 @@ export default function NetworkGraph3D({ users, applications, projects, authUser
       ctx.fillStyle = dark ? "#080808" : "#f0f0f0";
       ctx.fillRect(0, 0, w, h);
 
-      links.forEach(link => {
+      // Collaborator links (faint)
+      collabLinks.forEach(link => {
         const s = nodeMap[link.source], t = nodeMap[link.target];
         if (!s || !t) return;
         ctx.beginPath();
         ctx.moveTo(s.x, s.y);
         ctx.lineTo(t.x, t.y);
-        ctx.strokeStyle = dark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.1)";
+        ctx.strokeStyle = dark ? "rgba(255,255,255,0.15)" : "rgba(0,0,0,0.12)";
         ctx.lineWidth = 1;
+        ctx.setLineDash([]);
         ctx.stroke();
       });
 
+      // Mutual follow links (white, solid, clearly visible)
+      if (showMutualLines) {
+        mutualLinks.forEach(link => {
+          const s = nodeMap[link.source], t = nodeMap[link.target];
+          if (!s || !t) return;
+          ctx.beginPath();
+          ctx.moveTo(s.x, s.y);
+          ctx.lineTo(t.x, t.y);
+          ctx.strokeStyle = dark ? "rgba(255,255,255,0.75)" : "rgba(0,0,0,0.6)";
+          ctx.lineWidth = 1.5;
+          ctx.setLineDash([]);
+          ctx.stroke();
+        });
+      }
+
+      // Nodes
       ns.forEach(n => {
         ctx.beginPath();
         ctx.arc(n.x, n.y, n.r, 0, Math.PI * 2);
         const rgb = hexToRgb(n.color);
-        ctx.fillStyle = n.isMe ? n.color : n.isCollab
-          ? `rgba(${rgb},0.9)` : `rgba(${rgb},0.35)`;
+        ctx.fillStyle = n.isMe ? n.color
+          : n.isCollab ? `rgba(${rgb},0.9)`
+          : n.isMutual ? `rgba(${rgb},0.65)`
+          : `rgba(${rgb},0.35)`;
         ctx.fill();
-        if (n.isMe || n.isCollab) {
-          ctx.strokeStyle = n.color;
+
+        if (n.isMe || n.isCollab || n.isMutual) {
+          ctx.strokeStyle = n.isMutual ? (dark ? "rgba(255,255,255,0.75)" : "rgba(0,0,0,0.55)") : n.color;
           ctx.lineWidth = n.isMe ? 2 : 1;
+          ctx.setLineDash([]);
           ctx.stroke();
         }
-        if (n.isMe || n.isCollab) {
+
+        if (n.isMe || n.isCollab || n.isMutual) {
           ctx.font = n.isMe ? "bold 11px monospace" : "10px monospace";
-          ctx.fillStyle = n.color;
+          ctx.fillStyle = n.isMutual ? (dark ? "rgba(255,255,255,0.75)" : "rgba(0,0,0,0.6)") : n.color;
           ctx.textAlign = "center";
           ctx.fillText(n.name.split(" ")[0], n.x, n.y + n.r + 12);
         }
@@ -176,7 +211,7 @@ export default function NetworkGraph3D({ users, applications, projects, authUser
 
     rafRef.current = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(rafRef.current);
-  }, [links, dark, dims]);
+  }, [collabLinks, mutualLinks, showMutualLines, dark, dims]);
 
   const handleMouseMove = useCallback((e) => {
     const canvas = canvasRef.current;
@@ -187,7 +222,7 @@ export default function NetworkGraph3D({ users, applications, projects, authUser
       const dx = n.x - mx, dy = n.y - my;
       return Math.sqrt(dx * dx + dy * dy) < Math.max(n.r + 4, 8);
     });
-    setTooltip(hit && !hit.isMe ? { name: hit.name, role: hit.role, x: mx, y: my } : null);
+    setTooltip(hit && !hit.isMe ? { name: hit.name, role: hit.role, x: mx, y: my, isMutual: hit.isMutual, isCollab: hit.isCollab } : null);
     canvas.style.cursor = hit && !hit.isMe ? "pointer" : "default";
   }, []);
 
@@ -206,6 +241,12 @@ export default function NetworkGraph3D({ users, applications, projects, authUser
     }
   }, [users, onNodeClick]);
 
+  const legendItems = [
+    { type: "node", color: "#ffffff", label: "you", solid: true },
+    { type: "line", color: dark ? "rgba(255,255,255,0.15)" : "rgba(0,0,0,0.12)", label: "collaborator", dashed: false, width: 1 },
+    { type: "line", color: dark ? "rgba(255,255,255,0.75)" : "rgba(0,0,0,0.6)", label: "mutual follow", dashed: false, width: 2 },
+  ];
+
   return (
     <div style={{ position: "relative", width: "100%", height: dims.h, overflow: "hidden" }}>
       <canvas
@@ -217,18 +258,65 @@ export default function NetworkGraph3D({ users, applications, projects, authUser
         onClick={handleClick}
         style={{ display: "block" }}
       />
-      <div style={{ position: "absolute", top: 12, left: 12, display: "flex", flexDirection: "column", gap: 4 }}>
+
+      {/* Legend */}
+      <div style={{ position: "absolute", top: 12, left: 12, display: "flex", flexDirection: "column", gap: 6 }}>
+        {/* Skill colors */}
         {Object.entries(SKILL_COLORS).filter((_, i) => i % 2 === 0).map(([skill, color]) => (
           <div key={skill} style={{ display: "flex", alignItems: "center", gap: 6 }}>
             <div style={{ width: 6, height: 6, borderRadius: "50%", background: color, flexShrink: 0 }} />
             <span style={{ fontSize: 9, color: dark ? "rgba(255,255,255,0.35)" : "rgba(0,0,0,0.35)", fontFamily: "monospace" }}>{skill}</span>
           </div>
         ))}
+
+        {/* Divider */}
+        <div style={{ borderTop: `1px solid ${dark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)"}`, margin: "2px 0" }} />
+
+        {/* Connection types */}
+        {legendItems.map((item) => (
+          <div key={item.label} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            {item.type === "node" ? (
+              <div style={{ width: 8, height: 8, borderRadius: "50%", background: item.color, border: `1px solid ${item.color}`, flexShrink: 0 }} />
+            ) : (
+              <div style={{ width: 16, height: 0, borderTop: `${item.width}px solid ${item.color}`, flexShrink: 0 }} />
+            )}
+            <span style={{ fontSize: 9, color: dark ? "rgba(255,255,255,0.45)" : "rgba(0,0,0,0.45)", fontFamily: "monospace" }}>{item.label}</span>
+          </div>
+        ))}
+
+        {/* Toggle for mutual follow lines */}
+        <button
+          onClick={() => setShowMutualLines(v => !v)}
+          style={{
+            marginTop: 4,
+            background: showMutualLines ? (dark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.07)") : "none",
+            border: `1px solid ${dark ? "rgba(255,255,255,0.15)" : "rgba(0,0,0,0.15)"}`,
+            borderRadius: 4,
+            padding: "3px 8px",
+            fontSize: 9,
+            color: dark ? "rgba(255,255,255,0.5)" : "rgba(0,0,0,0.5)",
+            cursor: "pointer",
+            fontFamily: "monospace",
+            textAlign: "left",
+          }}
+        >
+          {showMutualLines ? "hide" : "show"} mutual lines
+        </button>
       </div>
+
+      {/* Tooltip */}
       {tooltip && (
-        <div style={{ position: "absolute", left: tooltip.x + 12, top: tooltip.y - 10, background: dark ? "#1a1a1a" : "#fff", border: "1px solid rgba(128,128,128,0.2)", borderRadius: 6, padding: "6px 10px", pointerEvents: "none", fontSize: 11, color: dark ? "#fff" : "#000", fontFamily: "monospace", whiteSpace: "nowrap" }}>
+        <div style={{
+          position: "absolute", left: tooltip.x + 12, top: tooltip.y - 10,
+          background: dark ? "#1a1a1a" : "#fff",
+          border: `1px solid ${tooltip.isMutual ? (dark ? "rgba(255,255,255,0.4)" : "rgba(0,0,0,0.3)") : "rgba(128,128,128,0.2)"}`,
+          borderRadius: 6, padding: "6px 10px", pointerEvents: "none",
+          fontSize: 11, color: dark ? "#fff" : "#000", fontFamily: "monospace", whiteSpace: "nowrap"
+        }}>
           <div>{tooltip.name}</div>
           {tooltip.role && <div style={{ opacity: 0.5, fontSize: 10 }}>{tooltip.role}</div>}
+          {tooltip.isMutual && <div style={{ fontSize: 9, opacity: 0.6, marginTop: 2 }}>mutual follow</div>}
+          {tooltip.isCollab && <div style={{ fontSize: 9, opacity: 0.6, marginTop: 2 }}>collaborator</div>}
         </div>
       )}
     </div>
