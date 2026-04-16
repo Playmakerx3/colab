@@ -1,28 +1,60 @@
 import React, { useRef, useMemo, useEffect, useState, useCallback } from "react";
 
-const SKILL_COLORS = {
-  "Design":       "#a78bfa",
-  "Engineering":  "#60a5fa",
-  "Music":        "#f472b6",
-  "Video":        "#fb923c",
-  "Film / Video": "#fb923c",
-  "Marketing":    "#34d399",
-  "Finance":      "#fbbf24",
-  "Writing":      "#e879f9",
-  "AI/ML":        "#38bdf8",
-  "Product":      "#4ade80",
-  "Photography":  "#f87171",
-  "Data":         "#818cf8",
-  "Sales":        "#2dd4bf",
-  "Operations":   "#94a3b8",
-  "3D/CAD":       "#c084fc",
-  "Architecture": "#86efac",
+// ── Macro clusters ──────────────────────────────────────────────────────────
+const SKILL_CLUSTERS = {
+  Creative: {
+    color: "#a78bfa",
+    skills: [
+      "Design", "Illustration", "Motion Design", "Animation", "Photography",
+      "Video", "Music", "Podcast", "Writing", "Copywriting",
+      "Content Strategy", "Journalism", "Branding",
+    ],
+  },
+  Tech: {
+    color: "#60a5fa",
+    skills: [
+      "Engineering", "Frontend", "Backend", "Mobile Dev", "DevOps",
+      "Security", "AI/ML", "Data", "Blockchain", "AR/VR",
+      "Game Dev", "Robotics", "Data Analysis",
+    ],
+  },
+  Business: {
+    color: "#34d399",
+    skills: [
+      "Product", "Marketing", "Sales", "Growth", "SEO", "Social Media",
+      "Finance", "Fundraising", "Business Development", "Strategy",
+      "Operations", "Project Management", "Legal", "Accounting",
+      "HR/Recruiting", "Customer Success",
+    ],
+  },
+  Making: {
+    color: "#fb923c",
+    skills: [
+      "Architecture", "3D/CAD", "Industrial Design", "Hardware",
+      "Electrical Engineering", "Mechanical Engineering", "Woodworking", "Fashion",
+    ],
+  },
+  Research: {
+    color: "#2dd4bf",
+    skills: [
+      "Research", "Healthcare", "Education", "Policy", "Community",
+    ],
+  },
 };
-const DEFAULT_COLOR = "#475569";
 
-function getColor(skills = []) {
-  for (const s of skills) if (SKILL_COLORS[s]) return SKILL_COLORS[s];
-  return DEFAULT_COLOR;
+// Reverse lookup: skill → { cluster, color }
+const SKILL_META = {};
+Object.entries(SKILL_CLUSTERS).forEach(([clusterName, { color, skills }]) => {
+  skills.forEach(s => { SKILL_META[s] = { cluster: clusterName, color }; });
+});
+
+function getNodeColor(skills = []) {
+  for (const s of skills) if (SKILL_META[s]) return SKILL_META[s].color;
+  return "#475569";
+}
+function getClusterName(skills = []) {
+  for (const s of skills) if (SKILL_META[s]) return SKILL_META[s].cluster;
+  return null;
 }
 
 function hexToRgb(hex) {
@@ -32,7 +64,12 @@ function hexToRgb(hex) {
   return `${r},${g},${b}`;
 }
 
-export default function NetworkGraph3D({ users, applications, projects, authUser, onNodeClick, dark, following = [], followers = [] }) {
+// ── Component ────────────────────────────────────────────────────────────────
+export default function NetworkGraph3D({
+  users, applications, projects, authUser,
+  onNodeClick, dark,
+  following = [], followers = [],
+}) {
   const canvasRef = useRef();
   const nodesRef = useRef([]);
   const rafRef = useRef();
@@ -45,8 +82,45 @@ export default function NetworkGraph3D({ users, applications, projects, authUser
     return new Set(following.filter(id => followers.includes(id)));
   }, [following, followers, authUser]);
 
-  const { nodes, collabLinks, mutualLinks } = useMemo(() => {
-    if (!users?.length || !authUser) return { nodes: [], collabLinks: [], mutualLinks: [] };
+  // ── Layout ─────────────────────────────────────────────────────────────────
+  // Returns macro cluster centers + skill sub-centers given canvas size
+  const getLayout = useCallback((w, h) => {
+    const cx = w / 2, cy = h / 2;
+    const clusterNames = Object.keys(SKILL_CLUSTERS);
+    const macroR = Math.min(w, h) * 0.30;
+
+    // Macro cluster centers — evenly spaced around a circle
+    const macroCenters = {};
+    clusterNames.forEach((name, i) => {
+      const angle = (i / clusterNames.length) * Math.PI * 2 - Math.PI / 2;
+      macroCenters[name] = {
+        x: cx + Math.cos(angle) * macroR,
+        y: cy + Math.sin(angle) * macroR,
+      };
+    });
+
+    // Skill sub-centers — smaller ring within each macro cluster
+    const skillCenters = {};
+    Object.entries(SKILL_CLUSTERS).forEach(([clusterName, { skills }]) => {
+      const mc = macroCenters[clusterName];
+      const subR = Math.min(w, h) * 0.09;
+      skills.forEach((skill, i) => {
+        const angle = (i / skills.length) * Math.PI * 2;
+        skillCenters[skill] = {
+          x: mc.x + Math.cos(angle) * subR,
+          y: mc.y + Math.sin(angle) * subR,
+        };
+      });
+    });
+
+    return { macroCenters, skillCenters, cx, cy };
+  }, []);
+
+  // ── Graph data ──────────────────────────────────────────────────────────────
+  const { nodes, collabLinks, mutualLinks, macroCenters, skillPopulation } = useMemo(() => {
+    if (!users?.length || !authUser) return { nodes: [], collabLinks: [], mutualLinks: [], macroCenters: {}, skillPopulation: {} };
+
+    const { macroCenters, skillCenters, cx, cy } = getLayout(dims.w, dims.h);
 
     const myProjectIds = new Set([
       ...projects.filter(p => p.owner_id === authUser.id).map(p => p.id),
@@ -59,34 +133,39 @@ export default function NetworkGraph3D({ users, applications, projects, authUser
     );
     projects.filter(p => myProjectIds.has(p.id) && p.owner_id !== authUser.id).forEach(p => collaboratorIds.add(p.owner_id));
 
-    const w = dims.w, h = dims.h;
-    const cx = w / 2, cy = h / 2;
-
-    const skillKeys = Object.keys(SKILL_COLORS);
-    const clusterCenters = {};
-    skillKeys.forEach((s, i) => {
-      const angle = (i / skillKeys.length) * Math.PI * 2 - Math.PI / 2;
-      const r = Math.min(w, h) * 0.32;
-      clusterCenters[s] = { x: cx + Math.cos(angle) * r, y: cy + Math.sin(angle) * r };
-    });
+    // Count how many people are in each skill (for label threshold)
+    const skillPopulation = {};
+    users.forEach(u => (u.skills || []).forEach(s => { skillPopulation[s] = (skillPopulation[s] || 0) + 1; }));
 
     const nodes = users.filter(u => u.name?.trim()).map(u => {
       const isMe = u.id === authUser.id;
       const isCollab = collaboratorIds.has(u.id);
       const isMutual = !isCollab && mutualFollowIds.has(u.id);
-      const primarySkill = (u.skills || []).find(s => clusterCenters[s]);
-      const center = primarySkill ? clusterCenters[primarySkill] : { x: cx + (Math.random() - 0.5) * 200, y: cy + (Math.random() - 0.5) * 200 };
-      const spread = isCollab ? 80 : isMutual ? 110 : 140;
+      const primarySkill = (u.skills || []).find(s => skillCenters[s]);
+      const skillCenter = primarySkill ? skillCenters[primarySkill] : null;
+      const macroCluster = getClusterName(u.skills);
+      const macroCenter = macroCluster ? macroCenters[macroCluster] : null;
+
+      // Fallback position: if no known skill, scatter around canvas center
+      const fallback = { x: cx + (Math.random() - 0.5) * 160, y: cy + (Math.random() - 0.5) * 160 };
+      const target = skillCenter || macroCenter || fallback;
+      const jitter = isCollab ? 30 : isMutual ? 40 : 28;
+
       return {
-        id: u.id, name: u.name, role: u.role || "", skills: u.skills || [],
-        color: isMe ? "#ffffff" : getColor(u.skills),
+        id: u.id,
+        name: u.name,
+        role: u.role || "",
+        skills: u.skills || [],
+        primarySkill: primarySkill || null,
+        macroCluster,
+        color: isMe ? "#ffffff" : getNodeColor(u.skills),
         isMe, isCollab, isMutual,
-        r: isMe ? 10 : isCollab ? 6 : isMutual ? 5 : 3,
-        x: isMe ? cx : center.x + (Math.random() - 0.5) * spread,
-        y: isMe ? cy : center.y + (Math.random() - 0.5) * spread,
+        r: isMe ? 10 : isCollab ? 7 : isMutual ? 5 : 3.5,
+        x: isMe ? cx : target.x + (Math.random() - 0.5) * jitter,
+        y: isMe ? cy : target.y + (Math.random() - 0.5) * jitter,
         vx: 0, vy: 0,
-        targetX: isMe ? cx : center.x,
-        targetY: isMe ? cy : center.y,
+        targetX: isMe ? cx : target.x,
+        targetY: isMe ? cy : target.y,
       };
     });
 
@@ -94,14 +173,13 @@ export default function NetworkGraph3D({ users, applications, projects, authUser
     collaboratorIds.forEach(cid => {
       if (users.find(u => u.id === cid)) collabLinks.push({ source: authUser.id, target: cid });
     });
-
     const mutualLinks = [];
     mutualFollowIds.forEach(uid => {
       if (users.find(u => u.id === uid)) mutualLinks.push({ source: authUser.id, target: uid });
     });
 
-    return { nodes, collabLinks, mutualLinks };
-  }, [users, applications, projects, authUser, dims, mutualFollowIds]);
+    return { nodes, collabLinks, mutualLinks, macroCenters, skillPopulation };
+  }, [users, applications, projects, authUser, dims, mutualFollowIds, getLayout]);
 
   useEffect(() => { nodesRef.current = nodes.map(n => ({ ...n })); }, [nodes]);
 
@@ -116,28 +194,35 @@ export default function NetworkGraph3D({ users, applications, projects, authUser
     return () => ro.disconnect();
   }, []);
 
+  // ── Render loop ─────────────────────────────────────────────────────────────
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas || !nodesRef.current.length) return;
     const ctx = canvas.getContext("2d");
-    const nodeMap = {};
-    nodesRef.current.forEach(n => { nodeMap[n.id] = n; });
+    const { skillCenters, macroCenters: mc } = getLayout(dims.w, dims.h);
 
     const tick = () => {
       const ns = nodesRef.current;
+      const nodeMap = {};
+      ns.forEach(n => { nodeMap[n.id] = n; });
       const w = canvas.width, h = canvas.height;
 
+      // Physics
       ns.forEach(n => {
         if (n.isMe) return;
-        n.vx += (n.targetX - n.x) * 0.003;
-        n.vy += (n.targetY - n.y) * 0.003;
+        // Attraction toward skill target
+        n.vx += (n.targetX - n.x) * 0.004;
+        n.vy += (n.targetY - n.y) * 0.004;
+        // Repulsion from nearby nodes
         ns.forEach(other => {
           if (other.id === n.id) return;
           const dx = n.x - other.x, dy = n.y - other.y;
           const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-          const minDist = (n.r + other.r) * 3;
+          // Same-skill nodes can pack tighter; different-cluster nodes repel more
+          const sameSkill = n.primarySkill && n.primarySkill === other.primarySkill;
+          const minDist = sameSkill ? (n.r + other.r) * 2 : (n.r + other.r) * 3.5;
           if (dist < minDist) {
-            const force = (minDist - dist) / dist * 0.08;
+            const force = (minDist - dist) / dist * (sameSkill ? 0.04 : 0.09);
             n.vx += dx * force;
             n.vy += dy * force;
           }
@@ -148,11 +233,35 @@ export default function NetworkGraph3D({ users, applications, projects, authUser
         n.y = Math.max(n.r, Math.min(h - n.r, n.y));
       });
 
+      // ── Draw ──────────────────────────────────────────────────────────────
       ctx.clearRect(0, 0, w, h);
       ctx.fillStyle = dark ? "#080808" : "#f0f0f0";
       ctx.fillRect(0, 0, w, h);
 
-      // Collaborator links (bright white — your people)
+      // Macro cluster zone labels (large, faint)
+      Object.entries(SKILL_CLUSTERS).forEach(([name, { color }]) => {
+        const center = mc[name];
+        if (!center) return;
+        ctx.font = `bold ${Math.round(Math.min(w, h) * 0.028)}px monospace`;
+        ctx.textAlign = "center";
+        ctx.fillStyle = dark ? `rgba(${hexToRgb(color)},0.08)` : `rgba(${hexToRgb(color)},0.12)`;
+        ctx.fillText(name.toUpperCase(), center.x, center.y);
+      });
+
+      // Skill sub-labels — only for skills with at least 1 user
+      ctx.font = "9px monospace";
+      Object.entries(skillCenters).forEach(([skill, pos]) => {
+        if (!skillPopulation[skill]) return;
+        const meta = SKILL_META[skill];
+        if (!meta) return;
+        ctx.textAlign = "center";
+        ctx.fillStyle = dark
+          ? `rgba(${hexToRgb(meta.color)},0.28)`
+          : `rgba(${hexToRgb(meta.color)},0.38)`;
+        ctx.fillText(skill, pos.x, pos.y - 14);
+      });
+
+      // Collaborator links (bright white)
       collabLinks.forEach(link => {
         const s = nodeMap[link.source], t = nodeMap[link.target];
         if (!s || !t) return;
@@ -173,7 +282,7 @@ export default function NetworkGraph3D({ users, applications, projects, authUser
           ctx.beginPath();
           ctx.moveTo(s.x, s.y);
           ctx.lineTo(t.x, t.y);
-          ctx.strokeStyle = dark ? "rgba(255,255,255,0.15)" : "rgba(0,0,0,0.12)";
+          ctx.strokeStyle = dark ? "rgba(255,255,255,0.18)" : "rgba(0,0,0,0.14)";
           ctx.lineWidth = 1;
           ctx.setLineDash([]);
           ctx.stroke();
@@ -182,26 +291,35 @@ export default function NetworkGraph3D({ users, applications, projects, authUser
 
       // Nodes
       ns.forEach(n => {
+        const rgb = hexToRgb(n.color);
         ctx.beginPath();
         ctx.arc(n.x, n.y, n.r, 0, Math.PI * 2);
-        const rgb = hexToRgb(n.color);
         ctx.fillStyle = n.isMe ? n.color
-          : n.isCollab ? `rgba(${rgb},0.9)`
+          : n.isCollab ? `rgba(${rgb},0.95)`
           : n.isMutual ? `rgba(${rgb},0.65)`
-          : `rgba(${rgb},0.35)`;
+          : `rgba(${rgb},0.4)`;
         ctx.fill();
 
-        if (n.isMe || n.isCollab || n.isMutual) {
-          ctx.strokeStyle = n.isMutual ? (dark ? "rgba(255,255,255,0.75)" : "rgba(0,0,0,0.55)") : n.color;
-          ctx.lineWidth = n.isMe ? 2 : 1;
+        // Ring for collab / mutual
+        if (n.isMe || n.isCollab) {
+          ctx.strokeStyle = n.color;
+          ctx.lineWidth = n.isMe ? 2 : 1.5;
+          ctx.setLineDash([]);
+          ctx.stroke();
+        } else if (n.isMutual) {
+          ctx.strokeStyle = dark ? "rgba(255,255,255,0.5)" : "rgba(0,0,0,0.4)";
+          ctx.lineWidth = 1;
           ctx.setLineDash([]);
           ctx.stroke();
         }
 
+        // Name labels for notable nodes
         if (n.isMe || n.isCollab || n.isMutual) {
           ctx.font = n.isMe ? "bold 11px monospace" : "10px monospace";
-          ctx.fillStyle = n.isMutual ? (dark ? "rgba(255,255,255,0.75)" : "rgba(0,0,0,0.6)") : n.color;
           ctx.textAlign = "center";
+          ctx.fillStyle = n.isCollab ? n.color
+            : n.isMutual ? (dark ? "rgba(255,255,255,0.6)" : "rgba(0,0,0,0.5)")
+            : n.color;
           ctx.fillText(n.name.split(" ")[0], n.x, n.y + n.r + 12);
         }
       });
@@ -211,8 +329,9 @@ export default function NetworkGraph3D({ users, applications, projects, authUser
 
     rafRef.current = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(rafRef.current);
-  }, [collabLinks, mutualLinks, showMutualLines, dark, dims]);
+  }, [collabLinks, mutualLinks, showMutualLines, dark, dims, getLayout, skillPopulation]);
 
+  // ── Interaction ─────────────────────────────────────────────────────────────
   const handleMouseMove = useCallback((e) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -220,9 +339,14 @@ export default function NetworkGraph3D({ users, applications, projects, authUser
     const mx = e.clientX - rect.left, my = e.clientY - rect.top;
     const hit = nodesRef.current.find(n => {
       const dx = n.x - mx, dy = n.y - my;
-      return Math.sqrt(dx * dx + dy * dy) < Math.max(n.r + 4, 8);
+      return Math.sqrt(dx * dx + dy * dy) < Math.max(n.r + 5, 10);
     });
-    setTooltip(hit && !hit.isMe ? { name: hit.name, role: hit.role, x: mx, y: my, isMutual: hit.isMutual, isCollab: hit.isCollab } : null);
+    setTooltip(hit && !hit.isMe ? {
+      name: hit.name, role: hit.role,
+      primarySkill: hit.primarySkill,
+      isMutual: hit.isMutual, isCollab: hit.isCollab,
+      x: mx, y: my,
+    } : null);
     canvas.style.cursor = hit && !hit.isMe ? "pointer" : "default";
   }, []);
 
@@ -233,7 +357,7 @@ export default function NetworkGraph3D({ users, applications, projects, authUser
     const mx = e.clientX - rect.left, my = e.clientY - rect.top;
     const hit = nodesRef.current.find(n => {
       const dx = n.x - mx, dy = n.y - my;
-      return Math.sqrt(dx * dx + dy * dy) < Math.max(n.r + 4, 8);
+      return Math.sqrt(dx * dx + dy * dy) < Math.max(n.r + 5, 10);
     });
     if (hit && !hit.isMe) {
       const user = users.find(u => u.id === hit.id);
@@ -241,12 +365,7 @@ export default function NetworkGraph3D({ users, applications, projects, authUser
     }
   }, [users, onNodeClick]);
 
-  const legendItems = [
-    { type: "node", color: "#ffffff", label: "you", solid: true },
-    { type: "line", color: dark ? "rgba(255,255,255,0.75)" : "rgba(0,0,0,0.6)", label: "collaborator", dashed: false, width: 2 },
-    { type: "line", color: dark ? "rgba(255,255,255,0.15)" : "rgba(0,0,0,0.12)", label: "mutual follow", dashed: false, width: 1 },
-  ];
-
+  // ── Legend ──────────────────────────────────────────────────────────────────
   return (
     <div style={{ position: "relative", width: "100%", height: dims.h, overflow: "hidden" }}>
       <canvas
@@ -260,12 +379,12 @@ export default function NetworkGraph3D({ users, applications, projects, authUser
       />
 
       {/* Legend */}
-      <div style={{ position: "absolute", top: 12, left: 12, display: "flex", flexDirection: "column", gap: 6 }}>
-        {/* Skill colors */}
-        {Object.entries(SKILL_COLORS).filter((_, i) => i % 2 === 0).map(([skill, color]) => (
-          <div key={skill} style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <div style={{ width: 6, height: 6, borderRadius: "50%", background: color, flexShrink: 0 }} />
-            <span style={{ fontSize: 9, color: dark ? "rgba(255,255,255,0.35)" : "rgba(0,0,0,0.35)", fontFamily: "monospace" }}>{skill}</span>
+      <div style={{ position: "absolute", top: 12, left: 12, display: "flex", flexDirection: "column", gap: 5 }}>
+        {/* Cluster colors */}
+        {Object.entries(SKILL_CLUSTERS).map(([name, { color }]) => (
+          <div key={name} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <div style={{ width: 7, height: 7, borderRadius: "50%", background: color, flexShrink: 0 }} />
+            <span style={{ fontSize: 9, color: dark ? "rgba(255,255,255,0.38)" : "rgba(0,0,0,0.38)", fontFamily: "monospace" }}>{name}</span>
           </div>
         ))}
 
@@ -273,31 +392,25 @@ export default function NetworkGraph3D({ users, applications, projects, authUser
         <div style={{ borderTop: `1px solid ${dark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)"}`, margin: "2px 0" }} />
 
         {/* Connection types */}
-        {legendItems.map((item) => (
-          <div key={item.label} style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            {item.type === "node" ? (
-              <div style={{ width: 8, height: 8, borderRadius: "50%", background: item.color, border: `1px solid ${item.color}`, flexShrink: 0 }} />
-            ) : (
-              <div style={{ width: 16, height: 0, borderTop: `${item.width}px solid ${item.color}`, flexShrink: 0 }} />
-            )}
-            <span style={{ fontSize: 9, color: dark ? "rgba(255,255,255,0.45)" : "rgba(0,0,0,0.45)", fontFamily: "monospace" }}>{item.label}</span>
-          </div>
-        ))}
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <div style={{ width: 16, height: 0, borderTop: `2px solid ${dark ? "rgba(255,255,255,0.75)" : "rgba(0,0,0,0.6)"}`, flexShrink: 0 }} />
+          <span style={{ fontSize: 9, color: dark ? "rgba(255,255,255,0.45)" : "rgba(0,0,0,0.45)", fontFamily: "monospace" }}>collaborator</span>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <div style={{ width: 16, height: 0, borderTop: `1px solid ${dark ? "rgba(255,255,255,0.18)" : "rgba(0,0,0,0.14)"}`, flexShrink: 0 }} />
+          <span style={{ fontSize: 9, color: dark ? "rgba(255,255,255,0.45)" : "rgba(0,0,0,0.45)", fontFamily: "monospace" }}>mutual follow</span>
+        </div>
 
-        {/* Toggle for mutual follow lines */}
+        {/* Toggle */}
         <button
           onClick={() => setShowMutualLines(v => !v)}
           style={{
-            marginTop: 4,
-            background: showMutualLines ? (dark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.07)") : "none",
-            border: `1px solid ${dark ? "rgba(255,255,255,0.15)" : "rgba(0,0,0,0.15)"}`,
-            borderRadius: 4,
-            padding: "3px 8px",
-            fontSize: 9,
-            color: dark ? "rgba(255,255,255,0.5)" : "rgba(0,0,0,0.5)",
-            cursor: "pointer",
-            fontFamily: "monospace",
-            textAlign: "left",
+            marginTop: 2,
+            background: showMutualLines ? (dark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)") : "none",
+            border: `1px solid ${dark ? "rgba(255,255,255,0.14)" : "rgba(0,0,0,0.14)"}`,
+            borderRadius: 4, padding: "3px 8px", fontSize: 9,
+            color: dark ? "rgba(255,255,255,0.45)" : "rgba(0,0,0,0.45)",
+            cursor: "pointer", fontFamily: "monospace", textAlign: "left",
           }}
         >
           {showMutualLines ? "hide" : "show"} mutual lines
@@ -307,16 +420,21 @@ export default function NetworkGraph3D({ users, applications, projects, authUser
       {/* Tooltip */}
       {tooltip && (
         <div style={{
-          position: "absolute", left: tooltip.x + 12, top: tooltip.y - 10,
+          position: "absolute", left: tooltip.x + 14, top: tooltip.y - 12,
           background: dark ? "#1a1a1a" : "#fff",
-          border: `1px solid ${tooltip.isMutual ? (dark ? "rgba(255,255,255,0.4)" : "rgba(0,0,0,0.3)") : "rgba(128,128,128,0.2)"}`,
-          borderRadius: 6, padding: "6px 10px", pointerEvents: "none",
-          fontSize: 11, color: dark ? "#fff" : "#000", fontFamily: "monospace", whiteSpace: "nowrap"
+          border: `1px solid ${tooltip.isCollab
+            ? (dark ? "rgba(255,255,255,0.3)" : "rgba(0,0,0,0.25)")
+            : "rgba(128,128,128,0.2)"}`,
+          borderRadius: 6, padding: "7px 11px",
+          pointerEvents: "none", fontSize: 11,
+          color: dark ? "#fff" : "#000",
+          fontFamily: "monospace", whiteSpace: "nowrap",
         }}>
           <div>{tooltip.name}</div>
-          {tooltip.role && <div style={{ opacity: 0.5, fontSize: 10 }}>{tooltip.role}</div>}
-          {tooltip.isMutual && <div style={{ fontSize: 9, opacity: 0.6, marginTop: 2 }}>mutual follow</div>}
-          {tooltip.isCollab && <div style={{ fontSize: 9, opacity: 0.6, marginTop: 2 }}>collaborator</div>}
+          {tooltip.role && <div style={{ opacity: 0.5, fontSize: 10, marginTop: 1 }}>{tooltip.role}</div>}
+          {tooltip.primarySkill && <div style={{ opacity: 0.45, fontSize: 9, marginTop: 2 }}>{tooltip.primarySkill}</div>}
+          {tooltip.isCollab && <div style={{ fontSize: 9, opacity: 0.55, marginTop: 3 }}>collaborator</div>}
+          {tooltip.isMutual && <div style={{ fontSize: 9, opacity: 0.55, marginTop: 3 }}>mutual follow</div>}
         </div>
       )}
     </div>
