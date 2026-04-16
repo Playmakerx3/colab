@@ -70,9 +70,22 @@ export default function NetworkGraph3D({ users, applications, projects, authUser
     });
   }, []);
 
-  const applyZoom = useCallback((factor) => {
+  const applyZoom = useCallback((factor, sx, sy) => {
     const v = viewRef.current;
-    v.zoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, v.zoom * factor));
+    const newZoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, v.zoom * factor));
+    if (newZoom === v.zoom) return;
+    const ratio = newZoom / v.zoom;
+    const c = canvasRef.current;
+    const cx = c ? c.width / 2 : 0, cy = c ? c.height / 2 : 0;
+    // Keep the point under the cursor fixed by adjusting pan
+    const pivotX = sx ?? cx;
+    const pivotY = sy ?? cy;
+    viewRef.current = {
+      ...v,
+      panX: pivotX - cx - (pivotX - cx - v.panX) * ratio,
+      panY: pivotY - cy - (pivotY - cy - v.panY) * ratio,
+      zoom: newZoom,
+    };
   }, []);
 
   const resetView = useCallback(() => {
@@ -462,7 +475,10 @@ export default function NetworkGraph3D({ users, applications, projects, authUser
   const handleWheel = useCallback((e) => {
     e.preventDefault();
     velocityRef.current = { vrX: 0, vrY: 0 };
-    applyZoom(e.deltaY < 0 ? 1.1 : 0.9);
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    applyZoom(e.deltaY < 0 ? 1.1 : 0.9, e.clientX - rect.left, e.clientY - rect.top);
   }, [applyZoom]);
 
   // Touch: 1 finger = 3D rotate, 2 finger = pinch zoom + twist
@@ -578,8 +594,8 @@ export default function NetworkGraph3D({ users, applications, projects, authUser
 
       {/* Controls */}
       <div style={{ position: "absolute", bottom: 16, right: 16, display: "flex", flexDirection: "column", gap: 4 }}>
-        <button onClick={() => applyZoom(1.3)} style={btnStyle}>+</button>
-        <button onClick={() => applyZoom(0.8)} style={btnStyle}>−</button>
+        <button onClick={() => { const c = canvasRef.current; if (c) applyZoom(1.3, c.width/2, c.height/2); }} style={btnStyle}>+</button>
+        <button onClick={() => { const c = canvasRef.current; if (c) applyZoom(0.8, c.width/2, c.height/2); }} style={btnStyle}>−</button>
         <button onClick={resetView} style={{ ...btnStyle, fontSize: 11 }} title="Reset view">⊙</button>
       </div>
 
