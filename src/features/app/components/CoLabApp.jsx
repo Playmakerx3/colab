@@ -2229,6 +2229,7 @@ const setViewingProfile = (user) => {
     addProjectAttachments,
     retryDmAttachment,
     retryProjectAttachment,
+    dmTypingUser,
   } = useMessaging({
     authUser,
     profile,
@@ -3464,6 +3465,10 @@ const setViewingProfile = (user) => {
                   const isActive = activeDmThread?.id === thread.id;
                   const threadMsgs = dmMessages[thread.id] || [];
                   const lastMsg = threadMsgs[threadMsgs.length - 1];
+                  const unreadCount = threadMsgs.filter(m => m.sender_id !== authUser?.id && !(m.read_by || []).includes(authUser?.id)).length;
+                  const lastMsgPrefix = lastMsg?.sender_id === authUser?.id ? "you: " : "";
+                  const lastMsgText = lastMsg ? `${lastMsgPrefix}${lastMsg.text}` : null;
+                  const lastMsgTruncated = lastMsgText ? (lastMsgText.length > 35 ? lastMsgText.slice(0, 35) + "…" : lastMsgText) : null;
                   return (
                     <div key={thread.id} onClick={() => openDmThread({ thread, otherUser: other })}
                       style={{ padding: "14px 20px", borderBottom: `1px solid ${border}`, cursor: "pointer", background: isActive ? bg2 : "none", display: "flex", gap: 12, alignItems: "center" }}
@@ -3471,12 +3476,12 @@ const setViewingProfile = (user) => {
                       onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = "none"; }}>
                       <div style={{ position: "relative", flexShrink: 0 }}>
                         <Avatar initials={initials(other.name)} size={36} dark={dark} />
-                        {thread.unread && <span style={{ position: "absolute", top: 0, right: 0, width: 8, height: 8, borderRadius: "50%", background: text, border: `2px solid ${bg}` }} />}
+                        {unreadCount > 0 && <span style={{ position: "absolute", top: -2, right: -2, minWidth: 16, height: 16, borderRadius: 8, background: text, color: bg, fontSize: 10, fontWeight: 600, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 4px", border: `2px solid ${bg}`, lineHeight: 1 }}>{unreadCount}</span>}
                       </div>
                       <div style={{ minWidth: 0, flex: 1 }}>
-                        <div style={{ fontSize: 13, color: text, fontWeight: thread.unread ? 500 : 400 }}>{other.name}</div>
-                        {lastMsg
-                          ? <div style={{ fontSize: 11, color: textMuted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{lastMsg.sender_id === authUser?.id ? "you: " : ""}{lastMsg.text}</div>
+                        <div style={{ fontSize: 13, color: text, fontWeight: unreadCount > 0 ? 500 : 400 }}>{other.name}</div>
+                        {lastMsgTruncated
+                          ? <div style={{ fontSize: 11, color: textMuted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{lastMsgTruncated}{lastMsg?.created_at ? ` · ${relativeTime(lastMsg.created_at)}` : ""}</div>
                           : <div style={{ fontSize: 11, color: textMuted }}>{other.role}</div>
                         }
                       </div>
@@ -3506,37 +3511,44 @@ const setViewingProfile = (user) => {
                         start the conversation.<br />
                         share context, ask a question, or drop an attachment.
                       </div>
-                    : (dmMessages[activeDmThread.id] || []).map((msg, i) => {
-                        const isMe = msg.sender_id === authUser?.id;
-                        const isRead = (msg.read_by || []).length > 0;
-                        const isEditing = editingMessage?.id === msg.id;
-                        return (
-                          <div key={msg.id || i} style={{ display: "flex", gap: 10, alignItems: "flex-end", flexDirection: isMe ? "row-reverse" : "row" }}>
-                            <Avatar initials={msg.sender_initials} size={26} dark={dark} />
-                            <div style={{ maxWidth: "70%" }}>
-                              {isEditing ? (
-                                <div style={{ display: "flex", gap: 6 }}>
-                                  <input value={editMessageText} onChange={e => setEditMessageText(e.target.value)} onKeyDown={e => { if (e.key === "Enter") handleEditDm(msg.id, editMessageText); if (e.key === "Escape") setEditingMessage(null); }} style={{ ...inputStyle, fontSize: 12, padding: "6px 10px" }} autoFocus />
-                                  <button onClick={() => handleEditDm(msg.id, editMessageText)} style={{ ...btnP, padding: "6px 10px", fontSize: 11, flexShrink: 0 }}>save</button>
+                    : (() => {
+                        const activeMsgs = dmMessages[activeDmThread.id] || [];
+                        const lastSentIdx = activeMsgs.reduce((acc, m, i) => m.sender_id === authUser?.id ? i : acc, -1);
+                        return activeMsgs.map((msg, i) => {
+                          const isMe = msg.sender_id === authUser?.id;
+                          const isEditing = editingMessage?.id === msg.id;
+                          const otherUserId = activeDmThread.otherUser?.id;
+                          const isLastSent = isMe && i === lastSentIdx;
+                          const seenByOther = isLastSent && otherUserId && (msg.read_by || []).includes(otherUserId);
+                          return (
+                            <div key={msg.id || i} style={{ display: "flex", gap: 10, alignItems: "flex-end", flexDirection: isMe ? "row-reverse" : "row" }}>
+                              <Avatar initials={msg.sender_initials} size={26} dark={dark} />
+                              <div style={{ maxWidth: "70%" }}>
+                                {isEditing ? (
+                                  <div style={{ display: "flex", gap: 6 }}>
+                                    <input value={editMessageText} onChange={e => setEditMessageText(e.target.value)} onKeyDown={e => { if (e.key === "Enter") handleEditDm(msg.id, editMessageText); if (e.key === "Escape") setEditingMessage(null); }} style={{ ...inputStyle, fontSize: 12, padding: "6px 10px" }} autoFocus />
+                                    <button onClick={() => handleEditDm(msg.id, editMessageText)} style={{ ...btnP, padding: "6px 10px", fontSize: 11, flexShrink: 0 }}>save</button>
+                                  </div>
+                                ) : (
+                                  <div style={{ background: isMe ? text : bg2, color: isMe ? bg : text, padding: "9px 13px", borderRadius: isMe ? "14px 14px 2px 14px" : "14px 14px 14px 2px", fontSize: 13, lineHeight: 1.55, border: isMe ? "none" : `1px solid ${border}` }}>
+                                    {renderMessageBody(msg.text, isMe)}{msg.edited && <span style={{ fontSize: 9, opacity: 0.5, marginLeft: 6 }}>edited</span>}
+                                  </div>
+                                )}
+                                <div style={{ fontSize: 10, color: textMuted, marginTop: 3, textAlign: isMe ? "right" : "left", display: "flex", gap: 8, justifyContent: isMe ? "flex-end" : "flex-start", alignItems: "center" }}>
+                                  <span>{new Date(msg.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
+                                  {isMe && <button className="hb" onClick={() => { setEditingMessage({ id: msg.id }); setEditMessageText(msg.text); }} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontSize: 10, fontFamily: "inherit" }}>edit</button>}
+                                  {isMe && <button className="hb" onClick={() => handleDeleteDm(msg.id)} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontSize: 10, fontFamily: "inherit" }}>delete</button>}
                                 </div>
-                              ) : (
-                                <div style={{ background: isMe ? text : bg2, color: isMe ? bg : text, padding: "9px 13px", borderRadius: isMe ? "14px 14px 2px 14px" : "14px 14px 14px 2px", fontSize: 13, lineHeight: 1.55, border: isMe ? "none" : `1px solid ${border}` }}>
-                                  {renderMessageBody(msg.text, isMe)}{msg.edited && <span style={{ fontSize: 9, opacity: 0.5, marginLeft: 6 }}>edited</span>}
-                                </div>
-                              )}
-                              <div style={{ fontSize: 10, color: textMuted, marginTop: 3, textAlign: isMe ? "right" : "left", display: "flex", gap: 8, justifyContent: isMe ? "flex-end" : "flex-start", alignItems: "center" }}>
-                                <span>{new Date(msg.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
-                                {isMe && isRead && <span style={{ fontSize: 9 }}>✓✓</span>}
-                                {isMe && <button className="hb" onClick={() => { setEditingMessage({ id: msg.id }); setEditMessageText(msg.text); }} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontSize: 10, fontFamily: "inherit" }}>edit</button>}
-                                {isMe && <button className="hb" onClick={() => handleDeleteDm(msg.id)} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontSize: 10, fontFamily: "inherit" }}>delete</button>}
+                                {seenByOther && <div style={{ fontSize: 10, color: textMuted, textAlign: "right", marginTop: 1, fontStyle: "italic" }}>Seen</div>}
                               </div>
                             </div>
-                          </div>
-                        );
-                      })
+                          );
+                        });
+                      })()
                   }
                   <div ref={dmEndRef} />
                 </div>
+                {dmTypingUser && <div style={{ padding: "4px 20px 0", fontSize: 11, color: textMuted, fontStyle: "italic" }}>{dmTypingUser} is typing...</div>}
                 <div style={{ padding: "14px 20px", borderTop: `1px solid ${border}`, display: "flex", gap: 10 }}>
                   <input placeholder="message..." value={dmInput} onChange={e => setDmInput(e.target.value)} onKeyDown={e => e.key === "Enter" && handleSendDm()} style={{ ...inputStyle, fontSize: 13 }} autoFocus />
                   <label style={{ ...btnG, padding: "10px 12px", cursor: "pointer", flexShrink: 0 }}>

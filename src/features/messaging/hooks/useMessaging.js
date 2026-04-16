@@ -43,6 +43,9 @@ export function useMessaging({
   const dmReadInFlightRef = useRef(new Set());
   const [dmAttachments, setDmAttachments] = useState({});
   const [projectAttachments, setProjectAttachments] = useState({});
+  const [dmTypingUser, setDmTypingUser] = useState(null);
+  const typingChannelRef = useRef(null);
+  const typingTimeoutRef = useRef(null);
 
   const isImageUrl = (url) => /\.(jpg|jpeg|png|gif|webp|bmp|svg)$/i.test(url || "");
   const normalizeUpload = (file) => ({
@@ -301,6 +304,58 @@ export function useMessaging({
     await uploadAttachment({ file: item.file, scope: "project", projectId });
   };
 
+  // Typing broadcast: send when dmInput changes and a thread is active
+  useEffect(() => {
+    if (!dmInput || !activeDmThread || !authUser?.id || !profile?.name) return;
+    supabase.channel(`dm-typing-${activeDmThread.id}`).send({
+      type: "broadcast",
+      event: "typing",
+      payload: { userId: authUser.id, name: profile.name },
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dmInput]);
+
+  // Typing subscription: subscribe when active thread changes
+  useEffect(() => {
+    if (typingChannelRef.current) {
+      supabase.removeChannel(typingChannelRef.current);
+      typingChannelRef.current = null;
+    }
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+      typingTimeoutRef.current = null;
+    }
+    setDmTypingUser(null);
+
+    if (!activeDmThread?.id || !authUser?.id) return;
+
+    const channel = supabase
+      .channel(`dm-typing-${activeDmThread.id}`)
+      .on("broadcast", { event: "typing" }, ({ payload }) => {
+        if (!payload || payload.userId === authUser.id) return;
+        setDmTypingUser(payload.name);
+        if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+        typingTimeoutRef.current = setTimeout(() => {
+          setDmTypingUser(null);
+          typingTimeoutRef.current = null;
+        }, 2000);
+      })
+      .subscribe();
+
+    typingChannelRef.current = channel;
+
+    return () => {
+      supabase.removeChannel(channel);
+      typingChannelRef.current = null;
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+        typingTimeoutRef.current = null;
+      }
+      setDmTypingUser(null);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeDmThread?.id]);
+
   useEffect(() => {
     if (!users?.length || !activeDmThread) return;
 
@@ -387,5 +442,6 @@ export function useMessaging({
     addProjectAttachments,
     retryDmAttachment,
     retryProjectAttachment,
+    dmTypingUser,
   };
 }
