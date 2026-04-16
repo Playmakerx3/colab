@@ -858,6 +858,8 @@ function CoLab() {
   const [discoverSkillFilter, setDiscoverSkillFilter] = useState([]);
   const [discoverLocationFilter, setDiscoverLocationFilter] = useState("");
   const [discoverSmartMatch, setDiscoverSmartMatch] = useState(false);
+  const [skillDepotSelected, setSkillDepotSelected] = useState(null); // null = grid, string = drill-in
+  const [customSkillInput, setCustomSkillInput] = useState("");
   const [activeProject, setActiveProject] = useState(null);
   const [viewingProfile, setViewingProfileState] = useState(null);
   const [viewFullProfile, setViewFullProfileState] = useState(null);
@@ -997,6 +999,23 @@ function CoLab() {
   const btnG = { background: "none", color: textMuted, border: `1px solid ${border}`, borderRadius: 8, padding: "10px 20px", fontSize: 12, cursor: "pointer", fontFamily: "inherit" };
 
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(null), 3000); };
+
+  // ── SKILL VALIDATION ──
+  const BANNED_WORDS = ["fuck", "shit", "ass", "dick", "pussy", "bitch", "cunt", "cock", "whore", "slut", "nigga", "nigger", "faggot", "retard", "rape", "porn", "sex", "nude", "naked", "bastard", "damn", "hell", "crap", "piss", "jerk", "idiot", "stupid", "dumb", "loser"];
+  const isSkillClean = (s) => {
+    const lower = s.toLowerCase();
+    return !BANNED_WORDS.some(w => lower.includes(w));
+  };
+  const normalizeSkill = (s) => s.trim().replace(/\s+/g, " ").replace(/\b\w/g, c => c.toUpperCase()).slice(0, 32);
+  const addCustomSkill = (currentSkills, setter) => {
+    const cleaned = normalizeSkill(customSkillInput);
+    if (!cleaned) return;
+    if (!isSkillClean(cleaned)) { showToast("That skill name isn't allowed."); return; }
+    if (cleaned.length < 2) { showToast("Skill name too short."); return; }
+    if (currentSkills.includes(cleaned)) { showToast("Already added."); return; }
+    setter([...currentSkills, cleaned]);
+    setCustomSkillInput("");
+  };
 const setViewingProfile = (user) => {
     setViewingProfileState(user || null);
   };
@@ -3016,8 +3035,27 @@ const setViewingProfile = (user) => {
               <div>
                 <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
                   {SKILLS.map(s => { const sel = onboardData.skills.includes(s); return <button key={s} className="hb" onClick={() => setOnboardData({ ...onboardData, skills: sel ? onboardData.skills.filter(x => x !== s) : [...onboardData.skills, s] })} style={{ padding: "6px 14px", borderRadius: 4, fontSize: 12, cursor: "pointer", fontFamily: "inherit", background: sel ? text : "none", color: sel ? bg : textMuted, border: `1px solid ${sel ? text : border}`, transition: "all 0.15s" }}>{s}</button>; })}
+                  {/* Custom skills added during onboarding */}
+                  {onboardData.skills.filter(s => !SKILLS.includes(s)).map(s => (
+                    <button key={s} className="hb" onClick={() => setOnboardData({ ...onboardData, skills: onboardData.skills.filter(x => x !== s) })}
+                      style={{ padding: "6px 14px", borderRadius: 4, fontSize: 12, cursor: "pointer", fontFamily: "inherit", background: text, color: bg, border: `1px solid ${text}` }}>
+                      {s} ✕
+                    </button>
+                  ))}
                 </div>
-                <div style={{ fontSize: 11, color: onboardData.skills.length === 0 ? text : textMuted, marginTop: 4 }}>
+                {/* Add custom skill */}
+                <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
+                  <input
+                    value={customSkillInput}
+                    onChange={e => setCustomSkillInput(e.target.value)}
+                    onKeyDown={e => e.key === "Enter" && addCustomSkill(onboardData.skills, (newSkills) => setOnboardData({ ...onboardData, skills: newSkills }))}
+                    placeholder="not listed? type it here..."
+                    style={{ background: "none", border: `1px solid ${border}`, borderRadius: 6, padding: "8px 12px", color: text, fontSize: 12, fontFamily: "inherit", outline: "none", flex: 1 }}
+                  />
+                  <button className="hb" onClick={() => addCustomSkill(onboardData.skills, (newSkills) => setOnboardData({ ...onboardData, skills: newSkills }))}
+                    style={{ background: "none", border: `1px solid ${border}`, borderRadius: 6, padding: "8px 14px", fontSize: 12, cursor: "pointer", fontFamily: "inherit", color: text }}>+ add</button>
+                </div>
+                <div style={{ fontSize: 11, color: onboardData.skills.length === 0 ? text : textMuted }}>
                   {onboardData.skills.length === 0 ? "select at least one to continue" : `${onboardData.skills.length} selected`}
                 </div>
               </div>
@@ -3493,6 +3531,7 @@ const setViewingProfile = (user) => {
             {[
               { id: "feed", label: "feed" },
               { id: "projects", label: "projects" },
+              { id: "skills", label: "skills" },
             ].map(({ id, label }) => (
               <button key={id} onClick={() => setExploreTab(id)} style={{ background: "none", border: "none", borderBottom: exploreTab === id ? `1px solid ${text}` : "1px solid transparent", color: exploreTab === id ? text : textMuted, padding: "8px 0", fontSize: 12, cursor: "pointer", fontFamily: "inherit", marginRight: 24, transition: "all 0.15s", display: "inline-flex", gap: 6, alignItems: "center", whiteSpace: "nowrap" }}>
                 {label}
@@ -3792,6 +3831,115 @@ const setViewingProfile = (user) => {
                     }
                     return <PostCard key={item.id} post={item} ctx={postCtx} />;
                   })}
+              </div>
+            );
+          })()}
+
+          {/* SKILLS DEPOT TAB */}
+          {exploreTab === "skills" && (() => {
+            // Build frequency maps
+            const peopleBySkill = {};
+            const projectsBySkill = {};
+            const allSkillNames = new Set(SKILLS);
+            // Collect all skills (canonical + custom from users/projects)
+            users.forEach(u => (u.skills || []).forEach(s => { allSkillNames.add(s); peopleBySkill[s] = (peopleBySkill[s] || 0) + 1; }));
+            projects.filter(p => !p.archived && !p.is_private).forEach(p => (p.skills || []).forEach(s => { allSkillNames.add(s); projectsBySkill[s] = (projectsBySkill[s] || 0) + 1; }));
+
+            const sortedSkills = [...allSkillNames].sort((a, b) => {
+              const aTotal = (peopleBySkill[a] || 0) + (projectsBySkill[a] || 0);
+              const bTotal = (peopleBySkill[b] || 0) + (projectsBySkill[b] || 0);
+              return bTotal - aTotal || a.localeCompare(b);
+            });
+
+            if (skillDepotSelected) {
+              const s = skillDepotSelected;
+              const skillPeople = users.filter(u => (u.skills || []).includes(s) && u.name?.trim());
+              const skillProjects = projects.filter(p => (p.skills || []).includes(s) && !p.archived && !p.is_private);
+              return (
+                <div>
+                  <button onClick={() => setSkillDepotSelected(null)} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontFamily: "inherit", fontSize: 12, padding: 0, marginBottom: 20 }}>← all skills</button>
+                  <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px", marginBottom: 8 }}>SKILL</div>
+                  <h2 style={{ fontSize: "clamp(24px, 4vw, 40px)", fontWeight: 400, letterSpacing: "-2px", color: text, marginBottom: 6 }}>{s}</h2>
+                  <p style={{ fontSize: 12, color: textMuted, marginBottom: 28 }}>{skillPeople.length} builder{skillPeople.length !== 1 ? "s" : ""} · {skillProjects.length} project{skillProjects.length !== 1 ? "s" : ""}</p>
+
+                  {skillPeople.length > 0 && (
+                    <div style={{ marginBottom: 32 }}>
+                      <div style={{ fontSize: 10, color: textMuted, letterSpacing: "1.5px", marginBottom: 14 }}>BUILDERS</div>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                        {skillPeople.map(u => {
+                          const isFollowing = following.includes(u.id);
+                          return (
+                            <div key={u.id} style={{ background: bg2, border: `1px solid ${border}`, borderRadius: 10, padding: "14px 16px", display: "flex", alignItems: "center", gap: 12 }}>
+                              <button onClick={() => setViewingProfile(u)} style={{ background: "none", border: "none", cursor: "pointer", padding: 0, flexShrink: 0 }}>
+                                <Avatar initials={initials(u.name)} size={36} dark={dark} />
+                              </button>
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <button onClick={() => setViewingProfile(u)} style={{ background: "none", border: "none", cursor: "pointer", padding: 0, fontFamily: "inherit" }}>
+                                  <div style={{ fontSize: 13, color: text, letterSpacing: "-0.3px" }}>{u.name}</div>
+                                </button>
+                                <div style={{ fontSize: 11, color: textMuted }}>{u.role}{u.location ? ` · ${u.location}` : ""}</div>
+                              </div>
+                              <button onClick={() => !isFollowing && handleSwipe("like", u)}
+                                style={{ fontSize: 11, padding: "5px 14px", borderRadius: 6, cursor: isFollowing ? "default" : "pointer", fontFamily: "inherit", transition: "all 0.15s",
+                                  background: isFollowing ? "none" : text, color: isFollowing ? textMuted : bg, border: `1px solid ${isFollowing ? border : text}` }}>
+                                {isFollowing ? "following" : "follow"}
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {skillProjects.length > 0 && (
+                    <div>
+                      <div style={{ fontSize: 10, color: textMuted, letterSpacing: "1.5px", marginBottom: 14 }}>PROJECTS NEEDING THIS SKILL</div>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                        {skillProjects.map(p => (
+                          <div key={p.id} style={{ background: bg2, border: `1px solid ${border}`, borderRadius: 10, padding: "14px 16px", cursor: "pointer" }}
+                            onClick={() => { setActiveProject(p); loadProjectData(p.id); setExploreTab("projects"); setSkillDepotSelected(null); }}>
+                            <div style={{ fontSize: 13, color: text, letterSpacing: "-0.3px", marginBottom: 4 }}>{p.title}</div>
+                            <div style={{ fontSize: 11, color: textMuted, marginBottom: 8 }}>{p.owner_name} · {p.category}</div>
+                            <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
+                              {(p.skills || []).map(sk => (
+                                <span key={sk} style={{ fontSize: 10, padding: "2px 8px", borderRadius: 3, border: `1px solid ${sk === s ? text : border}`, color: sk === s ? text : textMuted }}>{sk}</span>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {skillPeople.length === 0 && skillProjects.length === 0 && (
+                    <div style={{ fontSize: 13, color: textMuted, padding: "32px 0" }}>No builders or projects using this skill yet.</div>
+                  )}
+                </div>
+              );
+            }
+
+            return (
+              <div>
+                <div style={{ marginBottom: 28 }}>
+                  <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px", marginBottom: 8 }}>SKILLS DEPOT</div>
+                  <h2 style={{ fontSize: "clamp(22px, 3.5vw, 38px)", fontWeight: 400, lineHeight: 1.05, letterSpacing: "-1.5px", color: text, marginBottom: 6 }}>The skill glossary.</h2>
+                  <p style={{ fontSize: 12, color: textMuted, lineHeight: 1.75 }}>Every skill on CoLab — tap one to see who has it and which projects need it.</p>
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))", gap: 10 }}>
+                  {sortedSkills.map(s => {
+                    const pCount = peopleBySkill[s] || 0;
+                    const prCount = projectsBySkill[s] || 0;
+                    const hasMe = (profile?.skills || []).includes(s);
+                    return (
+                      <button key={s} onClick={() => setSkillDepotSelected(s)}
+                        style={{ background: bg2, border: `1px solid ${hasMe ? text : border}`, borderRadius: 10, padding: "16px", cursor: "pointer", textAlign: "left", fontFamily: "inherit", transition: "all 0.15s" }}>
+                        <div style={{ fontSize: 13, color: text, letterSpacing: "-0.3px", marginBottom: 8 }}>{s}{hasMe ? " ★" : ""}</div>
+                        <div style={{ fontSize: 10, color: textMuted }}>{pCount} builder{pCount !== 1 ? "s" : ""}</div>
+                        <div style={{ fontSize: 10, color: textMuted }}>{prCount} project{prCount !== 1 ? "s" : ""}</div>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             );
           })()}
@@ -5210,9 +5358,30 @@ const setViewingProfile = (user) => {
                 <div><label style={labelStyle}>BIO</label><textarea style={{ ...inputStyle, resize: "none" }} rows={4} value={profile?.bio || ""} onChange={e => setProfile({ ...profile, bio: e.target.value })} /></div>
                 <div>
                   <label style={labelStyle}>SKILLS</label>
-                  <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
+                  <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginBottom: 10 }}>
+                    {/* Canonical skills */}
                     {SKILLS.map(s => { const sel = (profile?.skills || []).includes(s); return <button key={s} className="hb" onClick={() => setProfile({ ...profile, skills: sel ? profile.skills.filter(x => x !== s) : [...(profile?.skills || []), s] })} style={{ padding: "3px 10px", borderRadius: 3, fontSize: 10, cursor: "pointer", fontFamily: "inherit", background: sel ? text : "none", color: sel ? bg : textMuted, border: `1px solid ${sel ? text : border}`, transition: "all 0.15s" }}>{s}</button>; })}
+                    {/* Custom skills not in canonical list */}
+                    {(profile?.skills || []).filter(s => !SKILLS.includes(s)).map(s => (
+                      <button key={s} className="hb" onClick={() => setProfile({ ...profile, skills: profile.skills.filter(x => x !== s) })}
+                        style={{ padding: "3px 10px", borderRadius: 3, fontSize: 10, cursor: "pointer", fontFamily: "inherit", background: text, color: bg, border: `1px solid ${text}` }}>
+                        {s} ✕
+                      </button>
+                    ))}
                   </div>
+                  {/* Add custom skill */}
+                  <div style={{ display: "flex", gap: 6 }}>
+                    <input
+                      value={customSkillInput}
+                      onChange={e => setCustomSkillInput(e.target.value)}
+                      onKeyDown={e => e.key === "Enter" && addCustomSkill(profile?.skills || [], (newSkills) => setProfile({ ...profile, skills: newSkills }))}
+                      placeholder="add a skill not listed above..."
+                      style={{ ...inputStyle, flex: 1, fontSize: 11, padding: "7px 12px" }}
+                    />
+                    <button className="hb" onClick={() => addCustomSkill(profile?.skills || [], (newSkills) => setProfile({ ...profile, skills: newSkills }))}
+                      style={{ ...btnG, fontSize: 11, padding: "7px 14px", whiteSpace: "nowrap" }}>+ add</button>
+                  </div>
+                  <div style={{ fontSize: 10, color: textMuted, marginTop: 5 }}>Only real professional skills — inappropriate entries are blocked.</div>
                 </div>
               </div>
               <div style={{ display: "flex", gap: 10 }}>

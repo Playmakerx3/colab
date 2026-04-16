@@ -1,6 +1,19 @@
 export const SKILLS = [
-  "Design", "Engineering", "Marketing", "Finance", "Legal", "Writing", "Video", "Music",
-  "Photography", "Data", "AI/ML", "Product", "Sales", "Operations", "3D/CAD", "Architecture",
+  // Creative & Media
+  "Design", "Illustration", "Motion Design", "Animation", "Photography", "Video", "Podcast",
+  "Music", "Writing", "Copywriting", "Content Strategy", "Journalism",
+  // Tech
+  "Engineering", "Frontend", "Backend", "Mobile Dev", "DevOps", "Security",
+  "AI/ML", "Data", "Blockchain", "AR/VR", "Game Dev", "Robotics",
+  // Business
+  "Product", "Marketing", "Sales", "Growth", "SEO", "Social Media", "Branding",
+  "Finance", "Fundraising", "Business Development", "Strategy", "Operations",
+  "Project Management", "Legal", "Accounting", "HR/Recruiting", "Customer Success",
+  // Physical & Making
+  "Architecture", "3D/CAD", "Industrial Design", "Hardware", "Electrical Engineering",
+  "Mechanical Engineering", "Woodworking", "Fashion",
+  // Research & Impact
+  "Research", "Data Analysis", "Healthcare", "Education", "Policy", "Community",
 ];
 
 export const CATEGORIES = [
