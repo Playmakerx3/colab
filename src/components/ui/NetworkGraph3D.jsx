@@ -1,44 +1,25 @@
 import React, { useRef, useMemo, useEffect, useState, useCallback } from "react";
 
-// ── Macro clusters ──────────────────────────────────────────────────────────
 const SKILL_CLUSTERS = {
   Creative: {
     color: "#a78bfa",
-    skills: [
-      "Design", "Illustration", "Motion Design", "Animation", "Photography",
-      "Video", "Music", "Podcast", "Writing", "Copywriting",
-      "Content Strategy", "Journalism", "Branding",
-    ],
+    skills: ["Design","Illustration","Motion Design","Animation","Photography","Video","Music","Podcast","Writing","Copywriting","Content Strategy","Journalism","Branding"],
   },
   Tech: {
     color: "#60a5fa",
-    skills: [
-      "Engineering", "Frontend", "Backend", "Mobile Dev", "DevOps",
-      "Security", "AI/ML", "Data", "Blockchain", "AR/VR",
-      "Game Dev", "Robotics", "Data Analysis",
-    ],
+    skills: ["Engineering","Frontend","Backend","Mobile Dev","DevOps","Security","AI/ML","Data","Blockchain","AR/VR","Game Dev","Robotics","Data Analysis"],
   },
   Business: {
     color: "#34d399",
-    skills: [
-      "Product", "Marketing", "Sales", "Growth", "SEO", "Social Media",
-      "Finance", "Fundraising", "Business Development", "Strategy",
-      "Operations", "Project Management", "Legal", "Accounting",
-      "HR/Recruiting", "Customer Success",
-    ],
+    skills: ["Product","Marketing","Sales","Growth","SEO","Social Media","Finance","Fundraising","Business Development","Strategy","Operations","Project Management","Legal","Accounting","HR/Recruiting","Customer Success"],
   },
   Making: {
     color: "#fb923c",
-    skills: [
-      "Architecture", "3D/CAD", "Industrial Design", "Hardware",
-      "Electrical Engineering", "Mechanical Engineering", "Woodworking", "Fashion",
-    ],
+    skills: ["Architecture","3D/CAD","Industrial Design","Hardware","Electrical Engineering","Mechanical Engineering","Woodworking","Fashion"],
   },
   Research: {
     color: "#2dd4bf",
-    skills: [
-      "Research", "Healthcare", "Education", "Policy", "Community",
-    ],
+    skills: ["Research","Healthcare","Education","Policy","Community"],
   },
 };
 
@@ -56,18 +37,13 @@ function getClusterName(skills = []) {
   return null;
 }
 function hexToRgb(hex) {
-  const r = parseInt(hex.slice(1, 3), 16);
-  const g = parseInt(hex.slice(3, 5), 16);
-  const b = parseInt(hex.slice(5, 7), 16);
-  return `${r},${g},${b}`;
+  return `${parseInt(hex.slice(1,3),16)},${parseInt(hex.slice(3,5),16)},${parseInt(hex.slice(5,7),16)}`;
 }
 
-// ── Component ────────────────────────────────────────────────────────────────
-export default function NetworkGraph3D({
-  users, applications, projects, authUser,
-  onNodeClick, dark,
-  following = [], followers = [],
-}) {
+const MIN_SCALE = 1;
+const MAX_SCALE = 6;
+
+export default function NetworkGraph3D({ users, applications, projects, authUser, onNodeClick, dark, following = [], followers = [] }) {
   const canvasRef = useRef();
   const nodesRef = useRef([]);
   const rafRef = useRef();
@@ -75,36 +51,64 @@ export default function NetworkGraph3D({
   const [dims, setDims] = useState({ w: 900, h: 600 });
   const [showMutualLines, setShowMutualLines] = useState(true);
 
-  // ── Viewport (pan + zoom) — kept in refs so no re-render per frame ──────────
-  const viewRef = useRef({ x: 0, y: 0, scale: 1 });
-  const isPanningRef = useRef(false);
-  const panMovedRef = useRef(false);
-  const panStartRef = useRef({ x: 0, y: 0 });
-  const panOriginRef = useRef({ x: 0, y: 0 });
+  // Viewport: pan (x,y), zoom scale, rotation angle (radians)
+  const viewRef = useRef({ x: 0, y: 0, scale: 1, rotation: 0 });
+  const interactRef = useRef({ mode: null, startX: 0, startY: 0, originView: null, panMoved: false });
   const pinchRef = useRef(null);
 
+  // World ↔ screen conversion (accounts for pan, zoom, and rotation around canvas center)
   const screenToWorld = useCallback((sx, sy) => {
-    const { x, y, scale } = viewRef.current;
-    return { x: (sx - x) / scale, y: (sy - y) / scale };
+    const c = canvasRef.current;
+    if (!c) return { x: sx, y: sy };
+    const { x: vx, y: vy, scale: vs, rotation: vr } = viewRef.current;
+    const cx = c.width / 2, cy = c.height / 2;
+    const u = (sx - vx - cx) / vs;
+    const v = (sy - vy - cy) / vs;
+    const cos = Math.cos(vr), sin = Math.sin(vr);
+    return { x: cx + u * cos + v * sin, y: cy - u * sin + v * cos };
   }, []);
 
-  const zoomAt = useCallback((sx, sy, factor) => {
+  const worldToScreen = useCallback((wx, wy) => {
+    const c = canvasRef.current;
+    if (!c) return { x: wx, y: wy };
+    const { x: vx, y: vy, scale: vs, rotation: vr } = viewRef.current;
+    const cx = c.width / 2, cy = c.height / 2;
+    const dx = wx - cx, dy = wy - cy;
+    const cos = Math.cos(vr), sin = Math.sin(vr);
+    return { x: vs * (dx * cos - dy * sin) + vx + cx, y: vs * (dx * sin + dy * cos) + vy + cy };
+  }, []);
+
+  const zoomIn = useCallback((sx, sy, factor = 1.2) => {
     const v = viewRef.current;
-    const newScale = Math.max(0.25, Math.min(5, v.scale * factor));
+    const newScale = Math.min(MAX_SCALE, v.scale * factor);
+    if (newScale === v.scale) return;
     const ratio = newScale / v.scale;
-    viewRef.current = { x: sx - (sx - v.x) * ratio, y: sy - (sy - v.y) * ratio, scale: newScale };
+    const c = canvasRef.current;
+    const cx = c ? c.width / 2 : 0, cy = c ? c.height / 2 : 0;
+    // Zoom toward screen point (sx, sy), keeping rotation center at canvas center
+    viewRef.current = {
+      ...v,
+      x: sx - cx - (sx - cx - v.x) * ratio,
+      y: sy - cy - (sy - cy - v.y) * ratio,
+      scale: newScale,
+    };
   }, []);
 
-  const resetView = useCallback(() => {
-    viewRef.current = { x: 0, y: 0, scale: 1 };
-  }, []);
+  const resetView = useCallback(() => { viewRef.current = { x: 0, y: 0, scale: 1, rotation: 0 }; }, []);
+
+  const getHit = useCallback((sx, sy) => {
+    const { x: wx, y: wy } = screenToWorld(sx, sy);
+    return nodesRef.current.find(n => {
+      const dx = n.x - wx, dy = n.y - wy;
+      return Math.sqrt(dx * dx + dy * dy) < Math.max(n.r + 6, 12);
+    });
+  }, [screenToWorld]);
 
   const mutualFollowIds = useMemo(() => {
     if (!authUser) return new Set();
     return new Set(following.filter(id => followers.includes(id)));
   }, [following, followers, authUser]);
 
-  // ── Layout ──────────────────────────────────────────────────────────────────
   const getLayout = useCallback((w, h) => {
     const cx = w / 2, cy = h / 2;
     const clusterNames = Object.keys(SKILL_CLUSTERS);
@@ -126,10 +130,8 @@ export default function NetworkGraph3D({
     return { macroCenters, skillCenters, cx, cy };
   }, []);
 
-  // ── Graph data ──────────────────────────────────────────────────────────────
   const { nodes, collabLinks, mutualLinks, skillPopulation } = useMemo(() => {
     if (!users?.length || !authUser) return { nodes: [], collabLinks: [], mutualLinks: [], skillPopulation: {} };
-
     const { macroCenters, skillCenters, cx, cy } = getLayout(dims.w, dims.h);
 
     const myProjectIds = new Set([
@@ -137,9 +139,7 @@ export default function NetworkGraph3D({
       ...applications.filter(a => a.applicant_id === authUser.id && a.status === "accepted").map(a => a.project_id),
     ]);
     const collaboratorIds = new Set(
-      applications
-        .filter(a => myProjectIds.has(a.project_id) && a.status === "accepted" && a.applicant_id !== authUser.id)
-        .map(a => a.applicant_id)
+      applications.filter(a => myProjectIds.has(a.project_id) && a.status === "accepted" && a.applicant_id !== authUser.id).map(a => a.applicant_id)
     );
     projects.filter(p => myProjectIds.has(p.id) && p.owner_id !== authUser.id).forEach(p => collaboratorIds.add(p.owner_id));
 
@@ -200,9 +200,10 @@ export default function NetworkGraph3D({
     const tick = () => {
       const ns = nodesRef.current;
       const w = canvas.width, h = canvas.height;
-      const { x: vx, y: vy, scale: vs } = viewRef.current;
+      const cx = w / 2, cy = h / 2;
+      const { x: vx, y: vy, scale: vs, rotation: vr } = viewRef.current;
 
-      // Physics (always in world space)
+      // Physics (always world space)
       ns.forEach(n => {
         if (n.isMe) return;
         n.vx += (n.targetX - n.x) * 0.004;
@@ -220,26 +221,26 @@ export default function NetworkGraph3D({
         });
         n.vx *= 0.85; n.vy *= 0.85;
         n.x += n.vx; n.y += n.vy;
-        // World-space boundary (use canvas size / scale as world bounds)
         n.x = Math.max(n.r, Math.min(w - n.r, n.x));
         n.y = Math.max(n.r, Math.min(h - n.r, n.y));
       });
 
-      // Build nodeMap each frame
       const nodeMap = {};
       ns.forEach(n => { nodeMap[n.id] = n; });
 
-      // Clear (always full canvas, before transform)
+      // Clear
       ctx.clearRect(0, 0, w, h);
       ctx.fillStyle = dark ? "#080808" : "#f0f0f0";
       ctx.fillRect(0, 0, w, h);
 
-      // Apply viewport transform
+      // Apply viewport: translate to canvas center + pan, then rotate, then scale, then shift back
       ctx.save();
-      ctx.translate(vx, vy);
+      ctx.translate(cx + vx, cy + vy);
+      ctx.rotate(vr);
       ctx.scale(vs, vs);
+      ctx.translate(-cx, -cy);
 
-      // Macro cluster labels
+      // Cluster zone labels
       Object.entries(SKILL_CLUSTERS).forEach(([name, { color }]) => {
         const center = mc[name];
         if (!center) return;
@@ -260,7 +261,7 @@ export default function NetworkGraph3D({
         ctx.fillText(skill, pos.x, pos.y - 14);
       });
 
-      // Collaborator links (bright)
+      // Collaborator links
       collabLinks.forEach(link => {
         const s = nodeMap[link.source], t = nodeMap[link.target];
         if (!s || !t) return;
@@ -269,7 +270,7 @@ export default function NetworkGraph3D({
         ctx.lineWidth = 1.5; ctx.setLineDash([]); ctx.stroke();
       });
 
-      // Mutual follow links (faint)
+      // Mutual follow links
       if (showMutualLines) {
         mutualLinks.forEach(link => {
           const s = nodeMap[link.source], t = nodeMap[link.target];
@@ -286,12 +287,8 @@ export default function NetworkGraph3D({
         const rgb = hexToRgb(n.color);
         ctx.beginPath();
         ctx.arc(n.x, n.y, n.r, 0, Math.PI * 2);
-        ctx.fillStyle = n.isMe ? meColor
-          : n.isCollab ? `rgba(${rgb},0.95)`
-          : n.isMutual ? `rgba(${rgb},0.65)`
-          : `rgba(${rgb},0.4)`;
+        ctx.fillStyle = n.isMe ? meColor : n.isCollab ? `rgba(${rgb},0.95)` : n.isMutual ? `rgba(${rgb},0.65)` : `rgba(${rgb},0.4)`;
         ctx.fill();
-
         if (n.isMe || n.isCollab) {
           ctx.strokeStyle = n.isMe ? meColor : n.color;
           ctx.lineWidth = n.isMe ? 2 : 1.5; ctx.setLineDash([]); ctx.stroke();
@@ -299,13 +296,10 @@ export default function NetworkGraph3D({
           ctx.strokeStyle = dark ? "rgba(255,255,255,0.5)" : "rgba(0,0,0,0.4)";
           ctx.lineWidth = 1; ctx.setLineDash([]); ctx.stroke();
         }
-
         if (n.isMe || n.isCollab || n.isMutual) {
           ctx.font = n.isMe ? "bold 11px monospace" : "10px monospace";
           ctx.textAlign = "center";
-          ctx.fillStyle = n.isMe ? meColor
-            : n.isCollab ? n.color
-            : dark ? "rgba(255,255,255,0.6)" : "rgba(0,0,0,0.5)";
+          ctx.fillStyle = n.isMe ? meColor : n.isCollab ? n.color : dark ? "rgba(255,255,255,0.6)" : "rgba(0,0,0,0.5)";
           ctx.fillText(n.name.split(" ")[0], n.x, n.y + n.r + 12);
         }
       });
@@ -318,28 +312,27 @@ export default function NetworkGraph3D({
     return () => cancelAnimationFrame(rafRef.current);
   }, [collabLinks, mutualLinks, showMutualLines, dark, dims, getLayout, skillPopulation]);
 
-  // ── Interaction ─────────────────────────────────────────────────────────────
-  const getHit = useCallback((sx, sy) => {
-    const { x, y, scale } = viewRef.current;
-    const wx = (sx - x) / scale, wy = (sy - y) / scale;
-    return nodesRef.current.find(n => {
-      const dx = n.x - wx, dy = n.y - wy;
-      return Math.sqrt(dx * dx + dy * dy) < Math.max(n.r + 5, 10);
-    });
-  }, []);
-
+  // ── Mouse ───────────────────────────────────────────────────────────────────
   const handleMouseDown = useCallback((e) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const rect = canvas.getBoundingClientRect();
     const sx = e.clientX - rect.left, sy = e.clientY - rect.top;
-    const hit = getHit(sx, sy);
-    if (!hit) {
-      isPanningRef.current = true;
-      panMovedRef.current = false;
-      panStartRef.current = { x: e.clientX, y: e.clientY };
-      panOriginRef.current = { ...viewRef.current };
-      canvas.style.cursor = "grabbing";
+
+    if (e.button === 2) {
+      // Right click → rotate
+      e.preventDefault();
+      interactRef.current = { mode: "rotate", startX: e.clientX, startY: e.clientY, originView: { ...viewRef.current }, panMoved: false };
+      canvas.style.cursor = "crosshair";
+    } else if (e.button === 0) {
+      const hit = getHit(sx, sy);
+      if (!hit) {
+        // Left click on empty → pan
+        interactRef.current = { mode: "pan", startX: e.clientX, startY: e.clientY, originView: { ...viewRef.current }, panMoved: false };
+        canvas.style.cursor = "grabbing";
+      } else {
+        interactRef.current = { mode: "click", startX: e.clientX, startY: e.clientY, originView: null, panMoved: false };
+      }
     }
   }, [getHit]);
 
@@ -348,34 +341,41 @@ export default function NetworkGraph3D({
     if (!canvas) return;
     const rect = canvas.getBoundingClientRect();
     const sx = e.clientX - rect.left, sy = e.clientY - rect.top;
+    const { mode, startX, startY, originView } = interactRef.current;
 
-    if (isPanningRef.current) {
-      const dx = e.clientX - panStartRef.current.x;
-      const dy = e.clientY - panStartRef.current.y;
-      if (Math.abs(dx) > 3 || Math.abs(dy) > 3) panMovedRef.current = true;
-      const o = panOriginRef.current;
-      viewRef.current = { ...viewRef.current, x: o.x + dx, y: o.y + dy };
+    if (mode === "pan") {
+      const dx = e.clientX - startX, dy = e.clientY - startY;
+      if (Math.abs(dx) > 3 || Math.abs(dy) > 3) interactRef.current.panMoved = true;
+      viewRef.current = { ...viewRef.current, x: originView.x + dx, y: originView.y + dy };
       return;
     }
 
+    if (mode === "rotate") {
+      const dx = e.clientX - startX;
+      interactRef.current.panMoved = true;
+      viewRef.current = { ...viewRef.current, rotation: originView.rotation + dx * 0.008 };
+      return;
+    }
+
+    // Hover tooltip
     const hit = getHit(sx, sy);
     if (hit && !hit.isMe) {
-      const { x: vx, y: vy, scale: vs } = viewRef.current;
-      setTooltip({ name: hit.name, role: hit.role, primarySkill: hit.primarySkill, isMutual: hit.isMutual, isCollab: hit.isCollab, x: hit.x * vs + vx, y: hit.y * vs + vy });
+      const sp = worldToScreen(hit.x, hit.y);
+      setTooltip({ name: hit.name, role: hit.role, primarySkill: hit.primarySkill, isMutual: hit.isMutual, isCollab: hit.isCollab, x: sp.x, y: sp.y });
       canvas.style.cursor = "pointer";
     } else {
       setTooltip(null);
-      canvas.style.cursor = isPanningRef.current ? "grabbing" : "grab";
+      canvas.style.cursor = mode ? "grabbing" : "grab";
     }
-  }, [getHit]);
+  }, [getHit, worldToScreen]);
 
   const handleMouseUp = useCallback(() => {
-    isPanningRef.current = false;
+    interactRef.current.mode = null;
     if (canvasRef.current) canvasRef.current.style.cursor = "grab";
   }, []);
 
   const handleClick = useCallback((e) => {
-    if (panMovedRef.current) return;
+    if (interactRef.current.panMoved) return;
     const canvas = canvasRef.current;
     if (!canvas) return;
     const rect = canvas.getBoundingClientRect();
@@ -386,26 +386,31 @@ export default function NetworkGraph3D({
     }
   }, [users, onNodeClick, getHit]);
 
+  const handleContextMenu = useCallback((e) => e.preventDefault(), []);
+
+  // Scroll = zoom in only
   const handleWheel = useCallback((e) => {
     e.preventDefault();
+    if (e.deltaY >= 0) return; // block zoom out
     const canvas = canvasRef.current;
     if (!canvas) return;
     const rect = canvas.getBoundingClientRect();
-    zoomAt(e.clientX - rect.left, e.clientY - rect.top, e.deltaY < 0 ? 1.12 : 0.9);
-  }, [zoomAt]);
+    zoomIn(e.clientX - rect.left, e.clientY - rect.top, 1.1);
+  }, [zoomIn]);
 
-  // Touch: single finger = pan, two finger = pinch zoom
+  // Touch: 1 finger = pan, 2 finger = pinch zoom in + rotate
   const handleTouchStart = useCallback((e) => {
     if (e.touches.length === 1) {
-      isPanningRef.current = true;
-      panMovedRef.current = false;
-      panStartRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
-      panOriginRef.current = { ...viewRef.current };
+      interactRef.current = { mode: "pan", startX: e.touches[0].clientX, startY: e.touches[0].clientY, originView: { ...viewRef.current }, panMoved: false };
     } else if (e.touches.length === 2) {
-      isPanningRef.current = false;
+      interactRef.current.mode = null;
       const dx = e.touches[1].clientX - e.touches[0].clientX;
       const dy = e.touches[1].clientY - e.touches[0].clientY;
-      pinchRef.current = { dist: Math.sqrt(dx * dx + dy * dy), scale: viewRef.current.scale };
+      pinchRef.current = {
+        dist: Math.sqrt(dx * dx + dy * dy),
+        angle: Math.atan2(dy, dx),
+        originView: { ...viewRef.current },
+      };
     }
   }, []);
 
@@ -414,37 +419,59 @@ export default function NetworkGraph3D({
     const canvas = canvasRef.current;
     if (!canvas) return;
     const rect = canvas.getBoundingClientRect();
-    if (e.touches.length === 1 && isPanningRef.current) {
-      const dx = e.touches[0].clientX - panStartRef.current.x;
-      const dy = e.touches[0].clientY - panStartRef.current.y;
-      if (Math.abs(dx) > 3 || Math.abs(dy) > 3) panMovedRef.current = true;
-      const o = panOriginRef.current;
-      viewRef.current = { ...viewRef.current, x: o.x + dx, y: o.y + dy };
+    const { mode, startX, startY, originView } = interactRef.current;
+
+    if (e.touches.length === 1 && mode === "pan") {
+      const dx = e.touches[0].clientX - startX, dy = e.touches[0].clientY - startY;
+      if (Math.abs(dx) > 3 || Math.abs(dy) > 3) interactRef.current.panMoved = true;
+      viewRef.current = { ...viewRef.current, x: originView.x + dx, y: originView.y + dy };
     } else if (e.touches.length === 2 && pinchRef.current) {
       const dx = e.touches[1].clientX - e.touches[0].clientX;
       const dy = e.touches[1].clientY - e.touches[0].clientY;
       const newDist = Math.sqrt(dx * dx + dy * dy);
+      const newAngle = Math.atan2(dy, dx);
       const factor = newDist / pinchRef.current.dist;
       const midX = (e.touches[0].clientX + e.touches[1].clientX) / 2 - rect.left;
       const midY = (e.touches[0].clientY + e.touches[1].clientY) / 2 - rect.top;
-      const newScale = Math.max(0.25, Math.min(5, pinchRef.current.scale * factor));
+      const ov = pinchRef.current.originView;
+      // Zoom in only
+      const newScale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, ov.scale * factor));
       const ratio = newScale / viewRef.current.scale;
-      viewRef.current = { x: midX - (midX - viewRef.current.x) * ratio, y: midY - (midY - viewRef.current.y) * ratio, scale: newScale };
+      const c = canvas;
+      const cx = c.width / 2, cy = c.height / 2;
+      const deltaAngle = newAngle - pinchRef.current.angle;
+      viewRef.current = {
+        x: midX - cx - (midX - cx - viewRef.current.x) * ratio,
+        y: midY - cy - (midY - cy - viewRef.current.y) * ratio,
+        scale: newScale,
+        rotation: ov.rotation + deltaAngle,
+      };
     }
   }, []);
 
   const handleTouchEnd = useCallback(() => {
-    isPanningRef.current = false;
+    interactRef.current.mode = null;
     pinchRef.current = null;
   }, []);
 
-  // Attach wheel with passive:false so we can preventDefault
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     canvas.addEventListener("wheel", handleWheel, { passive: false });
-    return () => canvas.removeEventListener("wheel", handleWheel);
-  }, [handleWheel]);
+    canvas.addEventListener("touchmove", handleTouchMove, { passive: false });
+    return () => {
+      canvas.removeEventListener("wheel", handleWheel);
+      canvas.removeEventListener("touchmove", handleTouchMove);
+    };
+  }, [handleWheel, handleTouchMove]);
+
+  const btnStyle = {
+    width: 32, height: 32, borderRadius: 6, fontSize: 16, cursor: "pointer",
+    display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "monospace",
+    background: dark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)",
+    border: `1px solid ${dark ? "rgba(255,255,255,0.14)" : "rgba(0,0,0,0.14)"}`,
+    color: dark ? "rgba(255,255,255,0.6)" : "rgba(0,0,0,0.6)",
+  };
 
   return (
     <div style={{ position: "relative", width: "100%", height: dims.h, overflow: "hidden" }}>
@@ -457,8 +484,8 @@ export default function NetworkGraph3D({
         onMouseUp={handleMouseUp}
         onMouseLeave={() => { handleMouseUp(); setTooltip(null); }}
         onClick={handleClick}
+        onContextMenu={handleContextMenu}
         onTouchStart={handleTouchStart}
-        onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
         style={{ display: "block", cursor: "grab", touchAction: "none" }}
       />
@@ -484,16 +511,15 @@ export default function NetworkGraph3D({
           style={{ marginTop: 2, background: showMutualLines ? (dark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)") : "none", border: `1px solid ${dark ? "rgba(255,255,255,0.14)" : "rgba(0,0,0,0.14)"}`, borderRadius: 4, padding: "3px 8px", fontSize: 9, color: dark ? "rgba(255,255,255,0.45)" : "rgba(0,0,0,0.45)", cursor: "pointer", fontFamily: "monospace", textAlign: "left" }}>
           {showMutualLines ? "hide" : "show"} mutual lines
         </button>
+        <div style={{ marginTop: 6, fontSize: 8, color: dark ? "rgba(255,255,255,0.22)" : "rgba(0,0,0,0.25)", fontFamily: "monospace", lineHeight: 1.6 }}>
+          drag · scroll to zoom<br />right-drag to rotate
+        </div>
       </div>
 
-      {/* Zoom controls */}
+      {/* Controls: zoom in + reset only */}
       <div style={{ position: "absolute", bottom: 16, right: 16, display: "flex", flexDirection: "column", gap: 4 }}>
-        <button onClick={() => { const c = canvasRef.current; if (c) { const r = c.getBoundingClientRect(); zoomAt(r.width / 2, r.height / 2, 1.25); } }}
-          style={{ width: 32, height: 32, borderRadius: 6, background: dark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)", border: `1px solid ${dark ? "rgba(255,255,255,0.14)" : "rgba(0,0,0,0.14)"}`, color: dark ? "rgba(255,255,255,0.6)" : "rgba(0,0,0,0.6)", fontSize: 18, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "monospace" }}>+</button>
-        <button onClick={() => { const c = canvasRef.current; if (c) { const r = c.getBoundingClientRect(); zoomAt(r.width / 2, r.height / 2, 0.8); } }}
-          style={{ width: 32, height: 32, borderRadius: 6, background: dark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)", border: `1px solid ${dark ? "rgba(255,255,255,0.14)" : "rgba(0,0,0,0.14)"}`, color: dark ? "rgba(255,255,255,0.6)" : "rgba(0,0,0,0.6)", fontSize: 18, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "monospace" }}>−</button>
-        <button onClick={resetView}
-          style={{ width: 32, height: 32, borderRadius: 6, background: dark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)", border: `1px solid ${dark ? "rgba(255,255,255,0.14)" : "rgba(0,0,0,0.14)"}`, color: dark ? "rgba(255,255,255,0.6)" : "rgba(0,0,0,0.6)", fontSize: 11, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "monospace" }}>⊙</button>
+        <button onClick={() => { const c = canvasRef.current; if (c) zoomIn(c.width / 2, c.height / 2, 1.3); }} style={btnStyle}>+</button>
+        <button onClick={resetView} style={{ ...btnStyle, fontSize: 11 }}>⊙</button>
       </div>
 
       {/* Tooltip */}
