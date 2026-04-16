@@ -855,6 +855,9 @@ function CoLab() {
   const [exploreTab, setExploreTab] = useState("feed");
   const [projectsSubTab, setProjectsSubTab] = useState("for-you");
   const [networkTab, setNetworkTab] = useState("graph");
+  const [discoverSkillFilter, setDiscoverSkillFilter] = useState([]);
+  const [discoverLocationFilter, setDiscoverLocationFilter] = useState("");
+  const [discoverSmartMatch, setDiscoverSmartMatch] = useState(false);
   const [activeProject, setActiveProject] = useState(null);
   const [viewingProfile, setViewingProfileState] = useState(null);
   const [viewFullProfile, setViewFullProfileState] = useState(null);
@@ -2642,44 +2645,195 @@ const setViewingProfile = (user) => {
 
         {/* DISCOVER TAB */}
         {networkTab === "discover" && (() => {
-          const card = discoverQueue[0];
+          const mySkills = profile?.skills || [];
+
+          // All users except self (not filtered by swipe history — full directory)
+          const allOtherUsers = users.filter(u => u.id !== authUser?.id && u.name?.trim());
+
+          // Apply filters
+          let displayUsers = allOtherUsers;
+          if (discoverSkillFilter.length > 0) {
+            displayUsers = displayUsers.filter(u =>
+              discoverSkillFilter.every(s => (u.skills || []).includes(s))
+            );
+          }
+          if (discoverLocationFilter.trim()) {
+            const loc = discoverLocationFilter.trim().toLowerCase();
+            displayUsers = displayUsers.filter(u =>
+              (u.location || "").toLowerCase().includes(loc)
+            );
+          }
+
+          // Smart match: sort by shared skill count (descending)
+          if (discoverSmartMatch) {
+            displayUsers = [...displayUsers].sort((a, b) => {
+              const aMatch = (a.skills || []).filter(s => mySkills.includes(s)).length;
+              const bMatch = (b.skills || []).filter(s => mySkills.includes(s)).length;
+              return bMatch - aMatch;
+            });
+          }
+
+          // Unique locations for suggestions
+          const allLocations = [...new Set(allOtherUsers.map(u => u.location).filter(Boolean))].sort();
+
+          // Popular skills across all users
+          const skillFreq = {};
+          allOtherUsers.forEach(u => (u.skills || []).forEach(s => { skillFreq[s] = (skillFreq[s] || 0) + 1; }));
+          const popularSkills = Object.entries(skillFreq).sort((a, b) => b[1] - a[1]).slice(0, 12).map(([s]) => s);
+
           return (
-            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", paddingTop: 32 }}>
-              {discoverSwipes === null ? (
-                <div style={{ fontSize: 12, color: textMuted }}>loading...</div>
-              ) : !card ? (
-                <div style={{ textAlign: "center", padding: "48px 0" }}>
-                  <div style={{ fontSize: 13, color: text, marginBottom: 8 }}>you've seen everyone.</div>
-                  <div style={{ fontSize: 11, color: textMuted }}>check back when new people join.</div>
+            <div>
+              {/* Header */}
+              <div style={{ marginBottom: 24 }}>
+                <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px", marginBottom: 8 }}>DISCOVER</div>
+                <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+                  <div>
+                    <h2 style={{ fontSize: "clamp(22px, 3.5vw, 36px)", fontWeight: 400, lineHeight: 1.05, letterSpacing: "-1.5px", color: text, marginBottom: 4 }}>Find your people.</h2>
+                    <p style={{ fontSize: 12, color: textMuted, lineHeight: 1.7 }}>{allOtherUsers.length} builders on CoLab — browse, filter, or let us match you.</p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setDiscoverSmartMatch(v => !v);
+                      setDiscoverSkillFilter([]);
+                      setDiscoverLocationFilter("");
+                    }}
+                    style={{
+                      padding: "9px 16px", borderRadius: 8, fontSize: 12, cursor: "pointer", transition: "all 0.15s", whiteSpace: "nowrap",
+                      background: discoverSmartMatch ? text : "none",
+                      color: discoverSmartMatch ? bg : text,
+                      border: `1px solid ${discoverSmartMatch ? text : border}`,
+                    }}
+                  >
+                    {discoverSmartMatch ? "smart match on" : "find my match"}
+                  </button>
                 </div>
-              ) : (
-                <div style={{ width: "100%", maxWidth: 360 }}>
-                  {/* Card */}
-                  <div style={{ background: bg2, border: `1px solid ${border}`, borderRadius: 16, padding: 28, marginBottom: 24 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 20 }}>
-                      <Avatar initials={initials(card.name)} size={56} dark={dark} />
-                      <div>
-                        <div style={{ fontSize: 15, color: text, letterSpacing: "-0.3px", marginBottom: 2 }}>{card.name}</div>
-                        <div style={{ fontSize: 11, color: textMuted }}>{card.role}{card.location ? ` · ${card.location}` : ""}</div>
-                      </div>
-                    </div>
-                    {card.bio && <div style={{ fontSize: 12, color: textMuted, lineHeight: 1.6, marginBottom: 16 }}>{card.bio}</div>}
-                    {(card.skills || []).length > 0 && (
-                      <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                        {(card.skills || []).slice(0, 5).map(s => (
-                          <span key={s} style={{ fontSize: 10, color: textMuted, border: `1px solid ${border}`, borderRadius: 999, padding: "2px 10px" }}>{s}</span>
-                        ))}
-                      </div>
+              </div>
+
+              {/* Smart match banner */}
+              {discoverSmartMatch && (
+                <div style={{ background: dark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.04)", border: `1px solid ${border}`, borderRadius: 10, padding: "12px 16px", marginBottom: 20, fontSize: 12, color: textMuted, lineHeight: 1.6 }}>
+                  {mySkills.length > 0
+                    ? <>Sorted by shared skills with you — <span style={{ color: text }}>{mySkills.slice(0, 3).join(", ")}{mySkills.length > 3 ? ` +${mySkills.length - 3} more` : ""}</span>.</>
+                    : "Add skills to your profile to get better matches."}
+                </div>
+              )}
+
+              {/* Filters */}
+              {!discoverSmartMatch && (
+                <div style={{ marginBottom: 20 }}>
+                  {/* Location filter */}
+                  <div style={{ marginBottom: 12 }}>
+                    <input
+                      value={discoverLocationFilter}
+                      onChange={e => setDiscoverLocationFilter(e.target.value)}
+                      placeholder="filter by location..."
+                      style={{ width: "100%", background: bg2, border: `1px solid ${border}`, borderRadius: 8, padding: "9px 14px", fontSize: 12, color: text, outline: "none", fontFamily: "inherit" }}
+                      list="discover-locations"
+                    />
+                    <datalist id="discover-locations">
+                      {allLocations.map(l => <option key={l} value={l} />)}
+                    </datalist>
+                  </div>
+                  {/* Skill chips */}
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                    {popularSkills.map(s => {
+                      const active = discoverSkillFilter.includes(s);
+                      return (
+                        <button key={s} onClick={() => setDiscoverSkillFilter(prev => active ? prev.filter(x => x !== s) : [...prev, s])}
+                          style={{ fontSize: 10, padding: "4px 11px", borderRadius: 999, cursor: "pointer", transition: "all 0.15s", fontFamily: "inherit",
+                            background: active ? text : "none", color: active ? bg : textMuted, border: `1px solid ${active ? text : border}` }}>
+                          {s}
+                        </button>
+                      );
+                    })}
+                    {(discoverSkillFilter.length > 0 || discoverLocationFilter) && (
+                      <button onClick={() => { setDiscoverSkillFilter([]); setDiscoverLocationFilter(""); }}
+                        style={{ fontSize: 10, padding: "4px 11px", borderRadius: 999, cursor: "pointer", fontFamily: "inherit", background: "none", color: textMuted, border: `1px solid ${border}`, opacity: 0.6 }}>
+                        clear
+                      </button>
                     )}
                   </div>
-                  {/* Buttons */}
-                  <div style={{ display: "flex", gap: 12 }}>
-                    <button className="hb" onClick={() => handleSwipe("pass", card)}
-                      style={{ flex: 1, padding: "12px", background: "none", border: `1px solid ${border}`, borderRadius: 10, fontSize: 18, cursor: "pointer", color: textMuted, transition: "all 0.15s" }}>✕</button>
-                    <button className="hb" onClick={() => handleSwipe("like", card)}
-                      style={{ flex: 1, padding: "12px", background: text, border: `1px solid ${text}`, borderRadius: 10, fontSize: 18, cursor: "pointer", color: bg, transition: "all 0.15s" }}>⚙</button>
-                  </div>
-                  <div style={{ fontSize: 10, color: textMuted, textAlign: "center", marginTop: 12 }}>{discoverQueue.length} left to discover</div>
+                </div>
+              )}
+
+              {/* Results count */}
+              <div style={{ fontSize: 10, color: textMuted, letterSpacing: "1px", marginBottom: 14 }}>
+                {displayUsers.length} {displayUsers.length === 1 ? "person" : "people"}{discoverSkillFilter.length > 0 || discoverLocationFilter ? " matching filters" : ""}
+              </div>
+
+              {/* User grid */}
+              {discoverSwipes === null ? (
+                <div style={{ fontSize: 12, color: textMuted, padding: "32px 0" }}>loading...</div>
+              ) : displayUsers.length === 0 ? (
+                <div style={{ textAlign: "center", padding: "48px 0" }}>
+                  <div style={{ fontSize: 13, color: text, marginBottom: 6 }}>no one matches those filters.</div>
+                  <button onClick={() => { setDiscoverSkillFilter([]); setDiscoverLocationFilter(""); }} style={{ fontSize: 11, color: textMuted, background: "none", border: "none", cursor: "pointer", textDecoration: "underline", fontFamily: "inherit" }}>clear filters</button>
+                </div>
+              ) : (
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 14 }}>
+                  {displayUsers.map(u => {
+                    const sharedSkills = mySkills.length > 0 ? (u.skills || []).filter(s => mySkills.includes(s)) : [];
+                    const isFollowing = following.includes(u.id);
+                    return (
+                      <div key={u.id} style={{ background: bg2, border: `1px solid ${border}`, borderRadius: 12, padding: 20, display: "flex", flexDirection: "column", gap: 12 }}>
+                        {/* Top row */}
+                        <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
+                          <button onClick={() => setViewingProfile(u)} style={{ background: "none", border: "none", cursor: "pointer", padding: 0, flexShrink: 0 }}>
+                            <Avatar initials={initials(u.name)} size={44} dark={dark} />
+                          </button>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <button onClick={() => setViewingProfile(u)} style={{ background: "none", border: "none", cursor: "pointer", padding: 0, textAlign: "left", display: "block", width: "100%" }}>
+                              <div style={{ fontSize: 14, color: text, letterSpacing: "-0.3px", marginBottom: 2, fontFamily: "inherit" }}>{u.name}</div>
+                              <div style={{ fontSize: 11, color: textMuted, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                                {u.role}{u.location ? ` · ${u.location}` : ""}
+                              </div>
+                            </button>
+                          </div>
+                          {discoverSmartMatch && sharedSkills.length > 0 && (
+                            <div style={{ fontSize: 10, color: text, border: `1px solid ${border}`, borderRadius: 999, padding: "2px 8px", whiteSpace: "nowrap", flexShrink: 0 }}>
+                              {sharedSkills.length} match
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Bio */}
+                        {u.bio && (
+                          <div style={{ fontSize: 11, color: textMuted, lineHeight: 1.65, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
+                            {u.bio}
+                          </div>
+                        )}
+
+                        {/* Skills */}
+                        {(u.skills || []).length > 0 && (
+                          <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
+                            {(u.skills || []).slice(0, 4).map(s => (
+                              <span key={s} style={{ fontSize: 10, padding: "2px 9px", borderRadius: 999, border: `1px solid ${sharedSkills.includes(s) && discoverSmartMatch ? text : border}`, color: sharedSkills.includes(s) && discoverSmartMatch ? text : textMuted }}>
+                                {s}
+                              </span>
+                            ))}
+                            {(u.skills || []).length > 4 && <span style={{ fontSize: 10, color: textMuted }}>+{u.skills.length - 4}</span>}
+                          </div>
+                        )}
+
+                        {/* Actions */}
+                        <div style={{ display: "flex", gap: 8, marginTop: "auto" }}>
+                          <button
+                            onClick={() => {
+                              if (!isFollowing) handleSwipe("like", u);
+                            }}
+                            style={{ flex: 1, padding: "7px 0", fontSize: 11, borderRadius: 7, cursor: isFollowing ? "default" : "pointer", fontFamily: "inherit", transition: "all 0.15s",
+                              background: isFollowing ? "none" : text, color: isFollowing ? textMuted : bg, border: `1px solid ${isFollowing ? border : text}` }}>
+                            {isFollowing ? "following" : "follow"}
+                          </button>
+                          <button
+                            onClick={() => setViewingProfile(u)}
+                            style={{ flex: 1, padding: "7px 0", fontSize: 11, borderRadius: 7, cursor: "pointer", fontFamily: "inherit", background: "none", color: text, border: `1px solid ${border}`, transition: "all 0.15s" }}>
+                            view profile
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>
