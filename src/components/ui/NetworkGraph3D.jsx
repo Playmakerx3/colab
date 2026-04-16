@@ -50,11 +50,15 @@ export default function NetworkGraph3D({ users, applications, projects, authUser
   const [tooltip, setTooltip] = useState(null);
   const [dims, setDims] = useState({ w: 900, h: 600 });
   const [showMutualLines, setShowMutualLines] = useState(true);
+  const [rotateMode, setRotateMode] = useState(false);
 
   // Viewport: pan (x,y), zoom scale, rotation angle (radians)
   const viewRef = useRef({ x: 0, y: 0, scale: 1, rotation: 0 });
   const interactRef = useRef({ mode: null, startX: 0, startY: 0, originView: null, panMoved: false });
   const pinchRef = useRef(null);
+  const rotateModeRef = useRef(false);
+
+  useEffect(() => { rotateModeRef.current = rotateMode; }, [rotateMode]);
 
   // World ↔ screen conversion (accounts for pan, zoom, and rotation around canvas center)
   const screenToWorld = useCallback((sx, sy) => {
@@ -78,14 +82,13 @@ export default function NetworkGraph3D({ users, applications, projects, authUser
     return { x: vs * (dx * cos - dy * sin) + vx + cx, y: vs * (dx * sin + dy * cos) + vy + cy };
   }, []);
 
-  const zoomIn = useCallback((sx, sy, factor = 1.2) => {
+  const applyZoom = useCallback((sx, sy, factor) => {
     const v = viewRef.current;
-    const newScale = Math.min(MAX_SCALE, v.scale * factor);
+    const newScale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, v.scale * factor));
     if (newScale === v.scale) return;
     const ratio = newScale / v.scale;
     const c = canvasRef.current;
     const cx = c ? c.width / 2 : 0, cy = c ? c.height / 2 : 0;
-    // Zoom toward screen point (sx, sy), keeping rotation center at canvas center
     viewRef.current = {
       ...v,
       x: sx - cx - (sx - cx - v.x) * ratio,
@@ -314,20 +317,18 @@ export default function NetworkGraph3D({ users, applications, projects, authUser
 
   // ── Mouse ───────────────────────────────────────────────────────────────────
   const handleMouseDown = useCallback((e) => {
+    if (e.button !== 0) return;
     const canvas = canvasRef.current;
     if (!canvas) return;
     const rect = canvas.getBoundingClientRect();
     const sx = e.clientX - rect.left, sy = e.clientY - rect.top;
 
-    if (e.button === 2) {
-      // Right click → rotate
-      e.preventDefault();
+    if (rotateModeRef.current) {
       interactRef.current = { mode: "rotate", startX: e.clientX, startY: e.clientY, originView: { ...viewRef.current }, panMoved: false };
       canvas.style.cursor = "crosshair";
-    } else if (e.button === 0) {
+    } else {
       const hit = getHit(sx, sy);
       if (!hit) {
-        // Left click on empty → pan
         interactRef.current = { mode: "pan", startX: e.clientX, startY: e.clientY, originView: { ...viewRef.current }, panMoved: false };
         canvas.style.cursor = "grabbing";
       } else {
@@ -365,7 +366,7 @@ export default function NetworkGraph3D({ users, applications, projects, authUser
       canvas.style.cursor = "pointer";
     } else {
       setTooltip(null);
-      canvas.style.cursor = mode ? "grabbing" : "grab";
+      canvas.style.cursor = mode ? (mode === "rotate" ? "crosshair" : "grabbing") : rotateModeRef.current ? "crosshair" : "grab";
     }
   }, [getHit, worldToScreen]);
 
@@ -388,15 +389,14 @@ export default function NetworkGraph3D({ users, applications, projects, authUser
 
   const handleContextMenu = useCallback((e) => e.preventDefault(), []);
 
-  // Scroll = zoom in only
+  // Scroll = zoom in/out, clamped at min scale 1
   const handleWheel = useCallback((e) => {
     e.preventDefault();
-    if (e.deltaY >= 0) return; // block zoom out
     const canvas = canvasRef.current;
     if (!canvas) return;
     const rect = canvas.getBoundingClientRect();
-    zoomIn(e.clientX - rect.left, e.clientY - rect.top, 1.1);
-  }, [zoomIn]);
+    applyZoom(e.clientX - rect.left, e.clientY - rect.top, e.deltaY < 0 ? 1.1 : 0.9);
+  }, [applyZoom]);
 
   // Touch: 1 finger = pan, 2 finger = pinch zoom in + rotate
   const handleTouchStart = useCallback((e) => {
@@ -436,7 +436,7 @@ export default function NetworkGraph3D({ users, applications, projects, authUser
       const ov = pinchRef.current.originView;
       // Zoom in only
       const newScale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, ov.scale * factor));
-      const ratio = newScale / viewRef.current.scale;
+      const ratio = newScale / (viewRef.current.scale || 1);
       const c = canvas;
       const cx = c.width / 2, cy = c.height / 2;
       const deltaAngle = newAngle - pinchRef.current.angle;
@@ -484,8 +484,7 @@ export default function NetworkGraph3D({ users, applications, projects, authUser
         onMouseUp={handleMouseUp}
         onMouseLeave={() => { handleMouseUp(); setTooltip(null); }}
         onClick={handleClick}
-        onContextMenu={handleContextMenu}
-        onTouchStart={handleTouchStart}
+          onTouchStart={handleTouchStart}
         onTouchEnd={handleTouchEnd}
         style={{ display: "block", cursor: "grab", touchAction: "none" }}
       />
@@ -512,13 +511,19 @@ export default function NetworkGraph3D({ users, applications, projects, authUser
           {showMutualLines ? "hide" : "show"} mutual lines
         </button>
         <div style={{ marginTop: 6, fontSize: 8, color: dark ? "rgba(255,255,255,0.22)" : "rgba(0,0,0,0.25)", fontFamily: "monospace", lineHeight: 1.6 }}>
-          drag · scroll to zoom<br />right-drag to rotate
+          drag to pan · scroll to zoom<br />{rotateMode ? "drag to rotate" : "rotate button →"}
         </div>
       </div>
 
-      {/* Controls: zoom in + reset only */}
+      {/* Controls */}
       <div style={{ position: "absolute", bottom: 16, right: 16, display: "flex", flexDirection: "column", gap: 4 }}>
-        <button onClick={() => { const c = canvasRef.current; if (c) zoomIn(c.width / 2, c.height / 2, 1.3); }} style={btnStyle}>+</button>
+        <button onClick={() => { const c = canvasRef.current; if (c) applyZoom(c.width / 2, c.height / 2, 1.3); }} style={btnStyle}>+</button>
+        <button onClick={() => { const c = canvasRef.current; if (c) applyZoom(c.width / 2, c.height / 2, 0.8); }} style={btnStyle}>−</button>
+        <button
+          onClick={() => setRotateMode(v => !v)}
+          style={{ ...btnStyle, fontSize: 13, background: rotateMode ? (dark ? "rgba(255,255,255,0.2)" : "rgba(0,0,0,0.15)") : btnStyle.background, color: rotateMode ? (dark ? "#fff" : "#000") : btnStyle.color }}
+          title="Toggle rotate mode"
+        >↻</button>
         <button onClick={resetView} style={{ ...btnStyle, fontSize: 11 }}>⊙</button>
       </div>
 
