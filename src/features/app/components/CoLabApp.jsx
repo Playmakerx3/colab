@@ -1101,12 +1101,26 @@ const setViewingProfile = (user) => {
 
   const discoverQueue = React.useMemo(() => {
     if (!discoverSwipes || !authUser) return [];
+    // Projects I own or am an accepted member of
+    const myProjectIds = new Set([
+      ...projects.filter(p => p.owner_id === authUser.id).map(p => p.id),
+      ...applications.filter(a => a.applicant_id === authUser.id && a.status === "accepted").map(a => a.project_id),
+    ]);
+    // People already on those projects (collaborators)
+    const collaboratorIds = new Set(
+      applications
+        .filter(a => myProjectIds.has(a.project_id) && a.status === "accepted" && a.applicant_id !== authUser.id)
+        .map(a => a.applicant_id)
+    );
+    projects.filter(p => myProjectIds.has(p.id) && p.owner_id !== authUser.id).forEach(p => collaboratorIds.add(p.owner_id));
     return users.filter(u =>
       u.id !== authUser.id &&
       !discoverSwipes.has(u.id) &&
+      !following.includes(u.id) &&
+      !collaboratorIds.has(u.id) &&
       u.name?.trim()
     );
-  }, [users, discoverSwipes, authUser]);
+  }, [users, discoverSwipes, authUser, following, applications, projects]);
 
   const updateTaskOptimistic = async (taskId, updates) => {
     const previousTask = tasks.find((task) => task.id === taskId);
