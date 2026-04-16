@@ -3599,14 +3599,12 @@ const setViewingProfile = (user) => {
           </div>
 
           {/* Stats */}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 1, marginBottom: 36, border: `1px solid ${border}`, borderRadius: 10, overflow: "hidden" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 1, marginBottom: 36, border: `1px solid ${border}`, borderRadius: 10, overflow: "hidden" }}>
             {[
               ["projects", myProjects.length],
               ["applied to", appliedProjectIds.length],
-              ["followers", followers.length],
-              ["notifications", unreadNotifs],
             ].map(([label,val],i) => (
-              <div key={i} style={{ padding: "16px 18px", background: bg2, borderRight: i < 3 ? `1px solid ${border}` : "none" }}>
+              <div key={i} style={{ padding: "16px 18px", background: bg2, borderRight: i < 1 ? `1px solid ${border}` : "none" }}>
                 <div style={{ fontSize: "clamp(18px, 3vw, 24px)", fontWeight: 400, color: text, letterSpacing: "-1px" }}>{val}</div>
                 <div style={{ fontSize: 10, color: textMuted, marginTop: 3 }}>{label}</div>
               </div>
