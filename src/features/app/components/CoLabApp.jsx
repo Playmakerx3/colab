@@ -852,8 +852,9 @@ function CoLab() {
   const [dark, setDark] = useState(true);
   const [screen, setScreen] = useState("landing");
   const [appScreen, setAppScreen] = useState("explore");
-  const [exploreTab, setExploreTab] = useState("for-you");
-  const [networkTab, setNetworkTab] = useState("feed");
+  const [exploreTab, setExploreTab] = useState("feed");
+  const [projectsSubTab, setProjectsSubTab] = useState("for-you");
+  const [networkTab, setNetworkTab] = useState("graph");
   const [activeProject, setActiveProject] = useState(null);
   const [viewingProfile, setViewingProfileState] = useState(null);
   const [viewFullProfile, setViewFullProfileState] = useState(null);
@@ -1811,11 +1812,11 @@ const setViewingProfile = (user) => {
   }, [activeProject?.id, messages.length, projectTab]);
 
   useEffect(() => {
-    const shouldAutoOpen = appScreen === "network"
-      && (networkTab === "feed" || networkTab === "feed-following")
+    const shouldAutoOpen = appScreen === "explore"
+      && exploreTab === "feed"
       && posts.length === 0;
     setAutoOpenComposer(shouldAutoOpen);
-  }, [appScreen, networkTab, posts.length]);
+  }, [appScreen, exploreTab, posts.length]);
 
   useEffect(() => {
     if (!exploreFiltersClearedNotice) return undefined;
@@ -1846,7 +1847,8 @@ const setViewingProfile = (user) => {
   const openJoinProjectFlow = () => {
     setAppScreen("explore");
     setActiveProject(null);
-    setExploreTab("all");
+    setExploreTab("projects");
+    setProjectsSubTab("all");
     setTimeout(() => {
       document.getElementById("feed")?.scrollIntoView({ behavior: "smooth", block: "start" });
     }, 50);
@@ -2501,54 +2503,30 @@ const setViewingProfile = (user) => {
   };
 
   const renderNetwork = () => {
-    const followingFeed = posts.filter(p => following.includes(p.user_id));
-    const allFeed = posts;
-    const feedToShow = networkTab === "feed-following" ? followingFeed : allFeed;
-    const postCtx = {
-      postLikes, postReposts, expandedComments, postComments, authUser, users,
-      handleDeletePost, dark, border, text, textMuted, bg, bg2, btnP, inputStyle,
-      setViewingProfile, handleLike, handleRepost, setExpandedComments, loadComments,
-      myInitials, setPostComments, profile, supabase,
-      pendingLikeIds, commentPulseIds, pendingCommentByPost,
-      recentActivityByPost, justInsertedPostIds, markCommentPending, markRecentActivity,
-    };
 
     return (
       <div className="pad fu" style={{ width: "100%", padding: "48px 32px" }}>
-        <style>{`
-          @keyframes feedPulse { 0% { transform: scale(1); } 45% { transform: scale(1.08); } 100% { transform: scale(1); } }
-          @keyframes feedPostAppear { 0% { opacity: 0; transform: translateY(-8px); } 100% { opacity: 1; transform: translateY(0); } }
-        `}</style>
         <div style={{ marginBottom: 28 }}>
           <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px", marginBottom: 10 }}>NETWORK</div>
           <h2 style={{ fontSize: "clamp(24px, 4vw, 36px)", fontWeight: 400, letterSpacing: "-1.5px", color: text, marginBottom: 8 }}>Your network.</h2>
-          <p style={{ fontSize: 13, color: textMuted }}>See what people are building. Share what you're working on.</p>
+          <p style={{ fontSize: 13, color: textMuted }}>Your collaborators, connections, and people worth meeting.</p>
         </div>
-        {pendingFeedPosts.length > 0 && (networkTab === "feed" || networkTab === "feed-following") && (
-          <button className="hb" onClick={revealPendingPosts} style={{ marginBottom: 16, background: bg2, border: `1px solid ${border}`, borderRadius: 999, padding: "8px 14px", color: text, fontSize: 11, cursor: "pointer", fontFamily: "inherit" }}>
-            {pendingFeedPosts.length} new {pendingFeedPosts.length === 1 ? "post" : "posts"} · show updates
-          </button>
-        )}
 
-        {/* Tabs */}
+        {/* Tabs: graph | discover */}
         <div style={{ borderBottom: `1px solid ${border}`, marginBottom: 28, display: "flex" }}>
           {[
-            { id: "feed", label: "feed" },
-            { id: "feed-following", label: "following", count: followingFeed.length },
-            { id: "people", label: "people" },
+            { id: "graph", label: "people" },
             { id: "discover", label: "discover" },
-          ].map(({ id, label, count }) => (
+          ].map(({ id, label }) => (
             <button key={id} onClick={() => setNetworkTab(id)} style={{ background: "none", border: "none", borderBottom: networkTab === id ? `1px solid ${text}` : "1px solid transparent", color: networkTab === id ? text : textMuted, padding: "8px 0", fontSize: 12, cursor: "pointer", fontFamily: "inherit", marginRight: 24, transition: "all 0.15s", display: "inline-flex", gap: 6, alignItems: "center", whiteSpace: "nowrap" }}>
               {label}
-              {count > 0 && <span style={{ fontSize: 10, background: bg3, borderRadius: 10, padding: "1px 6px", color: textMuted }}>{count}</span>}
             </button>
           ))}
         </div>
 
-        {/* Feed tabs */}
-        {(networkTab === "feed" || networkTab === "feed-following") && (
+        {/* Feed tabs — moved to Explore */}
+        {false && (
           <div>
-            {/* Compose */}
             <div style={{ background: bg2, border: `1px solid ${border}`, borderRadius: 14, padding: "18px", marginBottom: 32 }}>
               <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
                 <Avatar initials={myInitials} size={40} dark={dark} />
@@ -2708,8 +2686,8 @@ const setViewingProfile = (user) => {
           );
         })()}
 
-        {/* People tab */}
-        {networkTab === "people" && (
+        {/* Graph tab */}
+        {networkTab === "graph" && (
           <div style={{ margin: "0 -40px" }}>
             <NetworkGraph3D
               users={users}
@@ -3355,74 +3333,91 @@ const setViewingProfile = (user) => {
       {!viewFullProfile && appScreen === "explore" && !activeProject && (
         <div className="pad fu" style={{ width: "100%", padding: "28px 32px 48px" }}>
           {showFirstTimeGuide && renderFirstTimeGuide()}
-          <div style={{ marginBottom: 32 }}>
-            <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px", marginBottom: 14 }}>FIND YOUR PEOPLE. BUILD SOMETHING REAL.</div>
-            <h1 style={{ fontSize: "clamp(30px, 5vw, 56px)", fontWeight: 400, lineHeight: 1.0, letterSpacing: "-2.5px", marginBottom: 14, color: text }}>Don't just connect.<br />Build together.</h1>
-            <p style={{ fontSize: 13, color: textMuted, maxWidth: 400, lineHeight: 1.8, marginBottom: 22 }}>Post your project. Find people with the skills you need. Get to work.</p>
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              <button className="hb" onClick={openCreateProjectFlow} style={btnP}>Post a project</button>
-              <button className="hb" onClick={() => document.getElementById("feed")?.scrollIntoView({ behavior: "smooth" })} style={btnG}>Browse</button>
-            </div>
-          </div>
-          <div style={{ borderTop: `1px solid ${border}`, marginBottom: 24, display: "flex", gap: 32, paddingTop: 20, flexWrap: "wrap" }}>
-            {[["open now", projects.filter(p => (p.collaborators||0) < (p.max_collaborators||2)).length],["projects", projects.length],["builders", users.length]].map(([l,v]) => (
-              <div key={l}><div style={{ fontSize: 24, color: text, letterSpacing: "-1px" }}>{v}</div><div style={{ fontSize: 10, color: textMuted, marginTop: 2 }}>{l}</div></div>
-            ))}
-          </div>
-          {projects.filter(p => p.featured && !p.archived && !p.is_private).length > 0 && (
-            <div style={{ marginBottom: 28, padding: "16px 20px", background: bg2, border: `1px solid ${border}`, borderRadius: 10 }}>
-              <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px", marginBottom: 12 }}>★ FEATURED THIS WEEK</div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                {projects.filter(p => p.featured && !p.archived && !p.is_private).slice(0, 3).map(p => (
-                  <div key={p.id} onClick={() => { setActiveProject(p); loadProjectData(p.id); }} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer", padding: "8px 0", borderBottom: `1px solid ${border}` }}
-                    onMouseEnter={e => e.currentTarget.style.opacity = "0.6"} onMouseLeave={e => e.currentTarget.style.opacity = "1"}>
-                    <div>
-                      <div style={{ fontSize: 13, color: text }}>{p.title}</div>
-                      <div style={{ fontSize: 10, color: textMuted }}>{p.owner_name} · {p.category}</div>
-                    </div>
-                    <div style={{ display: "flex", gap: 8, alignItems: "center", flexShrink: 0 }}>
-                      {p.shipped && <span style={{ fontSize: 10, color: "#22c55e" }}>shipped</span>}
-                      <span style={{ fontSize: 10, color: textMuted }}>{(p.skills || []).slice(0, 2).join(", ")}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-          {trendingProjects.length > 0 && (
-            <div style={{ marginBottom: 28, padding: "16px 20px", background: bg2, border: `1px solid ${border}`, borderRadius: 10 }}>
-              <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px", marginBottom: 12 }}>TRENDING</div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                {trendingProjects.map(p => (
-                  <div key={p.id} onClick={() => { setActiveProject(p); loadProjectData(p.id); }} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer", padding: "6px 0", borderBottom: `1px solid ${border}` }}
-                    onMouseEnter={e => e.currentTarget.style.opacity = "0.6"} onMouseLeave={e => e.currentTarget.style.opacity = "1"}>
-                    <div>
-                      <div style={{ fontSize: 13, color: text }}>{p.title}</div>
-                      <div style={{ fontSize: 10, color: textMuted }}>{p.category}</div>
-                    </div>
-                    <div style={{ fontSize: 10, color: textMuted, flexShrink: 0 }}>{applications.filter(a => a.project_id === p.id).length} applicants</div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-          <div id="feed" style={{ borderBottom: `1px solid ${border}`, display: "flex" }}>
-            {["for-you","all"].map(id => (
-              <button key={id} onClick={() => setExploreTab(id)} style={{ background: "none", border: "none", borderBottom: exploreTab === id ? `1px solid ${text}` : "1px solid transparent", color: exploreTab === id ? text : textMuted, padding: "8px 0", fontSize: 12, cursor: "pointer", fontFamily: "inherit", marginRight: 24, transition: "all 0.15s", display: "inline-flex", gap: 6, alignItems: "center" }}>
-                {id === "for-you" ? "for you" : "all projects"}
-                {id === "for-you" && forYou.length > 0 && <span style={{ fontSize: 10, background: bg3, borderRadius: 10, padding: "1px 6px", color: textMuted }}>{forYou.length}</span>}
+
+          {/* Top-level explore tabs: feed | projects */}
+          <div style={{ borderBottom: `1px solid ${border}`, marginBottom: 28, display: "flex" }}>
+            {[
+              { id: "feed", label: "feed" },
+              { id: "projects", label: "projects" },
+            ].map(({ id, label }) => (
+              <button key={id} onClick={() => setExploreTab(id)} style={{ background: "none", border: "none", borderBottom: exploreTab === id ? `1px solid ${text}` : "1px solid transparent", color: exploreTab === id ? text : textMuted, padding: "8px 0", fontSize: 12, cursor: "pointer", fontFamily: "inherit", marginRight: 24, transition: "all 0.15s", display: "inline-flex", gap: 6, alignItems: "center", whiteSpace: "nowrap" }}>
+                {label}
               </button>
             ))}
           </div>
-          {loading ? <Spinner dark={dark} /> : (
+
+          {/* PROJECTS TAB */}
+          {exploreTab === "projects" && (
             <>
-              {exploreTab === "for-you" && ((profile?.skills || []).length === 0
-                ? <div style={{ padding: "36px 0", color: textMuted, fontSize: 13 }}>add skills to see matched projects. <button onClick={() => setAppScreen("profile")} style={{ background: "none", border: "none", color: text, cursor: "pointer", fontFamily: "inherit", fontSize: 13, textDecoration: "underline" }}>update profile →</button></div>
-                : forYou.length === 0
-                  ? <div style={{ padding: "36px 0", color: textMuted, fontSize: 13 }}>no matches yet. <button className="hb" onClick={() => setExploreTab("all")} style={{ background: "none", border: "none", color: text, cursor: "pointer", fontFamily: "inherit", fontSize: 13, textDecoration: "underline" }}>browse all →</button></div>
-                  : <div><div style={{ padding: "14px 0 2px", fontSize: 11, color: textMuted }}>{forYou.length} project{forYou.length !== 1 ? "s" : ""} matching your skills</div>{forYou.map(p => <PRow key={p.id} p={p} />)}</div>
+              <div style={{ marginBottom: 32 }}>
+                <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px", marginBottom: 14 }}>FIND YOUR PEOPLE. BUILD SOMETHING REAL.</div>
+                <h1 style={{ fontSize: "clamp(30px, 5vw, 56px)", fontWeight: 400, lineHeight: 1.0, letterSpacing: "-2.5px", marginBottom: 14, color: text }}>Don't just connect.<br />Build together.</h1>
+                <p style={{ fontSize: 13, color: textMuted, maxWidth: 400, lineHeight: 1.8, marginBottom: 22 }}>Post your project. Find people with the skills you need. Get to work.</p>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  <button className="hb" onClick={openCreateProjectFlow} style={btnP}>Post a project</button>
+                  <button className="hb" onClick={() => setExploreTab("feed")} style={btnG}>Browse feed</button>
+                </div>
+              </div>
+              <div style={{ borderTop: `1px solid ${border}`, marginBottom: 24, display: "flex", gap: 32, paddingTop: 20, flexWrap: "wrap" }}>
+                {[["open now", projects.filter(p => (p.collaborators||0) < (p.max_collaborators||2)).length],["projects", projects.length],["builders", users.length]].map(([l,v]) => (
+                  <div key={l}><div style={{ fontSize: 24, color: text, letterSpacing: "-1px" }}>{v}</div><div style={{ fontSize: 10, color: textMuted, marginTop: 2 }}>{l}</div></div>
+                ))}
+              </div>
+              {projects.filter(p => p.featured && !p.archived && !p.is_private).length > 0 && (
+                <div style={{ marginBottom: 28, padding: "16px 20px", background: bg2, border: `1px solid ${border}`, borderRadius: 10 }}>
+                  <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px", marginBottom: 12 }}>★ FEATURED THIS WEEK</div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    {projects.filter(p => p.featured && !p.archived && !p.is_private).slice(0, 3).map(p => (
+                      <div key={p.id} onClick={() => { setActiveProject(p); loadProjectData(p.id); }} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer", padding: "8px 0", borderBottom: `1px solid ${border}` }}
+                        onMouseEnter={e => e.currentTarget.style.opacity = "0.6"} onMouseLeave={e => e.currentTarget.style.opacity = "1"}>
+                        <div>
+                          <div style={{ fontSize: 13, color: text }}>{p.title}</div>
+                          <div style={{ fontSize: 10, color: textMuted }}>{p.owner_name} · {p.category}</div>
+                        </div>
+                        <div style={{ display: "flex", gap: 8, alignItems: "center", flexShrink: 0 }}>
+                          {p.shipped && <span style={{ fontSize: 10, color: "#22c55e" }}>shipped</span>}
+                          <span style={{ fontSize: 10, color: textMuted }}>{(p.skills || []).slice(0, 2).join(", ")}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               )}
-              {exploreTab === "all" && (
+              {trendingProjects.length > 0 && (
+                <div style={{ marginBottom: 28, padding: "16px 20px", background: bg2, border: `1px solid ${border}`, borderRadius: 10 }}>
+                  <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px", marginBottom: 12 }}>TRENDING</div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    {trendingProjects.map(p => (
+                      <div key={p.id} onClick={() => { setActiveProject(p); loadProjectData(p.id); }} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer", padding: "6px 0", borderBottom: `1px solid ${border}` }}
+                        onMouseEnter={e => e.currentTarget.style.opacity = "0.6"} onMouseLeave={e => e.currentTarget.style.opacity = "1"}>
+                        <div>
+                          <div style={{ fontSize: 13, color: text }}>{p.title}</div>
+                          <div style={{ fontSize: 10, color: textMuted }}>{p.category}</div>
+                        </div>
+                        <div style={{ fontSize: 10, color: textMuted, flexShrink: 0 }}>{applications.filter(a => a.project_id === p.id).length} applicants</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {/* Project sub-tabs: for-you | all */}
+              <div style={{ borderBottom: `1px solid ${border}`, display: "flex", marginBottom: 0 }}>
+                {["for-you","all"].map(id => (
+                  <button key={id} onClick={() => setProjectsSubTab(id)} style={{ background: "none", border: "none", borderBottom: projectsSubTab === id ? `1px solid ${text}` : "1px solid transparent", color: projectsSubTab === id ? text : textMuted, padding: "8px 0", fontSize: 12, cursor: "pointer", fontFamily: "inherit", marginRight: 24, transition: "all 0.15s", display: "inline-flex", gap: 6, alignItems: "center" }}>
+                    {id === "for-you" ? "for you" : "all projects"}
+                    {id === "for-you" && forYou.length > 0 && <span style={{ fontSize: 10, background: bg3, borderRadius: 10, padding: "1px 6px", color: textMuted }}>{forYou.length}</span>}
+                  </button>
+                ))}
+              </div>
+              {loading ? <Spinner dark={dark} /> : (
+                <>
+                  {projectsSubTab === "for-you" && ((profile?.skills || []).length === 0
+                    ? <div style={{ padding: "36px 0", color: textMuted, fontSize: 13 }}>add skills to see matched projects. <button onClick={() => setAppScreen("profile")} style={{ background: "none", border: "none", color: text, cursor: "pointer", fontFamily: "inherit", fontSize: 13, textDecoration: "underline" }}>update profile →</button></div>
+                    : forYou.length === 0
+                      ? <div style={{ padding: "36px 0", color: textMuted, fontSize: 13 }}>no matches yet. <button className="hb" onClick={() => setProjectsSubTab("all")} style={{ background: "none", border: "none", color: text, cursor: "pointer", fontFamily: "inherit", fontSize: 13, textDecoration: "underline" }}>browse all →</button></div>
+                      : <div><div style={{ padding: "14px 0 2px", fontSize: 11, color: textMuted }}>{forYou.length} project{forYou.length !== 1 ? "s" : ""} matching your skills</div>{forYou.map(p => <PRow key={p.id} p={p} />)}</div>
+                  )}
+                  {projectsSubTab === "all" && (
                 <div>
                   <div style={{ padding: "14px 0 12px", display: "flex", flexDirection: "column", gap: 10 }}>
                     <input placeholder="search projects..." value={search} onChange={e => setSearch(e.target.value)} style={inputStyle} />
@@ -3471,6 +3466,192 @@ const setViewingProfile = (user) => {
               )}
             </>
           )}
+            </>
+          )}
+
+          {/* FEED TAB */}
+          {exploreTab === "feed" && (() => {
+            const firstName = profile?.name?.split(" ")[0] || "you";
+            const recentProjectPosts = posts.filter(p => p.project_id).slice(0, 3);
+            const postCtx = {
+              postLikes, postReposts, expandedComments, postComments, authUser, users,
+              handleDeletePost, dark, border, text, textMuted, bg, bg2, btnP, inputStyle,
+              setViewingProfile, handleLike, handleRepost, setExpandedComments, loadComments,
+              myInitials, setPostComments, profile, supabase,
+              pendingLikeIds, commentPulseIds, pendingCommentByPost,
+              recentActivityByPost, justInsertedPostIds, markCommentPending, markRecentActivity,
+            };
+            const visibleFeed = posts.filter(post => matchesRegion((users.find(u => u.id === post.user_id)?.location), regionFilter, profile?.location));
+            const quickActions = [
+              { label: "🚀 share a project update", text: "Working on " },
+              { label: "👥 need collaborators", text: "Looking for someone who can " },
+              { label: "📢 open to work", text: "I'm available to collaborate on " },
+            ];
+            return (
+              <div>
+                <style>{`
+                  @keyframes feedPulse { 0% { transform: scale(1); } 45% { transform: scale(1.08); } 100% { transform: scale(1); } }
+                  @keyframes feedPostAppear { 0% { opacity: 0; transform: translateY(-8px); } 100% { opacity: 1; transform: translateY(0); } }
+                `}</style>
+
+                {/* Hero header — steal from projects page */}
+                <div style={{ marginBottom: 28 }}>
+                  <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px", marginBottom: 10 }}>WHAT'S HAPPENING</div>
+                  <h2 style={{ fontSize: "clamp(26px, 4vw, 44px)", fontWeight: 400, lineHeight: 1.05, letterSpacing: "-2px", marginBottom: 10, color: text }}>The builder feed.</h2>
+                  <p style={{ fontSize: 13, color: textMuted, lineHeight: 1.75, marginBottom: 18 }}>Updates from builders, new projects, and people looking to collaborate.</p>
+                  {/* Live stats */}
+                  <div style={{ display: "flex", gap: 24, flexWrap: "wrap" }}>
+                    {[
+                      [posts.length, "posts"],
+                      [users.length, "builders"],
+                      [projects.filter(p => !p.archived && !p.is_private).length, "active projects"],
+                    ].map(([v, l]) => (
+                      <div key={l} style={{ display: "flex", alignItems: "baseline", gap: 5 }}>
+                        <span style={{ fontSize: 20, color: text, letterSpacing: "-0.5px", fontWeight: 400 }}>{v}</span>
+                        <span style={{ fontSize: 10, color: textMuted }}>{l}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* New posts banner */}
+                {pendingFeedPosts.length > 0 && (
+                  <button className="hb" onClick={revealPendingPosts} style={{ marginBottom: 20, background: bg2, border: `1px solid ${border}`, borderRadius: 999, padding: "8px 14px", color: text, fontSize: 11, cursor: "pointer", fontFamily: "inherit" }}>
+                    {pendingFeedPosts.length} new {pendingFeedPosts.length === 1 ? "post" : "posts"} · show updates
+                  </button>
+                )}
+
+                {/* Compose box — personalized */}
+                <div style={{ background: bg2, border: `1px solid ${border}`, borderRadius: 14, padding: "20px", marginBottom: 28 }}>
+                  <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
+                    <Avatar initials={myInitials} size={44} dark={dark} />
+                    <div style={{ flex: 1 }}>
+                      <textarea
+                        ref={feedComposerRef}
+                        placeholder={`What are you building, ${firstName}?`}
+                        value={newPostContent}
+                        onChange={e => setNewPostContent(e.target.value)}
+                        rows={newPostContent || autoOpenComposer ? 4 : 2}
+                        style={{ ...inputStyle, resize: "none", fontSize: 13, padding: "10px 14px", background: bg3, borderColor: "transparent", lineHeight: 1.7, width: "100%" }}
+                      />
+                      {/* Quick action chips — always show */}
+                      {!newPostContent && !autoOpenComposer && (
+                        <div style={{ display: "flex", gap: 6, marginTop: 10, flexWrap: "wrap" }}>
+                          {quickActions.map(({ label, text }) => (
+                            <button key={label} className="hb" onClick={() => { setNewPostContent(text); feedComposerRef.current?.focus(); }}
+                              style={{ fontSize: 11, padding: "4px 10px", background: "none", border: `1px solid ${border}`, borderRadius: 999, color: textMuted, cursor: "pointer", fontFamily: "inherit", transition: "all 0.15s" }}>
+                              {label}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                      {(newPostContent.trim() || autoOpenComposer) && (
+                        <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 10 }}>
+                          {/* Media preview */}
+                          {newPostMediaUrl && (
+                            <div style={{ position: "relative", display: "inline-block", maxWidth: "100%" }}>
+                              {newPostMediaType === "audio"
+                                ? <div style={{ fontSize: 11, color: text, padding: "8px 12px", background: bg3, borderRadius: 8, display: "flex", gap: 6, alignItems: "center" }}>♪ {newPostMediaUrl.split("/").pop().split("?")[0]}</div>
+                                : newPostMediaUrl.match(/\.(jpg|jpeg|png|gif|webp)$/i)
+                                  ? <img src={newPostMediaUrl} alt="" style={{ maxWidth: "100%", maxHeight: 200, borderRadius: 8, border: `1px solid ${border}` }} />
+                                  : <div style={{ fontSize: 11, color: textMuted, padding: "6px 10px", background: bg3, borderRadius: 6 }}>file: {newPostMediaUrl.split("/").pop()}</div>}
+                              <button onClick={() => { setNewPostMediaUrl(""); setNewPostMediaType(""); }} style={{ position: "absolute", top: 4, right: 4, background: bg, border: `1px solid ${border}`, borderRadius: "50%", width: 20, height: 20, cursor: "pointer", fontSize: 10, display: "flex", alignItems: "center", justifyContent: "center", color: text, fontFamily: "inherit" }}>✕</button>
+                            </div>
+                          )}
+                          <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                            <label style={{ cursor: "pointer", flexShrink: 0 }}>
+                              <div style={{ ...btnG, padding: "6px 12px", fontSize: 11, display: "inline-flex", alignItems: "center", gap: 5 }}>↑ photo/video</div>
+                              <input type="file" accept="image/*,video/*" style={{ display: "none" }} onChange={async (e) => {
+                                const file = e.target.files[0]; if (!file) return;
+                                showToast("Uploading...");
+                                const safeName = file.name.replace(/[^a-zA-Z0-9.\-_]/g, "_");
+                                const path = `posts/${authUser.id}/${Date.now()}-${safeName}`;
+                                const { error } = await supabase.storage.from("user-uploads").upload(path, file);
+                                if (error) { showToast(`Upload failed: ${error.message}`); return; }
+                                const { data: { publicUrl } } = supabase.storage.from("user-uploads").getPublicUrl(path);
+                                setNewPostMediaUrl(publicUrl); setNewPostMediaType(file.type.startsWith("video") ? "video" : "image");
+                                showToast("Ready.");
+                              }} />
+                            </label>
+                            <label style={{ cursor: "pointer", flexShrink: 0 }}>
+                              <div style={{ ...btnG, padding: "6px 12px", fontSize: 11, display: "inline-flex", alignItems: "center", gap: 5 }}>♪ audio</div>
+                              <input type="file" accept="audio/*,.mp3,.wav,.ogg,.m4a,.aac,.flac" style={{ display: "none" }} onChange={async (e) => {
+                                const file = e.target.files[0]; if (!file) return;
+                                showToast("Uploading audio...");
+                                const safeName = file.name.replace(/[^a-zA-Z0-9.\-_]/g, "_");
+                                const path = `posts/${authUser.id}/${Date.now()}-${safeName}`;
+                                const { error } = await supabase.storage.from("user-uploads").upload(path, file);
+                                if (error) { showToast(`Upload failed: ${error.message}`); return; }
+                                const { data: { publicUrl } } = supabase.storage.from("user-uploads").getPublicUrl(path);
+                                setNewPostMediaUrl(publicUrl); setNewPostMediaType("audio");
+                                showToast("Audio ready.");
+                              }} />
+                            </label>
+                            <input placeholder="or paste a YouTube URL..." value={newPostMediaUrl.includes("youtube") || newPostMediaUrl.includes("youtu.be") ? newPostMediaUrl : ""} onChange={e => { setNewPostMediaUrl(e.target.value); setNewPostMediaType("youtube"); }} style={{ ...inputStyle, fontSize: 11, padding: "6px 10px", flex: 1 }} />
+                          </div>
+                          <div style={{ display: "flex", gap: 8 }}>
+                            <select value={newPostProject} onChange={e => setNewPostProject(e.target.value)} style={{ ...inputStyle, fontSize: 11, padding: "6px 10px", flex: 1 }}>
+                              <option value="">tag a project (optional)</option>
+                              {myProjects.map(p => <option key={p.id} value={p.id}>{p.title}</option>)}
+                            </select>
+                            <button className="hb" onClick={handleCreatePost} style={{ ...btnP, padding: "7px 18px", fontSize: 12, flexShrink: 0 }}>post</button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Active projects strip — steal from featured/trending on projects page */}
+                {recentProjectPosts.length > 0 && (
+                  <div style={{ marginBottom: 28 }}>
+                    <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px", marginBottom: 12 }}>ACTIVE PROJECTS</div>
+                    <div style={{ display: "flex", gap: 10, overflowX: "auto", paddingBottom: 4 }}>
+                      {recentProjectPosts.map(post => {
+                        const proj = projects.find(p => p.id === post.project_id);
+                        if (!proj) return null;
+                        return (
+                          <div key={post.id} onClick={() => { setActiveProject(proj); loadProjectData(proj.id); setExploreTab("projects"); }}
+                            style={{ flexShrink: 0, width: 180, background: bg2, border: `1px solid ${border}`, borderRadius: 10, padding: "14px", cursor: "pointer", transition: "opacity 0.15s" }}
+                            onMouseEnter={e => e.currentTarget.style.opacity = "0.7"} onMouseLeave={e => e.currentTarget.style.opacity = "1"}>
+                            <div style={{ fontSize: 12, color: text, marginBottom: 4, fontWeight: 500, lineHeight: 1.3 }}>{proj.title}</div>
+                            <div style={{ fontSize: 10, color: textMuted, marginBottom: 8 }}>{proj.owner_name}</div>
+                            <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+                              {(proj.skills || []).slice(0, 2).map(s => (
+                                <span key={s} style={{ fontSize: 9, color: textMuted, border: `1px solid ${border}`, borderRadius: 3, padding: "1px 6px" }}>{s}</span>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      })}
+                      <div onClick={() => setExploreTab("projects")}
+                        style={{ flexShrink: 0, width: 120, background: "none", border: `1px solid ${border}`, borderRadius: 10, padding: "14px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: textMuted, fontSize: 11, transition: "opacity 0.15s" }}
+                        onMouseEnter={e => e.currentTarget.style.opacity = "0.6"} onMouseLeave={e => e.currentTarget.style.opacity = "1"}>
+                        all projects →
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Region filter */}
+                <div style={{ marginBottom: 20, display: "flex", gap: 5, flexWrap: "wrap", alignItems: "center" }}>
+                  <span style={{ fontSize: 10, color: textMuted, letterSpacing: "1px", marginRight: 4 }}>REGION</span>
+                  {["local","city","national","international"].map(r => { const sel = regionFilter === r; return <button key={r} className="hb" onClick={() => setRegionFilter(sel ? null : r)} style={{ padding: "3px 10px", borderRadius: 3, fontSize: 10, cursor: "pointer", fontFamily: "inherit", background: sel ? text : "none", color: sel ? bg : textMuted, border: `1px solid ${sel ? text : border}`, transition: "all 0.15s" }}>{r}</button>; })}
+                </div>
+
+                {/* Feed */}
+                {visibleFeed.length === 0
+                  ? (
+                    <div style={{ padding: "40px 0", textAlign: "center" }}>
+                      <div style={{ fontSize: 20, color: text, letterSpacing: "-0.5px", marginBottom: 8 }}>Nothing here yet.</div>
+                      <div style={{ fontSize: 13, color: textMuted, marginBottom: 20 }}>Be the first to share what you're building.</div>
+                      <button className="hb" onClick={() => feedComposerRef.current?.focus()} style={btnP}>Post something →</button>
+                    </div>
+                  )
+                  : visibleFeed.map(post => <PostCard key={post.id} post={post} ctx={postCtx} />)}
+              </div>
+            );
+          })()}
         </div>
       )}
 
@@ -4781,7 +4962,7 @@ const setViewingProfile = (user) => {
                   ? <div style={{ fontSize: 12, color: textMuted }}>no skills. <button onClick={() => setEditProfile(true)} style={{ background: "none", border: "none", color: text, cursor: "pointer", fontFamily: "inherit", fontSize: 12, textDecoration: "underline" }}>add →</button></div>
                   : <div>
                       <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginBottom: 8 }}>{(profile?.skills || []).map(s => <span key={s} style={{ fontSize: 11, padding: "3px 10px", border: `1px solid ${border}`, borderRadius: 3, color: textMuted }}>{s}</span>)}</div>
-                      <div style={{ fontSize: 11, color: textMuted }}>★ {forYou.length} matching project{forYou.length !== 1 ? "s" : ""} <button className="hb" onClick={() => { setAppScreen("explore"); setExploreTab("for-you"); }} style={{ background: "none", border: "none", color: text, cursor: "pointer", fontFamily: "inherit", fontSize: 11, textDecoration: "underline", marginLeft: 4 }}>view →</button></div>
+                      <div style={{ fontSize: 11, color: textMuted }}>★ {forYou.length} matching project{forYou.length !== 1 ? "s" : ""} <button className="hb" onClick={() => { setAppScreen("explore"); setExploreTab("projects"); setProjectsSubTab("for-you"); }} style={{ background: "none", border: "none", color: text, cursor: "pointer", fontFamily: "inherit", fontSize: 11, textDecoration: "underline", marginLeft: 4 }}>view →</button></div>
                   </div>
                 }
               </div>

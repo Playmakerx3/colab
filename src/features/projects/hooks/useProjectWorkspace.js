@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { CATEGORIES } from "../../../constants/appConstants";
+import { supabase } from "../../../supabase";
 import {
   createProject,
   createProjectActivity,
@@ -162,6 +163,21 @@ export function useProjectWorkspace({
 
       console.info("[project:create] API success", { projectId: data.id });
       setProjects([data, ...projects]);
+
+      // Auto-post to feed if public
+      if (!payload.is_private) {
+        const snippet = payload.description.length > 120 ? payload.description.slice(0, 120) + "…" : payload.description;
+        await supabase.from("posts").insert({
+          user_id: authUser.id,
+          user_name: payload.owner_name,
+          user_initials: payload.owner_initials,
+          user_role: profile?.role || "",
+          content: `🚀 Just posted: ${payload.title}\n\n${snippet}\n\nLooking for collaborators — apply on CoLab.`,
+          project_id: data.id,
+          project_title: payload.title,
+        });
+      }
+
       setNewProject({ title: "", description: "", category: CATEGORIES[0], skills: [], maxCollaborators: 2, location: "", goals: "", timeline: "", is_private: false });
       setShowCreate(false);
       setActiveProject(data);
