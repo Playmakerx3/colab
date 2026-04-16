@@ -2684,7 +2684,7 @@ const setViewingProfile = (user) => {
                     <button className="hb" onClick={() => handleSwipe("pass", card)}
                       style={{ flex: 1, padding: "12px", background: "none", border: `1px solid ${border}`, borderRadius: 10, fontSize: 18, cursor: "pointer", color: textMuted, transition: "all 0.15s" }}>✕</button>
                     <button className="hb" onClick={() => handleSwipe("like", card)}
-                      style={{ flex: 1, padding: "12px", background: text, border: `1px solid ${text}`, borderRadius: 10, fontSize: 18, cursor: "pointer", color: bg, transition: "all 0.15s" }}>♥</button>
+                      style={{ flex: 1, padding: "12px", background: text, border: `1px solid ${text}`, borderRadius: 10, fontSize: 18, cursor: "pointer", color: bg, transition: "all 0.15s" }}>⚙</button>
                   </div>
                   <div style={{ fontSize: 10, color: textMuted, textAlign: "center", marginTop: 12 }}>{discoverQueue.length} left to discover</div>
                 </div>
@@ -3196,7 +3196,7 @@ const setViewingProfile = (user) => {
       {discoverMatch && (
         <div onClick={() => setDiscoverMatch(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.8)", zIndex: 400, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
           <div onClick={e => e.stopPropagation()} style={{ background: bg, border: `1px solid ${border}`, borderRadius: 16, padding: 32, maxWidth: 320, width: "100%", textAlign: "center" }}>
-            <div style={{ fontSize: 28, marginBottom: 16 }}>♥</div>
+            <div style={{ fontSize: 28, marginBottom: 16 }}>⚙</div>
             <div style={{ fontSize: 16, color: text, letterSpacing: "-0.5px", marginBottom: 8 }}>it's a match.</div>
             <div style={{ fontSize: 12, color: textMuted, marginBottom: 24 }}>you and {discoverMatch.name} both want to collaborate.</div>
             <div style={{ display: "flex", gap: 10 }}>
