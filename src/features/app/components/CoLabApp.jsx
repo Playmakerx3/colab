@@ -849,7 +849,7 @@ function FullProfilePortfolio({ userId, bg2, border, text, textMuted }) {
 
 // ── PUBLIC PROJECT PAGE ──
 function CoLab() {
-  const [dark, setDark] = useState(true);
+  const [dark, setDark] = useState(false);
   const [screen, setScreen] = useState("landing");
   const [appScreen, setAppScreen] = useState("explore");
   const [exploreTab, setExploreTab] = useState("feed");
@@ -3331,7 +3331,6 @@ const setViewingProfile = (user) => {
             style={{ position: "relative", background: showNotifications ? bg3 : "none", border: "none", borderRadius: 6, padding: "5px 4px", cursor: "pointer", color: textMuted, fontSize: 12, fontFamily: "inherit", flexShrink: 0 }}>
             ◎{unreadNotifs > 0 && <span style={{ position: "absolute", top: -2, right: -2, minWidth: 14, height: 14, borderRadius: 999, background: text, color: bg, border: `1px solid ${bg}`, fontSize: 9, display: "inline-flex", alignItems: "center", justifyContent: "center", padding: "0 3px", lineHeight: 1 }}>{Math.min(unreadNotifs, 99)}</span>}
           </button>
-          <button onClick={() => setDark(!dark)} style={{ background: "none", border: `1px solid ${border}`, borderRadius: 6, padding: "3px 5px", cursor: "pointer", fontSize: 10, color: textMuted, fontFamily: "inherit", flexShrink: 0, marginLeft: 2 }}>{dark ? "☀" : "☾"}</button>
           <button onClick={() => setShowSettings(true)}
             style={{ background: "none", border: "none", borderRadius: 6, padding: "5px 4px", cursor: "pointer", color: textMuted, fontSize: 12, fontFamily: "inherit" }}>
             ⚙
@@ -5517,6 +5516,25 @@ const setViewingProfile = (user) => {
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
               <div>
+                <div style={{ fontSize: 11, color: textMuted, letterSpacing: "1px", marginBottom: 10 }}>APPEARANCE</div>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button className="hb" onClick={() => setDark(false)}
+                    style={{ flex: 1, padding: "10px", borderRadius: 8, fontSize: 11, cursor: "pointer", fontFamily: "inherit", transition: "all 0.15s",
+                      background: !dark ? (dark ? "#fff" : "#000") : "none",
+                      color: !dark ? (dark ? "#000" : "#fff") : textMuted,
+                      border: `1px solid ${!dark ? (dark ? "#fff" : "#000") : border}` }}>
+                    light
+                  </button>
+                  <button className="hb" onClick={() => setDark(true)}
+                    style={{ flex: 1, padding: "10px", borderRadius: 8, fontSize: 11, cursor: "pointer", fontFamily: "inherit", transition: "all 0.15s",
+                      background: dark ? "#fff" : "none",
+                      color: dark ? "#000" : textMuted,
+                      border: `1px solid ${dark ? "#fff" : border}` }}>
+                    dark
+                  </button>
+                </div>
+              </div>
+              <div style={{ borderTop: `1px solid ${border}`, paddingTop: 20 }}>
                 <div style={{ fontSize: 11, color: textMuted, letterSpacing: "1px", marginBottom: 10 }}>CHANGE EMAIL</div>
                 <input placeholder="New email address" value={settingsEmail} onChange={e => setSettingsEmail(e.target.value)}
                   style={{ ...inputStyle, marginBottom: 8 }} />
