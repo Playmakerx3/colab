@@ -3472,7 +3472,6 @@ const setViewingProfile = (user) => {
           {/* FEED TAB */}
           {exploreTab === "feed" && (() => {
             const firstName = profile?.name?.split(" ")[0] || "you";
-            const recentProjectPosts = posts.filter(p => p.project_id).slice(0, 3);
             const postCtx = {
               postLikes, postReposts, expandedComments, postComments, authUser, users,
               handleDeletePost, dark, border, text, textMuted, bg, bg2, btnP, inputStyle,
@@ -3481,12 +3480,19 @@ const setViewingProfile = (user) => {
               pendingLikeIds, commentPulseIds, pendingCommentByPost,
               recentActivityByPost, justInsertedPostIds, markCommentPending, markRecentActivity,
             };
-            const visibleFeed = posts.filter(post => matchesRegion((users.find(u => u.id === post.user_id)?.location), regionFilter, profile?.location));
             const quickActions = [
-              { label: "🚀 share a project update", text: "Working on " },
-              { label: "👥 need collaborators", text: "Looking for someone who can " },
-              { label: "📢 open to work", text: "I'm available to collaborate on " },
+              { label: "share a project update", text: "Working on " },
+              { label: "need collaborators", text: "Looking for someone who can " },
+              { label: "open to work", text: "I'm available to collaborate on " },
             ];
+            // Projects created by followed users — shown as feed events
+            const followedProjectEvents = projects
+              .filter(p => following.includes(p.owner_id) && !p.archived && !p.is_private)
+              .map(p => ({ _type: "project_created", id: `proj-${p.id}`, created_at: p.created_at, project: p }));
+            // Merge posts + project events, sorted newest first
+            const filteredPosts = posts.filter(post => matchesRegion((users.find(u => u.id === post.user_id)?.location), regionFilter, profile?.location));
+            const mergedFeed = [...filteredPosts.map(p => ({ ...p, _type: "post" })), ...followedProjectEvents]
+              .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
             return (
               <div>
                 <style>{`
@@ -3494,24 +3500,11 @@ const setViewingProfile = (user) => {
                   @keyframes feedPostAppear { 0% { opacity: 0; transform: translateY(-8px); } 100% { opacity: 1; transform: translateY(0); } }
                 `}</style>
 
-                {/* Hero header — steal from projects page */}
+                {/* Hero header */}
                 <div style={{ marginBottom: 28 }}>
                   <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px", marginBottom: 10 }}>WHAT'S HAPPENING</div>
                   <h2 style={{ fontSize: "clamp(26px, 4vw, 44px)", fontWeight: 400, lineHeight: 1.05, letterSpacing: "-2px", marginBottom: 10, color: text }}>The builder feed.</h2>
-                  <p style={{ fontSize: 13, color: textMuted, lineHeight: 1.75, marginBottom: 18 }}>Updates from builders, new projects, and people looking to collaborate.</p>
-                  {/* Live stats */}
-                  <div style={{ display: "flex", gap: 24, flexWrap: "wrap" }}>
-                    {[
-                      [posts.length, "posts"],
-                      [users.length, "builders"],
-                      [projects.filter(p => !p.archived && !p.is_private).length, "active projects"],
-                    ].map(([v, l]) => (
-                      <div key={l} style={{ display: "flex", alignItems: "baseline", gap: 5 }}>
-                        <span style={{ fontSize: 20, color: text, letterSpacing: "-0.5px", fontWeight: 400 }}>{v}</span>
-                        <span style={{ fontSize: 10, color: textMuted }}>{l}</span>
-                      </div>
-                    ))}
-                  </div>
+                  <p style={{ fontSize: 13, color: textMuted, lineHeight: 1.75 }}>Updates from builders, new projects, and people looking to collaborate.</p>
                 </div>
 
                 {/* New posts banner */}
@@ -3602,45 +3595,14 @@ const setViewingProfile = (user) => {
                   </div>
                 </div>
 
-                {/* Active projects strip — steal from featured/trending on projects page */}
-                {recentProjectPosts.length > 0 && (
-                  <div style={{ marginBottom: 28 }}>
-                    <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px", marginBottom: 12 }}>ACTIVE PROJECTS</div>
-                    <div style={{ display: "flex", gap: 10, overflowX: "auto", paddingBottom: 4 }}>
-                      {recentProjectPosts.map(post => {
-                        const proj = projects.find(p => p.id === post.project_id);
-                        if (!proj) return null;
-                        return (
-                          <div key={post.id} onClick={() => { setActiveProject(proj); loadProjectData(proj.id); setExploreTab("projects"); }}
-                            style={{ flexShrink: 0, width: 180, background: bg2, border: `1px solid ${border}`, borderRadius: 10, padding: "14px", cursor: "pointer", transition: "opacity 0.15s" }}
-                            onMouseEnter={e => e.currentTarget.style.opacity = "0.7"} onMouseLeave={e => e.currentTarget.style.opacity = "1"}>
-                            <div style={{ fontSize: 12, color: text, marginBottom: 4, fontWeight: 500, lineHeight: 1.3 }}>{proj.title}</div>
-                            <div style={{ fontSize: 10, color: textMuted, marginBottom: 8 }}>{proj.owner_name}</div>
-                            <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-                              {(proj.skills || []).slice(0, 2).map(s => (
-                                <span key={s} style={{ fontSize: 9, color: textMuted, border: `1px solid ${border}`, borderRadius: 3, padding: "1px 6px" }}>{s}</span>
-                              ))}
-                            </div>
-                          </div>
-                        );
-                      })}
-                      <div onClick={() => setExploreTab("projects")}
-                        style={{ flexShrink: 0, width: 120, background: "none", border: `1px solid ${border}`, borderRadius: 10, padding: "14px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: textMuted, fontSize: 11, transition: "opacity 0.15s" }}
-                        onMouseEnter={e => e.currentTarget.style.opacity = "0.6"} onMouseLeave={e => e.currentTarget.style.opacity = "1"}>
-                        all projects →
-                      </div>
-                    </div>
-                  </div>
-                )}
-
                 {/* Region filter */}
                 <div style={{ marginBottom: 20, display: "flex", gap: 5, flexWrap: "wrap", alignItems: "center" }}>
                   <span style={{ fontSize: 10, color: textMuted, letterSpacing: "1px", marginRight: 4 }}>REGION</span>
                   {["local","city","national","international"].map(r => { const sel = regionFilter === r; return <button key={r} className="hb" onClick={() => setRegionFilter(sel ? null : r)} style={{ padding: "3px 10px", borderRadius: 3, fontSize: 10, cursor: "pointer", fontFamily: "inherit", background: sel ? text : "none", color: sel ? bg : textMuted, border: `1px solid ${sel ? text : border}`, transition: "all 0.15s" }}>{r}</button>; })}
                 </div>
 
-                {/* Feed */}
-                {visibleFeed.length === 0
+                {/* Merged feed: posts + project-created events */}
+                {mergedFeed.length === 0
                   ? (
                     <div style={{ padding: "40px 0", textAlign: "center" }}>
                       <div style={{ fontSize: 20, color: text, letterSpacing: "-0.5px", marginBottom: 8 }}>Nothing here yet.</div>
@@ -3648,7 +3610,34 @@ const setViewingProfile = (user) => {
                       <button className="hb" onClick={() => feedComposerRef.current?.focus()} style={btnP}>Post something →</button>
                     </div>
                   )
-                  : visibleFeed.map(post => <PostCard key={post.id} post={post} ctx={postCtx} />)}
+                  : mergedFeed.map(item => {
+                    if (item._type === "project_created") {
+                      const { project: proj } = item;
+                      const owner = users.find(u => u.id === proj.owner_id);
+                      return (
+                        <div key={item.id} style={{ padding: "16px 0", borderBottom: `1px solid ${border}`, display: "flex", gap: 12, alignItems: "flex-start" }}>
+                          <button onClick={() => owner && setViewingProfile(owner)} style={{ background: "none", border: "none", cursor: "pointer", padding: 0, flexShrink: 0 }}>
+                            <Avatar initials={initials(proj.owner_name)} size={36} dark={dark} />
+                          </button>
+                          <div>
+                            <div style={{ fontSize: 13, color: textMuted, marginBottom: 6 }}>
+                              <button className="hb" onClick={() => owner && setViewingProfile(owner)} style={{ background: "none", border: "none", color: text, cursor: "pointer", fontFamily: "inherit", fontSize: 13, fontWeight: 500, padding: 0 }}>{proj.owner_name}</button>
+                              {" has created "}
+                              <button className="hb" onClick={() => { setActiveProject(proj); loadProjectData(proj.id); setExploreTab("projects"); }} style={{ background: "none", border: "none", color: text, cursor: "pointer", fontFamily: "inherit", fontSize: 13, fontWeight: 500, padding: 0, textDecoration: "underline" }}>{proj.title}</button>
+                            </div>
+                            <div style={{ fontSize: 11, color: textMuted, marginBottom: 8 }}>{proj.category}{proj.location ? ` · ${proj.location}` : ""} · {new Date(proj.created_at).toLocaleDateString()}</div>
+                            {(proj.skills || []).length > 0 && (
+                              <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginBottom: 10 }}>
+                                {(proj.skills || []).slice(0, 4).map(s => <span key={s} style={{ fontSize: 10, color: textMuted, border: `1px solid ${border}`, borderRadius: 3, padding: "1px 8px" }}>{s}</span>)}
+                              </div>
+                            )}
+                            <button className="hb" onClick={() => { setActiveProject(proj); loadProjectData(proj.id); setExploreTab("projects"); }} style={{ ...btnG, fontSize: 11, padding: "4px 12px" }}>view project →</button>
+                          </div>
+                        </div>
+                      );
+                    }
+                    return <PostCard key={item.id} post={item} ctx={postCtx} />;
+                  })}
               </div>
             );
           })()}
