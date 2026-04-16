@@ -7,6 +7,7 @@ import Avatar from "../../../components/ui/Avatar";
 import ProgressBar from "../../../components/ui/ProgressBar";
 import Spinner from "../../../components/ui/Spinner";
 import PixelBannerDisplay from "../../../components/ui/PixelBannerDisplay";
+import NetworkGraph3D from "../../../components/ui/NetworkGraph3D";
 import { useAuthBootstrap } from "../../../hooks/useAuthBootstrap";
 import { signIn, signOut, signUp } from "../../../services/authService";
 import { useProfileState } from "../../profile/hooks/useProfileState";
@@ -2709,32 +2710,18 @@ const setViewingProfile = (user) => {
 
         {/* People tab */}
         {networkTab === "people" && (
-          <div>
-            <div style={{ marginBottom: 16, display: "flex", flexDirection: "column", gap: 8 }}>
-              <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
-                {["Design","Engineering","Marketing","Music","Finance","AI/ML","Writing","Video","Product"].map(s => { const sel = networkFilter === s; return <button key={s} className="hb" onClick={() => setNetworkFilter(sel ? null : s)} style={{ padding: "3px 10px", borderRadius: 3, fontSize: 10, cursor: "pointer", fontFamily: "inherit", background: sel ? text : "none", color: sel ? bg : textMuted, border: `1px solid ${sel ? text : border}`, transition: "all 0.15s" }}>{s}</button>; })}
-                {networkFilter && <button className="hb" onClick={() => setNetworkFilter(null)} style={{ padding: "3px 10px", borderRadius: 3, fontSize: 10, cursor: "pointer", fontFamily: "inherit", background: "none", color: textMuted, border: `1px solid ${border}` }}>clear</button>}
-              </div>
-              <div style={{ display: "flex", gap: 5, flexWrap: "wrap", alignItems: "center" }}>
-                <span style={{ fontSize: 10, color: textMuted, letterSpacing: "1px" }}>REGION</span>
-                {["local","city","national","international"].map(r => { const sel = regionFilter === r; return <button key={r} className="hb" onClick={() => setRegionFilter(sel ? null : r)} style={{ padding: "3px 10px", borderRadius: 3, fontSize: 10, cursor: "pointer", fontFamily: "inherit", background: sel ? text : "none", color: sel ? bg : textMuted, border: `1px solid ${sel ? text : border}`, transition: "all 0.15s" }}>{r}</button>; })}
-              </div>
-            </div>
-            <div className="network-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 14 }}>
-              {users.filter(u => {
-                if (u.id === authUser?.id) return false;
-                if (networkFilter && !(u.skills || []).includes(networkFilter)) return false;
-                if (regionFilter && u.location) {
-                  const loc = (u.location || "").toLowerCase();
-                  const myLoc = (profile?.location || "").toLowerCase();
-                  const myCity = myLoc.split(",")[0].trim();
-                  if (regionFilter === "local" || regionFilter === "city") return loc.includes(myCity) && myCity.length > 0;
-                  if (regionFilter === "national") return loc.includes("us") || loc.includes("usa") || loc.includes("united states") || (myLoc && loc.split(",").pop().trim() === myLoc.split(",").pop().trim());
-                  if (regionFilter === "international") return myLoc && !loc.includes(myLoc.split(",").pop().trim().toLowerCase());
-                }
-                return true;
-              }).map(u => <UserCard key={u.id} u={u} />)}
-            </div>
+          <div style={{ margin: "0 -40px" }}>
+            <NetworkGraph3D
+              users={users}
+              applications={applications}
+              projects={projects}
+              authUser={authUser}
+              dark={dark}
+              onNodeClick={(user) => {
+                setViewFullProfile(user);
+                setViewingProfile(user.id);
+              }}
+            />
           </div>
         )}
       </div>
