@@ -54,7 +54,6 @@ export default function LandingPage({ dark, setDark, onLogin, onSignup, supabase
 
   const [liveStats, setLiveStats] = useState({ builders: "...", projects: "..." });
   const [skillCategoryCount, setSkillCategoryCount] = useState("...");
-  const [liveProjects, setLiveProjects] = useState(null);
 
   useEffect(() => {
     (async () => {
@@ -62,17 +61,14 @@ export default function LandingPage({ dark, setDark, onLogin, onSignup, supabase
         { count: builderCount },
         { count: projectCount },
         { data: projSkills },
-        { data: projects },
       ] = await Promise.all([
         supabase.from("profiles").select("*", { count: "exact", head: true }),
         supabase.from("projects").select("*", { count: "exact", head: true }),
         supabase.from("projects").select("skills"),
-        supabase.from("projects").select("id, title, category, skills, owner_id").limit(4),
       ]);
       setLiveStats({ builders: builderCount ?? "...", projects: projectCount ?? "..." });
       const uniqueSkills = new Set((projSkills || []).flatMap((p) => p.skills || []));
       setSkillCategoryCount(uniqueSkills.size || 48);
-      setLiveProjects(projects || []);
     })();
   }, []);
 
@@ -250,100 +246,6 @@ export default function LandingPage({ dark, setDark, onLogin, onSignup, supabase
             <div style={{ fontSize: 10, color: textMuted, marginTop: 4 }}>{l}</div>
           </div>
         ))}
-      </div>
-
-      {/* Live projects */}
-      <div
-        className="pad"
-        style={{ padding: "72px 40px", borderBottom: `1px solid ${border}` }}
-      >
-        <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px", marginBottom: 36 }}>
-          WHAT'S BEING BUILT
-        </div>
-        {liveProjects === null ? (
-          <div style={{ fontSize: 12, color: textMuted }}>Loading projects...</div>
-        ) : liveProjects.length === 0 ? (
-          <div style={{ fontSize: 12, color: textMuted }}>No projects yet.</div>
-        ) : (
-          <div
-            className="lp-card-grid"
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(2, 1fr)",
-              gap: 16,
-              marginBottom: 32,
-            }}
-          >
-            {liveProjects.map((proj) => (
-              <div
-                key={proj.id}
-                className="card-h"
-                style={{
-                  background: bg2,
-                  border: `1px solid ${border}`,
-                  borderRadius: 10,
-                  padding: "20px 24px",
-                  transition: "border 0.2s",
-                }}
-              >
-                <div
-                  style={{
-                    fontSize: 10,
-                    color: textMuted,
-                    letterSpacing: "1px",
-                    marginBottom: 8,
-                    textTransform: "uppercase",
-                  }}
-                >
-                  {proj.category || "Project"}
-                </div>
-                <div
-                  style={{
-                    fontSize: 14,
-                    fontWeight: 500,
-                    color: text,
-                    marginBottom: 14,
-                    lineHeight: 1.4,
-                  }}
-                >
-                  {proj.title}
-                </div>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                  {(proj.skills || []).slice(0, 4).map((skill, si) => (
-                    <span
-                      key={si}
-                      style={{
-                        border: `1px solid ${border}`,
-                        borderRadius: 999,
-                        padding: "2px 10px",
-                        fontSize: 10,
-                        color: textMuted,
-                      }}
-                    >
-                      {skill}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-        <button
-          className="hb"
-          onClick={onSignup}
-          style={{
-            background: "none",
-            color: textMuted,
-            border: `1px solid ${border}`,
-            borderRadius: 8,
-            padding: "10px 20px",
-            fontSize: 12,
-            cursor: "pointer",
-            fontFamily: "inherit",
-          }}
-        >
-          Browse all projects →
-        </button>
       </div>
 
       {/* How it works */}
