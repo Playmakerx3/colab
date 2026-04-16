@@ -970,6 +970,8 @@ function CoLab() {
   const [projectLastReadAt, setProjectLastReadAt] = useState({});
   const [exploreFiltersClearedNotice, setExploreFiltersClearedNotice] = useState(false);
   const [showCollaboratorsList, setShowCollaboratorsList] = useState(false);
+  const [discoverSwipes, setDiscoverSwipes] = useState(null); // null=unloaded, Set=loaded
+  const [discoverMatch, setDiscoverMatch] = useState(null); // matched user object
 
   const messagesEndRef = useRef(null);
   const dmEndRef = useRef(null);
@@ -1096,6 +1098,15 @@ const setViewingProfile = (user) => {
       return acc;
     }, {});
   }, [projects, projectTasksById, authUser?.id]);
+
+  const discoverQueue = React.useMemo(() => {
+    if (!discoverSwipes || !authUser) return [];
+    return users.filter(u =>
+      u.id !== authUser.id &&
+      !discoverSwipes.has(u.id) &&
+      u.name?.trim()
+    );
+  }, [users, discoverSwipes, authUser]);
 
   const updateTaskOptimistic = async (taskId, updates) => {
     const previousTask = tasks.find((task) => task.id === taskId);
@@ -1269,6 +1280,12 @@ const setViewingProfile = (user) => {
     setInviteLoading(false);
   }, [activeProject?.id]);
 
+  useEffect(() => {
+    if (networkTab !== "discover" || discoverSwipes !== null || !authUser?.id) return;
+    supabase.from("swipes").select("swiped_id").eq("swiper_id", authUser.id)
+      .then(({ data }) => setDiscoverSwipes(new Set((data || []).map(s => s.swiped_id))));
+  }, [networkTab, discoverSwipes, authUser?.id]);
+
 
   useRealtimeSubscriptions({
     authUser,
@@ -1404,6 +1421,16 @@ const setViewingProfile = (user) => {
       await supabase.from("follows").insert({ follower_id: authUser.id, following_id: userId });
       setFollowing(prev => [...prev, userId]);
       showToast("Following!");
+    }
+  };
+
+  const handleSwipe = async (direction, user) => {
+    setDiscoverSwipes(prev => new Set([...(prev || []), user.id]));
+    await supabase.from("swipes").upsert({ swiper_id: authUser.id, swiped_id: user.id, direction }, { onConflict: "swiper_id,swiped_id" });
+    if (direction === "like") {
+      const { data } = await supabase.from("swipes").select("id")
+        .eq("swiper_id", user.id).eq("swiped_id", authUser.id).eq("direction", "like").maybeSingle();
+      if (data) setDiscoverMatch(user);
     }
   };
 
@@ -2494,6 +2521,7 @@ const setViewingProfile = (user) => {
             { id: "feed", label: "feed" },
             { id: "feed-following", label: "following", count: followingFeed.length },
             { id: "people", label: "people" },
+            { id: "discover", label: "discover" },
           ].map(({ id, label, count }) => (
             <button key={id} onClick={() => setNetworkTab(id)} style={{ background: "none", border: "none", borderBottom: networkTab === id ? `1px solid ${text}` : "1px solid transparent", color: networkTab === id ? text : textMuted, padding: "8px 0", fontSize: 12, cursor: "pointer", fontFamily: "inherit", marginRight: 24, transition: "all 0.15s", display: "inline-flex", gap: 6, alignItems: "center", whiteSpace: "nowrap" }}>
               {label}
@@ -2618,6 +2646,52 @@ const setViewingProfile = (user) => {
             })()}
           </div>
         )}
+
+        {/* DISCOVER TAB */}
+        {networkTab === "discover" && (() => {
+          const card = discoverQueue[0];
+          return (
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", paddingTop: 32 }}>
+              {discoverSwipes === null ? (
+                <div style={{ fontSize: 12, color: textMuted }}>loading...</div>
+              ) : !card ? (
+                <div style={{ textAlign: "center", padding: "48px 0" }}>
+                  <div style={{ fontSize: 13, color: text, marginBottom: 8 }}>you've seen everyone.</div>
+                  <div style={{ fontSize: 11, color: textMuted }}>check back when new people join.</div>
+                </div>
+              ) : (
+                <div style={{ width: "100%", maxWidth: 360 }}>
+                  {/* Card */}
+                  <div style={{ background: bg2, border: `1px solid ${border}`, borderRadius: 16, padding: 28, marginBottom: 24 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 20 }}>
+                      <Avatar initials={initials(card.name)} size={56} dark={dark} />
+                      <div>
+                        <div style={{ fontSize: 15, color: text, letterSpacing: "-0.3px", marginBottom: 2 }}>{card.name}</div>
+                        <div style={{ fontSize: 11, color: textMuted }}>{card.role}{card.location ? ` · ${card.location}` : ""}</div>
+                      </div>
+                    </div>
+                    {card.bio && <div style={{ fontSize: 12, color: textMuted, lineHeight: 1.6, marginBottom: 16 }}>{card.bio}</div>}
+                    {(card.skills || []).length > 0 && (
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                        {(card.skills || []).slice(0, 5).map(s => (
+                          <span key={s} style={{ fontSize: 10, color: textMuted, border: `1px solid ${border}`, borderRadius: 999, padding: "2px 10px" }}>{s}</span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  {/* Buttons */}
+                  <div style={{ display: "flex", gap: 12 }}>
+                    <button className="hb" onClick={() => handleSwipe("pass", card)}
+                      style={{ flex: 1, padding: "12px", background: "none", border: `1px solid ${border}`, borderRadius: 10, fontSize: 18, cursor: "pointer", color: textMuted, transition: "all 0.15s" }}>✕</button>
+                    <button className="hb" onClick={() => handleSwipe("like", card)}
+                      style={{ flex: 1, padding: "12px", background: text, border: `1px solid ${text}`, borderRadius: 10, fontSize: 18, cursor: "pointer", color: bg, transition: "all 0.15s" }}>♥</button>
+                  </div>
+                  <div style={{ fontSize: 10, color: textMuted, textAlign: "center", marginTop: 12 }}>{discoverQueue.length} left to discover</div>
+                </div>
+              )}
+            </div>
+          );
+        })()}
 
         {/* People tab */}
         {networkTab === "people" && (
@@ -3117,6 +3191,23 @@ const setViewingProfile = (user) => {
         </div>
       )}
       {showBannerEditor && <BannerEditor pixels={bannerPixels} onSave={saveBanner} onClose={() => setShowBannerEditor(false)} dark={dark} bg={bg} border={border} text={text} textMuted={textMuted} />}
+
+      {/* MATCH MODAL */}
+      {discoverMatch && (
+        <div onClick={() => setDiscoverMatch(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.8)", zIndex: 400, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: bg, border: `1px solid ${border}`, borderRadius: 16, padding: 32, maxWidth: 320, width: "100%", textAlign: "center" }}>
+            <div style={{ fontSize: 28, marginBottom: 16 }}>♥</div>
+            <div style={{ fontSize: 16, color: text, letterSpacing: "-0.5px", marginBottom: 8 }}>it's a match.</div>
+            <div style={{ fontSize: 12, color: textMuted, marginBottom: 24 }}>you and {discoverMatch.name} both want to collaborate.</div>
+            <div style={{ display: "flex", gap: 10 }}>
+              <button className="hb" onClick={() => setDiscoverMatch(null)}
+                style={{ flex: 1, padding: "10px", background: "none", border: `1px solid ${border}`, borderRadius: 8, fontSize: 12, cursor: "pointer", color: textMuted, fontFamily: "inherit" }}>keep discovering</button>
+              <button className="hb" onClick={() => { openDm(discoverMatch); setDiscoverMatch(null); }}
+                style={{ flex: 1, padding: "10px", background: text, border: "none", borderRadius: 8, fontSize: 12, cursor: "pointer", color: bg, fontFamily: "inherit" }}>send a message</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* COLLABORATORS LIST */}
       {showCollaboratorsList && (() => {
