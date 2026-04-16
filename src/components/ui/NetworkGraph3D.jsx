@@ -152,20 +152,20 @@ export default function NetworkGraph3D({ users, applications, projects, authUser
       ctx.fillStyle = dark ? "#080808" : "#f0f0f0";
       ctx.fillRect(0, 0, w, h);
 
-      // Collaborator links (faint)
+      // Collaborator links (bright white — your people)
       collabLinks.forEach(link => {
         const s = nodeMap[link.source], t = nodeMap[link.target];
         if (!s || !t) return;
         ctx.beginPath();
         ctx.moveTo(s.x, s.y);
         ctx.lineTo(t.x, t.y);
-        ctx.strokeStyle = dark ? "rgba(255,255,255,0.15)" : "rgba(0,0,0,0.12)";
-        ctx.lineWidth = 1;
+        ctx.strokeStyle = dark ? "rgba(255,255,255,0.75)" : "rgba(0,0,0,0.6)";
+        ctx.lineWidth = 1.5;
         ctx.setLineDash([]);
         ctx.stroke();
       });
 
-      // Mutual follow links (white, solid, clearly visible)
+      // Mutual follow links (faint)
       if (showMutualLines) {
         mutualLinks.forEach(link => {
           const s = nodeMap[link.source], t = nodeMap[link.target];
@@ -173,8 +173,8 @@ export default function NetworkGraph3D({ users, applications, projects, authUser
           ctx.beginPath();
           ctx.moveTo(s.x, s.y);
           ctx.lineTo(t.x, t.y);
-          ctx.strokeStyle = dark ? "rgba(255,255,255,0.75)" : "rgba(0,0,0,0.6)";
-          ctx.lineWidth = 1.5;
+          ctx.strokeStyle = dark ? "rgba(255,255,255,0.15)" : "rgba(0,0,0,0.12)";
+          ctx.lineWidth = 1;
           ctx.setLineDash([]);
           ctx.stroke();
         });
@@ -243,8 +243,8 @@ export default function NetworkGraph3D({ users, applications, projects, authUser
 
   const legendItems = [
     { type: "node", color: "#ffffff", label: "you", solid: true },
-    { type: "line", color: dark ? "rgba(255,255,255,0.15)" : "rgba(0,0,0,0.12)", label: "collaborator", dashed: false, width: 1 },
-    { type: "line", color: dark ? "rgba(255,255,255,0.75)" : "rgba(0,0,0,0.6)", label: "mutual follow", dashed: false, width: 2 },
+    { type: "line", color: dark ? "rgba(255,255,255,0.75)" : "rgba(0,0,0,0.6)", label: "collaborator", dashed: false, width: 2 },
+    { type: "line", color: dark ? "rgba(255,255,255,0.15)" : "rgba(0,0,0,0.12)", label: "mutual follow", dashed: false, width: 1 },
   ];
 
   return (
