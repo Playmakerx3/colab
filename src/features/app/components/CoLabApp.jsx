@@ -1978,7 +1978,7 @@ const setViewingProfile = (user) => {
         <div style={{ background: bg, border: `1px solid ${border}`, borderRadius: 16, padding: "32px 28px", width: "100%", maxWidth: 520, maxHeight: "92vh", overflowY: "auto", cursor: "pointer" }} onClick={() => { setViewFullProfile(u); onClose(); }}>
           <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 24 }}>
             <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px" }}>PROFILE</div>
-            <button onClick={onClose} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontSize: 14, fontFamily: "inherit" }}>✕</button>
+            <button onClick={e => { e.stopPropagation(); onClose(); }} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontSize: 14, fontFamily: "inherit" }}>✕</button>
           </div>
           <div style={{ display: "flex", gap: 16, alignItems: "center", marginBottom: 16 }}>
             <Avatar initials={uInitials} size={52} dark={dark} />
@@ -2718,8 +2718,7 @@ const setViewingProfile = (user) => {
               authUser={authUser}
               dark={dark}
               onNodeClick={(user) => {
-                setViewFullProfile(user);
-                setViewingProfile(user.id);
+                setViewingProfile(user);
               }}
             />
           </div>
