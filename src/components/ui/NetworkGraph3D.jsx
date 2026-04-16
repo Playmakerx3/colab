@@ -68,15 +68,11 @@ export default function NetworkGraph3D({ users, applications, projects, authUser
   const [tooltip, setTooltip] = useState(null);
   const [dims, setDims] = useState({ w: 900, h: 600 });
   const [showMutualLines, setShowMutualLines] = useState(true);
-  const [rotateMode, setRotateMode] = useState(false);
 
   // Viewport: pan (x,y), zoom scale, rotation angle (radians)
   const viewRef = useRef({ x: 0, y: 0, scale: 1, rotation: 0 });
   const interactRef = useRef({ mode: null, startX: 0, startY: 0, originView: null, panMoved: false });
   const pinchRef = useRef(null);
-  const rotateModeRef = useRef(false);
-
-  useEffect(() => { rotateModeRef.current = rotateMode; }, [rotateMode]);
 
   // Regenerate starfield when canvas size changes
   useEffect(() => {
@@ -447,7 +443,8 @@ export default function NetworkGraph3D({ users, applications, projects, authUser
 
   // ── Mouse ─────────────────────────────────────────────────────────────────
   const handleMouseDown = useCallback((e) => {
-    if (e.button !== 0) return;
+    // Left-click = pan / click node. Right-click = rotate.
+    if (e.button !== 0 && e.button !== 2) return;
     const canvas = canvasRef.current;
     if (!canvas) return;
     const rect = canvas.getBoundingClientRect();
@@ -457,7 +454,8 @@ export default function NetworkGraph3D({ users, applications, projects, authUser
     velocityRef.current = { vx: 0, vy: 0 };
     lastPanPosRef.current = { x: e.clientX, y: e.clientY, t: performance.now() };
 
-    if (rotateModeRef.current) {
+    if (e.button === 2) {
+      // Right-click drag = rotate
       interactRef.current = { mode: "rotate", startX: e.clientX, startY: e.clientY, originView: { ...viewRef.current }, panMoved: false };
       canvas.style.cursor = "crosshair";
     } else {
@@ -512,7 +510,7 @@ export default function NetworkGraph3D({ users, applications, projects, authUser
       canvas.style.cursor = "pointer";
     } else {
       setTooltip(null);
-      canvas.style.cursor = mode ? (mode === "rotate" ? "crosshair" : "grabbing") : rotateModeRef.current ? "crosshair" : "grab";
+      canvas.style.cursor = mode === "rotate" ? "crosshair" : mode === "pan" ? "grabbing" : "grab";
     }
   }, [getHit, worldToScreen]);
 
@@ -687,7 +685,7 @@ export default function NetworkGraph3D({ users, applications, projects, authUser
           {showMutualLines ? "hide" : "show"} mutual lines
         </button>
         <div style={{ marginTop: 4, fontSize: 8, color: "rgba(255,255,255,0.2)", fontFamily: "monospace", lineHeight: 1.7 }}>
-          drag · scroll · pinch<br />{rotateMode ? "dragging rotates" : "↻ to rotate"}
+          drag · scroll · pinch<br />right-click drag to rotate
         </div>
       </div>
 
@@ -710,16 +708,6 @@ export default function NetworkGraph3D({ users, applications, projects, authUser
           style={btnStyle}
           title="Zoom out"
         >−</button>
-        <button
-          onClick={() => setRotateMode(v => !v)}
-          style={{
-            ...btnStyle, fontSize: 14,
-            background: rotateMode ? "rgba(167,139,250,0.25)" : btnStyle.background,
-            color: rotateMode ? "#a78bfa" : btnStyle.color,
-            border: rotateMode ? "1px solid rgba(167,139,250,0.4)" : btnStyle.border,
-          }}
-          title="Toggle rotate mode"
-        >↻</button>
         <button onClick={resetView} style={{ ...btnStyle, fontSize: 12 }} title="Reset view">⊙</button>
       </div>
 
