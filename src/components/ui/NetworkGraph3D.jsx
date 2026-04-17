@@ -350,11 +350,17 @@ export default function NetworkGraph3D({ users, applications, projects, authUser
           // Core
           ctx.beginPath(); ctx.arc(n.sx, n.sy, n.sr, 0, Math.PI * 2);
           ctx.fillStyle = meColor; ctx.fill();
-          // Label
+          // Label: name + role
           const lfs = Math.max(7, Math.round(11 * n.pd * zoom));
-          ctx.font = `bold ${lfs}px monospace`; ctx.textAlign = "center";
-          ctx.fillStyle = meColor;
-          ctx.fillText("you", n.sx, n.sy + n.sr + Math.round(14 * n.pd * zoom));
+          const lineGap = Math.round(14 * n.pd * zoom);
+          ctx.textAlign = "center"; ctx.fillStyle = meColor;
+          ctx.font = `bold ${lfs}px monospace`;
+          ctx.fillText(n.name.split(" ")[0], n.sx, n.sy + n.sr + lineGap);
+          if (n.role) {
+            ctx.font = `${Math.max(6, Math.round(9 * n.pd * zoom))}px monospace`;
+            ctx.fillStyle = dark ? "rgba(255,255,255,0.5)" : "rgba(0,0,0,0.45)";
+            ctx.fillText(n.role, n.sx, n.sy + n.sr + lineGap + Math.round(12 * n.pd * zoom));
+          }
         } else {
           const opacity = n.isCollab ? 0.95 : n.isMutual ? 0.7 : 0.42;
           ctx.beginPath(); ctx.arc(n.sx, n.sy, n.sr, 0, Math.PI * 2);
