@@ -450,6 +450,7 @@ function PostCard({ post, ctx }) {
   }, [post.media_url, post.content]);
   const [localComment, setLocalComment] = React.useState("");
   const [hovered, setHovered] = React.useState(false);
+  const mySkillSet = React.useMemo(() => new Set(profile?.skills || []), [profile]);
 
   const submitComment = async () => {
     if (!localComment.trim()) return;
@@ -511,10 +512,22 @@ function PostCard({ post, ctx }) {
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
             <div>
-              <button onClick={() => postUser && setViewingProfile(postUser)} style={{ background: "none", border: "none", cursor: "pointer", padding: 0 }}>
-                <span style={{ fontSize: 13, fontWeight: 500, color: text }}>{post.user_name}</span>
-              </button>
-              {post.user_role && <span style={{ fontSize: 11, color: textMuted, marginLeft: 8 }}>{post.user_role}</span>}
+              <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
+                <button onClick={() => postUser && setViewingProfile(postUser)} style={{ background: "none", border: "none", cursor: "pointer", padding: 0 }}>
+                  <span style={{ fontSize: 13, fontWeight: 500, color: text }}>{post.user_name}</span>
+                </button>
+                {post.user_role && <span style={{ fontSize: 11, color: textMuted }}>{post.user_role}</span>}
+              </div>
+              {postUser?.skills?.length > 0 && (
+                <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 4, marginBottom: 2 }}>
+                  {postUser.skills.slice(0, 3).map(s => {
+                    const isMatch = mySkillSet.has(s);
+                    return (
+                      <span key={s} style={{ fontSize: 9, color: isMatch ? text : textMuted, border: `1px solid ${isMatch ? text : border}`, borderRadius: 3, padding: "1px 7px", fontWeight: isMatch ? 500 : 400, background: isMatch ? (dark ? "rgba(255,255,255,0.07)" : "rgba(0,0,0,0.04)") : "none" }}>{s}</span>
+                    );
+                  })}
+                </div>
+              )}
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 3 }}>
                 <div style={{ fontSize: 10, color: textMuted }}>{relativeTime(post.created_at)}</div>
                 {hasRecentActivity && (
@@ -600,7 +613,7 @@ function PostCard({ post, ctx }) {
           }}
         >
           {isLiked ? "♥" : "♡"}
-          {(post.like_count || 0) > 0 && <span style={{ fontSize: 12 }}>{post.like_count}</span>}
+          <span style={{ fontSize: 12, opacity: (post.like_count || 0) === 0 ? 0.35 : 1 }}>{post.like_count || 0}</span>
         </button>
         <button
           className="hb"
@@ -855,6 +868,7 @@ function CoLab() {
   const [exploreTab, setExploreTab] = useState("feed");
   const [feedSort, setFeedSort] = useState("for-you");
   const [hiddenFeedIds, setHiddenFeedIds] = useState(new Set());
+  const [followingOnly, setFollowingOnly] = useState(false);
   const [projectsSubTab, setProjectsSubTab] = useState("for-you");
   const [networkTab, setNetworkTab] = useState("graph");
   const [discoverSkillFilter, setDiscoverSkillFilter] = useState([]);
@@ -3838,9 +3852,20 @@ const setViewingProfile = (user) => {
 
             const filteredPosts = posts.filter(post => matchesRegion((users.find(u => u.id === post.user_id)?.location), regionFilter, profile?.location));
             const baseList = [...filteredPosts.map(p => ({ ...p, _type: "post" })), ...followedProjectEvents];
-            const chronoFeed = [...baseList].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-            const forYouFeed = diversifyFeed([...baseList].sort((a, b) => scoreItem(b) - scoreItem(a)));
-            const mergedFeed = feedSort === "for-you" ? forYouFeed : chronoFeed;
+            const followFilteredList = followingOnly
+              ? baseList.filter(item => {
+                  const aid = item.user_id || item.project?.owner_id;
+                  return following.includes(aid);
+                })
+              : baseList;
+            const chronoFeed = [...followFilteredList].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+            const forYouFeed = diversifyFeed([...followFilteredList].sort((a, b) => scoreItem(b) - scoreItem(a)));
+            const topFeed = [...followFilteredList].sort((a, b) => {
+              const la = a._type === "post" ? (a.like_count || 0) : 0;
+              const lb = b._type === "post" ? (b.like_count || 0) : 0;
+              return lb - la;
+            });
+            const mergedFeed = feedSort === "for-you" ? forYouFeed : feedSort === "top" ? topFeed : chronoFeed;
             const visibleFeed = mergedFeed.filter(item => !hiddenFeedIds.has(item.id));
 
             // Trending: top 3 liked posts in last 7 days with skill overlap
@@ -3870,13 +3895,18 @@ const setViewingProfile = (user) => {
                   <p style={{ fontSize: 13, color: textMuted, lineHeight: 1.75 }}>Updates from builders, new projects, and people looking to collaborate.</p>
                 </div>
 
-                {/* For You / Recent toggle */}
-                <div style={{ display: "flex", gap: 4, marginBottom: 24, background: bg2, borderRadius: 8, padding: 3, border: `1px solid ${border}`, width: "fit-content" }}>
-                  {[["for-you", "for you"], ["recent", "recent"]].map(([val, label]) => (
-                    <button key={val} className="hb" onClick={() => setFeedSort(val)} style={{ padding: "5px 14px", borderRadius: 6, fontSize: 11, cursor: "pointer", fontFamily: "inherit", border: "none", background: feedSort === val ? (dark ? "#fff" : "#111") : "transparent", color: feedSort === val ? (dark ? "#111" : "#fff") : textMuted, transition: "all 0.15s", fontWeight: feedSort === val ? 500 : 400 }}>
-                      {label}
-                    </button>
-                  ))}
+                {/* Sort + following filter */}
+                <div style={{ display: "flex", gap: 10, marginBottom: 24, alignItems: "center", flexWrap: "wrap" }}>
+                  <div style={{ display: "flex", gap: 4, background: bg2, borderRadius: 8, padding: 3, border: `1px solid ${border}` }}>
+                    {[["for-you", "for you"], ["recent", "recent"], ["top", "top"]].map(([val, label]) => (
+                      <button key={val} className="hb" onClick={() => setFeedSort(val)} style={{ padding: "5px 14px", borderRadius: 6, fontSize: 11, cursor: "pointer", fontFamily: "inherit", border: "none", background: feedSort === val ? (dark ? "#fff" : "#111") : "transparent", color: feedSort === val ? (dark ? "#111" : "#fff") : textMuted, transition: "all 0.15s", fontWeight: feedSort === val ? 500 : 400 }}>
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                  <button className="hb" onClick={() => setFollowingOnly(prev => !prev)} style={{ fontSize: 11, padding: "5px 14px", borderRadius: 8, border: `1px solid ${followingOnly ? text : border}`, background: followingOnly ? (dark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.05)") : "none", color: followingOnly ? text : textMuted, cursor: "pointer", fontFamily: "inherit", transition: "all 0.15s" }}>
+                    following only
+                  </button>
                 </div>
 
                 {/* New posts banner */}
@@ -4014,12 +4044,25 @@ const setViewingProfile = (user) => {
                     const reason = getReasonLabel(item);
                     const isOwn = (item.user_id || item.project?.owner_id) === authUser?.id;
 
+                    const categoryAccent = {
+                      "Tech / Software": "#3b82f6",
+                      "Creative / Art": "#8b5cf6",
+                      "Music": "#ec4899",
+                      "Film / Video": "#f97316",
+                      "Physical / Hardware": "#10b981",
+                      "Business / Startup": "#f59e0b",
+                      "Social Impact": "#06b6d4",
+                      "Research": "#6366f1",
+                      "Other": "#6b7280",
+                    };
+
                     if (item._type === "project_created") {
                       const { project: proj } = item;
                       const owner = users.find(u => u.id === proj.owner_id);
                       const matchSkills = (proj.skills || []).filter(s => mySkillSet.has(s));
+                      const accentColor = categoryAccent[proj.category] || "#6b7280";
                       return (
-                        <div key={item.id} style={{ padding: "18px 0", borderBottom: `1px solid ${border}`, position: "relative" }}>
+                        <div key={item.id} style={{ padding: "18px 0 18px 12px", borderBottom: `1px solid ${border}`, borderLeft: `3px solid ${accentColor}`, position: "relative", marginLeft: -12 }}>
                           {/* Reason label */}
                           {reason && <div style={{ fontSize: 9, color: textMuted, letterSpacing: "0.5px", marginBottom: 8, textTransform: "uppercase" }}>{reason}</div>}
                           <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
