@@ -853,6 +853,8 @@ function CoLab() {
   const [screen, setScreen] = useState("landing");
   const [appScreen, setAppScreen] = useState("explore");
   const [exploreTab, setExploreTab] = useState("feed");
+  const [feedSort, setFeedSort] = useState("for-you");
+  const [hiddenFeedIds, setHiddenFeedIds] = useState(new Set());
   const [projectsSubTab, setProjectsSubTab] = useState("for-you");
   const [networkTab, setNetworkTab] = useState("graph");
   const [discoverSkillFilter, setDiscoverSkillFilter] = useState([]);
@@ -3782,14 +3784,78 @@ const setViewingProfile = (user) => {
               { label: "need collaborators", text: "Looking for someone who can " },
               { label: "open to work", text: "I'm available to collaborate on " },
             ];
-            // Projects created by followed users — shown as feed events
+            // ── Feed data prep ─────────────────────────────────────────────
+            const mySkillSet = new Set(profile?.skills || []);
+
+            const getSkillOverlap = (item) => {
+              const authorId = item.user_id || item.project?.owner_id;
+              const author = users.find(u => u.id === authorId);
+              return (author?.skills || []).filter(s => mySkillSet.has(s));
+            };
+
+            const scoreItem = (item) => {
+              const authorId = item.user_id || item.project?.owner_id;
+              const overlap = getSkillOverlap(item).length;
+              const isFollowed = following.includes(authorId);
+              const ageHours = (Date.now() - new Date(item.created_at)) / 3600000;
+              const freshness = Math.exp(-ageHours / 96); // ~4-day half-life
+              const likeBoost = item._type === "post" ? Math.min((item.like_count || 0) * 0.15, 3) : 0;
+              return overlap * 2.5 + (isFollowed ? 3 : 0) + freshness * 5 + likeBoost;
+            };
+
+            const diversifyFeed = (items) => {
+              const result = [], deferred = [];
+              for (const item of items) {
+                const aid = item.user_id || item.project?.owner_id;
+                const l1 = result[result.length - 1], l2 = result[result.length - 2];
+                const lid1 = l1?.user_id || l1?.project?.owner_id;
+                const lid2 = l2?.user_id || l2?.project?.owner_id;
+                (aid === lid1 && aid === lid2) ? deferred.push(item) : result.push(item);
+              }
+              return [...result, ...deferred];
+            };
+
+            const getReasonLabel = (item) => {
+              if (item._type === "project_created") {
+                const proj = item.project;
+                const matchSkills = (proj.skills || []).filter(s => mySkillSet.has(s));
+                if (matchSkills.length > 0) return `looking for ${matchSkills.slice(0, 2).join(", ")}`;
+                if (following.includes(proj.owner_id)) return "you follow them";
+                return null;
+              }
+              const overlap = getSkillOverlap(item);
+              if (overlap.length >= 3) return `${overlap.length} skills in common`;
+              if (overlap.length > 0) return overlap.slice(0, 2).join(" · ");
+              if (following.includes(item.user_id)) return "you follow them";
+              return null;
+            };
+
+            const hideItem = (id) => setHiddenFeedIds(prev => { const n = new Set(prev); n.add(id); return n; });
+
             const followedProjectEvents = projects
               .filter(p => following.includes(p.owner_id) && !p.archived && !p.is_private)
               .map(p => ({ _type: "project_created", id: `proj-${p.id}`, created_at: p.created_at, project: p }));
-            // Merge posts + project events, sorted newest first
+
             const filteredPosts = posts.filter(post => matchesRegion((users.find(u => u.id === post.user_id)?.location), regionFilter, profile?.location));
-            const mergedFeed = [...filteredPosts.map(p => ({ ...p, _type: "post" })), ...followedProjectEvents]
-              .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+            const baseList = [...filteredPosts.map(p => ({ ...p, _type: "post" })), ...followedProjectEvents];
+            const chronoFeed = [...baseList].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+            const forYouFeed = diversifyFeed([...baseList].sort((a, b) => scoreItem(b) - scoreItem(a)));
+            const mergedFeed = feedSort === "for-you" ? forYouFeed : chronoFeed;
+            const visibleFeed = mergedFeed.filter(item => !hiddenFeedIds.has(item.id));
+
+            // Trending: top 3 liked posts in last 7 days with skill overlap
+            const trendingPosts = posts
+              .filter(p => {
+                const ageMs = Date.now() - new Date(p.created_at);
+                const poster = users.find(u => u.id === p.user_id);
+                return ageMs < 7 * 24 * 3600000
+                  && p.user_id !== authUser?.id
+                  && !hiddenFeedIds.has(p.id)
+                  && (mySkillSet.size === 0 || (poster?.skills || []).some(s => mySkillSet.has(s)));
+              })
+              .sort((a, b) => (b.like_count || 0) - (a.like_count || 0))
+              .slice(0, 3);
+
             return (
               <div>
                 <style>{`
@@ -3798,10 +3864,19 @@ const setViewingProfile = (user) => {
                 `}</style>
 
                 {/* Hero header */}
-                <div style={{ marginBottom: 28 }}>
+                <div style={{ marginBottom: 24 }}>
                   <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px", marginBottom: 10 }}>WHAT'S HAPPENING</div>
                   <h2 style={{ fontSize: "clamp(26px, 4vw, 44px)", fontWeight: 400, lineHeight: 1.05, letterSpacing: "-2px", marginBottom: 10, color: text }}>The builder feed.</h2>
                   <p style={{ fontSize: 13, color: textMuted, lineHeight: 1.75 }}>Updates from builders, new projects, and people looking to collaborate.</p>
+                </div>
+
+                {/* For You / Recent toggle */}
+                <div style={{ display: "flex", gap: 4, marginBottom: 24, background: bg2, borderRadius: 8, padding: 3, border: `1px solid ${border}`, width: "fit-content" }}>
+                  {[["for-you", "for you"], ["recent", "recent"]].map(([val, label]) => (
+                    <button key={val} className="hb" onClick={() => setFeedSort(val)} style={{ padding: "5px 14px", borderRadius: 6, fontSize: 11, cursor: "pointer", fontFamily: "inherit", border: "none", background: feedSort === val ? (dark ? "#fff" : "#111") : "transparent", color: feedSort === val ? (dark ? "#111" : "#fff") : textMuted, transition: "all 0.15s", fontWeight: feedSort === val ? 500 : 400 }}>
+                      {label}
+                    </button>
+                  ))}
                 </div>
 
                 {/* New posts banner */}
@@ -3892,14 +3967,42 @@ const setViewingProfile = (user) => {
                   </div>
                 </div>
 
+                {/* Trending this week */}
+                {trendingPosts.length > 0 && feedSort === "for-you" && (
+                  <div style={{ marginBottom: 28 }}>
+                    <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px", marginBottom: 12 }}>TRENDING IN YOUR SKILLS</div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 0, border: `1px solid ${border}`, borderRadius: 10, overflow: "hidden" }}>
+                      {trendingPosts.map((p, i) => {
+                        const poster = users.find(u => u.id === p.user_id);
+                        const overlap = (poster?.skills || []).filter(s => mySkillSet.has(s));
+                        return (
+                          <div key={p.id} style={{ padding: "12px 16px", borderBottom: i < trendingPosts.length - 1 ? `1px solid ${border}` : "none", display: "flex", gap: 12, alignItems: "flex-start", background: bg2 }}>
+                            <button onClick={() => poster && setViewingProfile(poster)} style={{ background: "none", border: "none", cursor: "pointer", padding: 0, flexShrink: 0 }}>
+                              <Avatar initials={p.user_initials} size={32} dark={dark} />
+                            </button>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+                                <button onClick={() => poster && setViewingProfile(poster)} style={{ background: "none", border: "none", cursor: "pointer", padding: 0, fontSize: 12, fontWeight: 500, color: text, fontFamily: "inherit" }}>{p.user_name}</button>
+                                <span style={{ fontSize: 10, color: textMuted }}>♥ {p.like_count || 0}</span>
+                              </div>
+                              <div style={{ fontSize: 12, color: text, lineHeight: 1.6, marginBottom: 6, overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>{p.content}</div>
+                              {overlap.length > 0 && <span style={{ fontSize: 9, color: textMuted, border: `1px solid ${border}`, borderRadius: 3, padding: "1px 7px" }}>{overlap.slice(0, 2).join(" · ")}</span>}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
                 {/* Region filter */}
                 <div style={{ marginBottom: 20, display: "flex", gap: 5, flexWrap: "wrap", alignItems: "center" }}>
                   <span style={{ fontSize: 10, color: textMuted, letterSpacing: "1px", marginRight: 4 }}>REGION</span>
                   {["local","city","national","international"].map(r => { const sel = regionFilter === r; return <button key={r} className="hb" onClick={() => setRegionFilter(sel ? null : r)} style={{ padding: "3px 10px", borderRadius: 3, fontSize: 10, cursor: "pointer", fontFamily: "inherit", background: sel ? text : "none", color: sel ? bg : textMuted, border: `1px solid ${sel ? text : border}`, transition: "all 0.15s" }}>{r}</button>; })}
                 </div>
 
-                {/* Merged feed: posts + project-created events */}
-                {mergedFeed.length === 0
+                {/* Feed */}
+                {visibleFeed.length === 0
                   ? (
                     <div style={{ padding: "40px 0", textAlign: "center" }}>
                       <div style={{ fontSize: 20, color: text, letterSpacing: "-0.5px", marginBottom: 8 }}>Nothing here yet.</div>
@@ -3907,33 +4010,66 @@ const setViewingProfile = (user) => {
                       <button className="hb" onClick={() => feedComposerRef.current?.focus()} style={btnP}>Post something →</button>
                     </div>
                   )
-                  : mergedFeed.map(item => {
+                  : visibleFeed.map(item => {
+                    const reason = getReasonLabel(item);
+                    const isOwn = (item.user_id || item.project?.owner_id) === authUser?.id;
+
                     if (item._type === "project_created") {
                       const { project: proj } = item;
                       const owner = users.find(u => u.id === proj.owner_id);
+                      const matchSkills = (proj.skills || []).filter(s => mySkillSet.has(s));
                       return (
-                        <div key={item.id} style={{ padding: "16px 0", borderBottom: `1px solid ${border}`, display: "flex", gap: 12, alignItems: "flex-start" }}>
-                          <button onClick={() => owner && setViewingProfile(owner)} style={{ background: "none", border: "none", cursor: "pointer", padding: 0, flexShrink: 0 }}>
-                            <Avatar initials={initials(proj.owner_name)} size={36} dark={dark} />
-                          </button>
-                          <div>
-                            <div style={{ fontSize: 13, color: textMuted, marginBottom: 6 }}>
-                              <button className="hb" onClick={() => owner && setViewingProfile(owner)} style={{ background: "none", border: "none", color: text, cursor: "pointer", fontFamily: "inherit", fontSize: 13, fontWeight: 500, padding: 0 }}>{proj.owner_name}</button>
-                              {" has created "}
-                              <button className="hb" onClick={() => { setActiveProject(proj); loadProjectData(proj.id); setExploreTab("projects"); }} style={{ background: "none", border: "none", color: text, cursor: "pointer", fontFamily: "inherit", fontSize: 13, fontWeight: 500, padding: 0, textDecoration: "underline" }}>{proj.title}</button>
-                            </div>
-                            <div style={{ fontSize: 11, color: textMuted, marginBottom: 8 }}>{proj.category}{proj.location ? ` · ${proj.location}` : ""} · {new Date(proj.created_at).toLocaleDateString()}</div>
-                            {(proj.skills || []).length > 0 && (
-                              <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginBottom: 10 }}>
-                                {(proj.skills || []).slice(0, 4).map(s => <span key={s} style={{ fontSize: 10, color: textMuted, border: `1px solid ${border}`, borderRadius: 3, padding: "1px 8px" }}>{s}</span>)}
+                        <div key={item.id} style={{ padding: "18px 0", borderBottom: `1px solid ${border}`, position: "relative" }}>
+                          {/* Reason label */}
+                          {reason && <div style={{ fontSize: 9, color: textMuted, letterSpacing: "0.5px", marginBottom: 8, textTransform: "uppercase" }}>{reason}</div>}
+                          <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
+                            <button onClick={() => owner && setViewingProfile(owner)} style={{ background: "none", border: "none", cursor: "pointer", padding: 0, flexShrink: 0 }}>
+                              <Avatar initials={initials(proj.owner_name)} size={36} dark={dark} />
+                            </button>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ fontSize: 13, color: textMuted, marginBottom: 4 }}>
+                                <button className="hb" onClick={() => owner && setViewingProfile(owner)} style={{ background: "none", border: "none", color: text, cursor: "pointer", fontFamily: "inherit", fontSize: 13, fontWeight: 500, padding: 0 }}>{proj.owner_name}</button>
+                                {" launched a project"}
                               </div>
+                              <button className="hb" onClick={() => { setActiveProject(proj); loadProjectData(proj.id); setExploreTab("projects"); }} style={{ background: "none", border: "none", cursor: "pointer", padding: 0, textAlign: "left", fontFamily: "inherit" }}>
+                                <div style={{ fontSize: 15, fontWeight: 500, color: text, letterSpacing: "-0.3px", marginBottom: 4 }}>{proj.title}</div>
+                              </button>
+                              {proj.description && <div style={{ fontSize: 12, color: textMuted, lineHeight: 1.65, marginBottom: 8, overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>{proj.description}</div>}
+                              <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginBottom: 10 }}>
+                                {(proj.skills || []).slice(0, 5).map(s => {
+                                  const isMatch = mySkillSet.has(s);
+                                  return <span key={s} style={{ fontSize: 10, color: isMatch ? text : textMuted, border: `1px solid ${isMatch ? text : border}`, borderRadius: 3, padding: "1px 8px", fontWeight: isMatch ? 500 : 400, background: isMatch ? (dark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.05)") : "none" }}>{s}{isMatch ? " ✓" : ""}</span>;
+                                })}
+                              </div>
+                              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                                <button className="hb" onClick={() => { setActiveProject(proj); loadProjectData(proj.id); setExploreTab("projects"); }} style={{ ...btnP, fontSize: 11, padding: "5px 14px" }}>
+                                  {matchSkills.length > 0 ? "apply to collaborate →" : "view project →"}
+                                </button>
+                                <span style={{ fontSize: 10, color: textMuted }}>{proj.category}{proj.location ? ` · ${proj.location}` : ""}</span>
+                              </div>
+                            </div>
+                            {/* Hide button */}
+                            {!isOwn && (
+                              <button className="hb" onClick={() => hideItem(item.id)} title="Not interested" style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontSize: 11, fontFamily: "inherit", opacity: 0.5, flexShrink: 0, padding: "2px 4px" }}>✕</button>
                             )}
-                            <button className="hb" onClick={() => { setActiveProject(proj); loadProjectData(proj.id); setExploreTab("projects"); }} style={{ ...btnG, fontSize: 11, padding: "4px 12px" }}>view project →</button>
                           </div>
                         </div>
                       );
                     }
-                    return <PostCard key={item.id} post={item} ctx={postCtx} />;
+
+                    // Regular post — wrap with reason chip + hide
+                    return (
+                      <div key={item.id} style={{ position: "relative" }}>
+                        {reason && <div style={{ fontSize: 9, color: textMuted, letterSpacing: "0.5px", paddingTop: 16, textTransform: "uppercase" }}>{reason}</div>}
+                        {!isOwn && (
+                          <button className="hb" onClick={() => hideItem(item.id)} title="Not interested" style={{ position: "absolute", top: reason ? 14 : 28, right: 0, background: "none", border: "none", color: textMuted, cursor: "pointer", fontSize: 11, fontFamily: "inherit", opacity: 0, transition: "opacity 0.15s" }}
+                            onMouseEnter={e => e.currentTarget.style.opacity = "0.6"}
+                            onMouseLeave={e => e.currentTarget.style.opacity = "0"}
+                          >hide</button>
+                        )}
+                        <PostCard post={item} ctx={postCtx} />
+                      </div>
+                    );
                   })}
               </div>
             );
