@@ -419,7 +419,7 @@ export default function NetworkGraph3D({ users, applications, projects, authUser
       const dy = e.clientY - startY;
       if (Math.abs(dx) > 2 || Math.abs(dy) > 2) interactRef.current.panMoved = true;
 
-      const newRotY = originView.rotY + dx * 0.007;
+      const newRotY = originView.rotY - dx * 0.007;
       const newRotX = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, originView.rotX + dy * 0.007));
 
       // Track velocity for spin inertia
@@ -504,7 +504,7 @@ export default function NetworkGraph3D({ users, applications, projects, authUser
       const dy = e.touches[0].clientY - startY;
       if (Math.abs(dx) > 2 || Math.abs(dy) > 2) interactRef.current.panMoved = true;
 
-      const newRotY = originView.rotY + dx * 0.007;
+      const newRotY = originView.rotY - dx * 0.007;
       const newRotX = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, originView.rotX + dy * 0.007));
 
       const now = performance.now();
