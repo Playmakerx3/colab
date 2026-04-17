@@ -18,7 +18,7 @@ const SKILL_CLUSTERS = {
     skills: ["Architecture","3D/CAD","Industrial Design","Hardware","Electrical Engineering","Mechanical Engineering","Woodworking","Fashion"],
   },
   Research: {
-    color: "#2dd4bf",
+    color: "#f472b6",
     skills: ["Research","Healthcare","Education","Policy","Community"],
   },
 };
