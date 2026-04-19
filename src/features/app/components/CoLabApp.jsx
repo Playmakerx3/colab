@@ -981,6 +981,7 @@ function CoLab() {
   const [communities, setCommunities] = useState([]);
   const [joinedCommunityIds, setJoinedCommunityIds] = useState([]);
   const [communityVotes, setCommunityVotes] = useState({}); // { postId: true }
+  const [communityDownvotes, setCommunityDownvotes] = useState({}); // { postId: true }
   const [activeCommunity, setActiveCommunity] = useState(null);
   const [communityPosts, setCommunityPosts] = useState([]);
   const [communityPostsLoading, setCommunityPostsLoading] = useState(false);
@@ -4564,6 +4565,28 @@ const setViewingProfile = (user) => {
           }
         };
 
+        const handleDownvote = async (post) => {
+          const hasDownvoted = communityDownvotes[post.id];
+          // clear any upvote first
+          if (communityVotes[post.id]) {
+            await supabase.from("community_post_votes").delete().eq("post_id", post.id).eq("user_id", authUser.id);
+            await supabase.from("community_posts").update({ upvotes: post.upvotes - 1 }).eq("id", post.id);
+            setCommunityVotes(prev => { const n = { ...prev }; delete n[post.id]; return n; });
+            setCommunityPosts(prev => prev.map(p => p.id === post.id ? { ...p, upvotes: post.upvotes - 1 } : p));
+            return;
+          }
+          if (hasDownvoted) {
+            // un-downvote
+            await supabase.from("community_posts").update({ upvotes: post.upvotes + 1 }).eq("id", post.id);
+            setCommunityDownvotes(prev => { const n = { ...prev }; delete n[post.id]; return n; });
+            setCommunityPosts(prev => prev.map(p => p.id === post.id ? { ...p, upvotes: post.upvotes + 1 } : p));
+          } else {
+            await supabase.from("community_posts").update({ upvotes: post.upvotes - 1 }).eq("id", post.id);
+            setCommunityDownvotes(prev => ({ ...prev, [post.id]: true }));
+            setCommunityPosts(prev => prev.map(p => p.id === post.id ? { ...p, upvotes: post.upvotes - 1 } : p));
+          }
+        };
+
         const handleCreatePost = async () => {
           if (!newThreadTitle.trim() || !activeCommunity) return;
           const payload = {
@@ -4708,6 +4731,8 @@ const setViewingProfile = (user) => {
                       <button className="hb" onClick={() => handleVote(activeThread)}
                         style={{ background: "none", border: "none", cursor: "pointer", fontSize: 18, color: communityVotes[activeThread.id] ? text : textMuted, lineHeight: 1, padding: "2px 6px" }}>+</button>
                       <span style={{ fontSize: 13, fontWeight: 500, color: text }}>{activeThread.upvotes}</span>
+                      <button className="hb" onClick={() => handleDownvote(activeThread)}
+                        style={{ background: "none", border: "none", cursor: "pointer", fontSize: 18, color: communityDownvotes[activeThread.id] ? text : textMuted, lineHeight: 1, padding: "2px 6px" }}>−</button>
                     </div>
                     <div style={{ flex: 1 }}>
                       <div style={{ fontSize: 20, fontWeight: 400, letterSpacing: "-0.5px", color: text, marginBottom: 10, lineHeight: 1.3 }}>{activeThread.title}</div>
@@ -4807,7 +4832,9 @@ const setViewingProfile = (user) => {
                       <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2, flexShrink: 0, width: 36 }}>
                         <button className="hb" onClick={e => { e.stopPropagation(); handleVote(post); }}
                           style={{ background: "none", border: "none", cursor: "pointer", fontSize: 14, color: communityVotes[post.id] ? text : textMuted, padding: "2px", lineHeight: 1 }}>+</button>
-                        <span style={{ fontSize: 12, fontWeight: 500, color: communityVotes[post.id] ? text : textMuted }}>{post.upvotes}</span>
+                        <span style={{ fontSize: 12, fontWeight: 500, color: communityVotes[post.id] ? text : communityDownvotes[post.id] ? textMuted : textMuted }}>{post.upvotes}</span>
+                        <button className="hb" onClick={e => { e.stopPropagation(); handleDownvote(post); }}
+                          style={{ background: "none", border: "none", cursor: "pointer", fontSize: 14, color: communityDownvotes[post.id] ? text : textMuted, padding: "2px", lineHeight: 1 }}>−</button>
                       </div>
                       {/* Content */}
                       <div style={{ flex: 1, minWidth: 0 }}>
