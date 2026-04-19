@@ -8,7 +8,7 @@ export const PROJECT_HEALTH = {
 };
 
 export const resolveTaskOwnership = (task, memberMap, currentUserId) => {
-  const assigneeId = task?.assigned_to || null;
+  const assigneeId = task?.assignee_id || task?.assigned_to || null;
   const assignee = assigneeId ? (memberMap?.[assigneeId] || null) : null;
   const isUnassigned = !assignee;
   const isAssignedToMe = !!assignee && assignee.id === currentUserId;

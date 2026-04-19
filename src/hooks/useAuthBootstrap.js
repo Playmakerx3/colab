@@ -6,11 +6,18 @@ export function useAuthBootstrap({
   setAuthUser,
   setProfile,
   setBannerPixels,
+  setVerifyEmail,
   setScreen,
   setAuthLoading,
   loadAllData,
 }) {
   useEffect(() => {
+    const isEmailUnconfirmed = (user) => {
+      if (!user) return false;
+      const hasNoIdentities = Array.isArray(user.identities) && user.identities.length === 0;
+      return hasNoIdentities || !user.email_confirmed_at;
+    };
+
     const loadProfile = async (userId) => {
       const { data } = await supabase.from("profiles").select("*").eq("id", userId).single();
       if (data) {
@@ -33,8 +40,15 @@ export function useAuthBootstrap({
 
     supabase.auth.getSession().then(({ data: { session } }) => {
       setAuthUser(session?.user || null);
-      if (session?.user) loadProfile(session.user.id);
-      else setAuthLoading(false);
+      if (session?.user) {
+        if (isEmailUnconfirmed(session.user)) {
+          setVerifyEmail(session.user.email || "");
+          setScreen("verify");
+          setAuthLoading(false);
+          return;
+        }
+        loadProfile(session.user.id);
+      } else setAuthLoading(false);
     });
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === "PASSWORD_RECOVERY") {
@@ -44,9 +58,18 @@ export function useAuthBootstrap({
         return;
       }
       setAuthUser(session?.user || null);
-      if (session?.user) loadProfile(session.user.id);
+      if (session?.user) {
+        if (isEmailUnconfirmed(session.user)) {
+          setVerifyEmail(session.user.email || "");
+          setScreen("verify");
+          setAuthLoading(false);
+          return;
+        }
+        loadProfile(session.user.id);
+      }
       else {
         setProfile(null);
+        setVerifyEmail("");
         setAuthLoading(false);
         setScreen("landing");
       }
