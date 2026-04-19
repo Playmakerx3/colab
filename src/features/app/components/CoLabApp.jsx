@@ -5374,7 +5374,7 @@ const setViewingProfile = (user) => {
                 </div>
                 {dmTypingUser && <div style={{ padding: "4px 20px 0", fontSize: 11, color: textMuted, fontStyle: "italic" }}>{dmTypingUser} is typing...</div>}
                 <div style={{ padding: "14px 20px", borderTop: `1px solid ${border}`, display: "flex", gap: 10 }}>
-                  <input placeholder="message..." value={dmInput} onChange={e => setDmInput(e.target.value)} onKeyDown={e => e.key === "Enter" && handleSendDm()} style={{ ...inputStyle, fontSize: 13 }} autoFocus />
+                  <input placeholder="message..." value={dmInput} onChange={e => setDmInput(e.target.value)} onKeyDown={e => e.key === "Enter" && handleSendDm()} style={{ ...inputStyle, fontSize: 13 }} autoFocus={window.innerWidth > 768} />
                   <label style={{ ...btnG, padding: "10px 12px", cursor: "pointer", flexShrink: 0 }}>
                     + file
                     <input type="file" multiple style={{ display: "none" }} onChange={(e) => addDmAttachments(Array.from(e.target.files || []), activeDmThread.id)} />
