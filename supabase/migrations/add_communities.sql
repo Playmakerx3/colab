@@ -86,22 +86,42 @@ create policy "Users can delete own comments" on community_comments for delete u
 
 -- Seed default communities
 insert into communities (name, slug, description, emoji, category, is_public) values
-  ('Music',        'music',        'For musicians, producers, beatmakers, and audio engineers',               '🎵', 'Creative',  true),
-  ('Design',       'design',       'Visual design, UX, branding, and creative direction',                     '🎨', 'Creative',  true),
-  ('Tech',         'tech',         'Engineering, development, devops, and all things technical',               '💻', 'Tech',      true),
-  ('Startups',     'startups',     'Building companies, finding co-founders, and sharing lessons learned',     '🚀', 'Business',  true),
-  ('Film & Video', 'film-video',   'Cinematography, editing, storytelling, and production',                    '🎬', 'Creative',  true),
-  ('Writing',      'writing',      'Content, copywriting, journalism, and long-form storytelling',             '✍️', 'Creative',  true),
-  ('Marketing',    'marketing',    'Growth, community building, branding strategy, and distribution',          '📈', 'Business',  true),
-  ('Research',     'research',     'Science, data, academic work, and discovery',                              '🔬', 'Research',  true),
-  ('Making',       'making',       'Hardware, fabrication, 3D printing, and hands-on creation',                '🛠️', 'Making',    true),
-  ('Photography',  'photography',  'Cameras, editing, visual storytelling, and photo projects',                '📷', 'Creative',  true),
-  ('Gaming',       'gaming',       'Game dev, design, culture, and playing together',                          '🎮', 'Tech',      true),
-  ('Education',    'education',    'Teaching, learning, EdTech, and sharing knowledge',                        '📚', 'Research',  true),
-  ('Animation',    'animation',    '2D, 3D, motion design, and everything that moves',                         '🎭', 'Creative',  true),
-  ('Data Science', 'data-science', 'ML, AI, data engineering, visualization, and analytics',                   '📊', 'Tech',      true),
-  ('Podcasting',   'podcasting',   'Audio storytelling, interviews, production, and growing an audience',       '🎙️', 'Creative', true),
-  ('Open Source',  'open-source',  'Free software, contributing to projects, and building in public',           '🌐', 'Tech',      true),
-  ('Fashion',      'fashion',      'Style, design, sustainable fashion, and the business of clothing',          '👗', 'Creative',  true),
-  ('Architecture', 'architecture', 'Spatial design, urbanism, interiors, and the built environment',            '🏛️', 'Making',   true)
+  ('Music',        'music',        'For musicians, producers, beatmakers, and audio engineers',               '♪',  'Creative',  true),
+  ('Design',       'design',       'Visual design, UX, branding, and creative direction',                     '◈',  'Creative',  true),
+  ('Tech',         'tech',         'Engineering, development, devops, and all things technical',               '⌨',  'Tech',      true),
+  ('Startups',     'startups',     'Building companies, finding co-founders, and sharing lessons learned',     '↗',  'Business',  true),
+  ('Film & Video', 'film-video',   'Cinematography, editing, storytelling, and production',                    '▶',  'Creative',  true),
+  ('Writing',      'writing',      'Content, copywriting, journalism, and long-form storytelling',             '✎',  'Creative',  true),
+  ('Marketing',    'marketing',    'Growth, community building, branding strategy, and distribution',          '↑',  'Business',  true),
+  ('Research',     'research',     'Science, data, academic work, and discovery',                              '⊙',  'Research',  true),
+  ('Making',       'making',       'Hardware, fabrication, 3D printing, and hands-on creation',                '✦',  'Making',    true),
+  ('Photography',  'photography',  'Cameras, editing, visual storytelling, and photo projects',                '◉',  'Creative',  true),
+  ('Gaming',       'gaming',       'Game dev, design, culture, and playing together',                          '⊕',  'Tech',      true),
+  ('Education',    'education',    'Teaching, learning, EdTech, and sharing knowledge',                        '≡',  'Research',  true),
+  ('Animation',    'animation',    '2D, 3D, motion design, and everything that moves',                         '◌',  'Creative',  true),
+  ('Data Science', 'data-science', 'ML, AI, data engineering, visualization, and analytics',                   '▦',  'Tech',      true),
+  ('Podcasting',   'podcasting',   'Audio storytelling, interviews, production, and growing an audience',       '◎',  'Creative',  true),
+  ('Open Source',  'open-source',  'Free software, contributing to projects, and building in public',           '⊛',  'Tech',      true),
+  ('Fashion',      'fashion',      'Style, design, sustainable fashion, and the business of clothing',          '◇',  'Creative',  true),
+  ('Architecture', 'architecture', 'Spatial design, urbanism, interiors, and the built environment',            '△',  'Making',    true)
 on conflict (slug) do nothing;
+
+-- Run this to update existing rows if the migration was already applied with emojis:
+update communities set emoji = '♪'  where slug = 'music';
+update communities set emoji = '◈'  where slug = 'design';
+update communities set emoji = '⌨'  where slug = 'tech';
+update communities set emoji = '↗'  where slug = 'startups';
+update communities set emoji = '▶'  where slug = 'film-video';
+update communities set emoji = '✎'  where slug = 'writing';
+update communities set emoji = '↑'  where slug = 'marketing';
+update communities set emoji = '⊙'  where slug = 'research';
+update communities set emoji = '✦'  where slug = 'making';
+update communities set emoji = '◉'  where slug = 'photography';
+update communities set emoji = '⊕'  where slug = 'gaming';
+update communities set emoji = '≡'  where slug = 'education';
+update communities set emoji = '◌'  where slug = 'animation';
+update communities set emoji = '▦'  where slug = 'data-science';
+update communities set emoji = '◎'  where slug = 'podcasting';
+update communities set emoji = '⊛'  where slug = 'open-source';
+update communities set emoji = '◇'  where slug = 'fashion';
+update communities set emoji = '△'  where slug = 'architecture';

@@ -972,7 +972,7 @@ function CoLab() {
   const [newThreadContent, setNewThreadContent] = useState("");
   const [newCommunityName, setNewCommunityName] = useState("");
   const [newCommunityDesc, setNewCommunityDesc] = useState("");
-  const [newCommunityEmoji, setNewCommunityEmoji] = useState("💬");
+  const [newCommunityEmoji, setNewCommunityEmoji] = useState("◈");
   const [newCommentText, setNewCommentText] = useState("");
   const [topCommunityPosts, setTopCommunityPosts] = useState([]);
   const [projectsSubTab, setProjectsSubTab] = useState("for-you");
@@ -4065,7 +4065,7 @@ const setViewingProfile = (user) => {
               _type: "community_post",
               id: `cp-${cp.id}`,
               _communityName: cp.communities?.name || "",
-              _communityEmoji: cp.communities?.emoji || "💬",
+              _communityEmoji: cp.communities?.emoji || "◈",
               _communityId: cp.community_id,
               _originalId: cp.id,
             }));
@@ -4338,7 +4338,7 @@ const setViewingProfile = (user) => {
                       return (
                         <div key={item.id} style={{ padding: "18px 0", borderBottom: `1px solid ${border}` }}>
                           <div style={{ fontSize: 9, color: textMuted, letterSpacing: "1.5px", marginBottom: 10, display: "flex", alignItems: "center", gap: 6 }}>
-                            <span>{item._communityEmoji}</span>
+                            <span style={{ fontSize: 11, lineHeight: 1 }}>{item._communityEmoji}</span>
                             <span>TRENDING IN {item._communityName.toUpperCase()}</span>
                           </div>
                           <div style={{ display: "flex", gap: 14, alignItems: "flex-start" }}>
@@ -4577,7 +4577,7 @@ const setViewingProfile = (user) => {
             setJoinedCommunityIds(prev => [...prev, data.id]);
             setNewCommunityName("");
             setNewCommunityDesc("");
-            setNewCommunityEmoji("💬");
+            setNewCommunityEmoji("◈");
             setShowCreateCommunity(false);
             loadCommunity(data);
             showToast("Community created.");
@@ -4625,7 +4625,7 @@ const setViewingProfile = (user) => {
               style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 12px", borderRadius: 6, cursor: "pointer", background: isActive ? bg3 : "none", transition: "background 0.1s" }}
               onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = bg2; }}
               onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = "none"; }}>
-              <span style={{ fontSize: 16, flexShrink: 0 }}>{c.emoji}</span>
+              <span style={{ fontSize: 13, flexShrink: 0, color: isActive ? text : textMuted, fontFamily: "inherit", lineHeight: 1 }}>{c.emoji}</span>
               <span style={{ flex: 1, fontSize: 12, color: isActive ? text : textMuted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.name}</span>
               <button className="hb" onClick={e => { e.stopPropagation(); isJoined ? handleLeave(c.id) : handleJoin(c.id); }}
                 style={{ fontSize: 9, padding: "2px 7px", borderRadius: 20, border: `1px solid ${isJoined ? border : text}`, background: isJoined ? "none" : text, color: isJoined ? textMuted : bg, cursor: "pointer", fontFamily: "inherit", flexShrink: 0 }}>
@@ -4679,7 +4679,7 @@ const setViewingProfile = (user) => {
                 <div style={{ maxWidth: 720, margin: "0 auto", padding: "32px 24px" }}>
                   <button className="hb" onClick={() => setActiveThread(null)}
                     style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontFamily: "inherit", fontSize: 12, marginBottom: 24, padding: 0, display: "flex", alignItems: "center", gap: 6 }}>
-                    ← back to {activeCommunity.emoji} {activeCommunity.name}
+                    ← back to {activeCommunity.name}
                   </button>
                   <div style={{ display: "flex", gap: 16, alignItems: "flex-start", marginBottom: 24 }}>
                     {/* Vote */}
@@ -4748,7 +4748,7 @@ const setViewingProfile = (user) => {
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24, flexWrap: "wrap", gap: 12 }}>
                     <div>
                       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
-                        <span style={{ fontSize: 28 }}>{activeCommunity.emoji}</span>
+                        <span style={{ fontSize: 18, color: text, fontFamily: "inherit", lineHeight: 1 }}>{activeCommunity.emoji}</span>
                         <div style={{ fontSize: 22, fontWeight: 400, letterSpacing: "-0.5px", color: text }}>{activeCommunity.name}</div>
                       </div>
                       {activeCommunity.description && <div style={{ fontSize: 12, color: textMuted, maxWidth: 480, lineHeight: 1.6 }}>{activeCommunity.description}</div>}
@@ -6397,7 +6397,8 @@ const setViewingProfile = (user) => {
             </div>
             <div style={{ display: "flex", gap: 10, marginBottom: 12 }}>
               <input value={newCommunityEmoji} onChange={e => setNewCommunityEmoji(e.target.value)}
-                style={{ ...inputStyle, width: 52, textAlign: "center", fontSize: 20, padding: "8px", flexShrink: 0 }} maxLength={2} />
+                placeholder="◈" title="Symbol (e.g. ♪ ◈ ↗ ▶ ⊕)"
+                style={{ ...inputStyle, width: 48, textAlign: "center", fontSize: 16, padding: "8px", flexShrink: 0 }} maxLength={2} />
               <input value={newCommunityName} onChange={e => setNewCommunityName(e.target.value)}
                 placeholder="Community name"
                 style={{ ...inputStyle, flex: 1, fontSize: 14, padding: "8px 12px" }} />
@@ -6411,14 +6412,14 @@ const setViewingProfile = (user) => {
               <button className="hb" onClick={async () => {
                 if (!newCommunityName.trim()) return;
                 const slug = newCommunityName.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
-                const payload = { name: newCommunityName.trim(), slug, description: newCommunityDesc.trim() || null, emoji: newCommunityEmoji || "💬", created_by: authUser.id };
+                const payload = { name: newCommunityName.trim(), slug, description: newCommunityDesc.trim() || null, emoji: newCommunityEmoji || "◈", created_by: authUser.id };
                 const { data, error } = await supabase.from("communities").insert(payload).select().single();
                 if (error) { showToast("Name taken or invalid. Try another."); return; }
                 if (data) {
                   setCommunities(prev => [...prev, data].sort((a, b) => a.name.localeCompare(b.name)));
                   await supabase.from("community_members").insert({ community_id: data.id, user_id: authUser.id, role: "admin" });
                   setJoinedCommunityIds(prev => [...prev, data.id]);
-                  setNewCommunityName(""); setNewCommunityDesc(""); setNewCommunityEmoji("💬");
+                  setNewCommunityName(""); setNewCommunityDesc(""); setNewCommunityEmoji("◈");
                   setShowCreateCommunity(false);
                   setAppScreen("communities");
                   showToast("Community created!");
