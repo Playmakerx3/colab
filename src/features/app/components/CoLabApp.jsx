@@ -512,7 +512,7 @@ function PostCard({ post, ctx }) {
     setViewingProfile, handleLike, handleRepost, setExpandedComments, loadComments,
     myInitials, setPostComments, profile, supabase, pendingLikeIds,
     commentPulseIds, pendingCommentByPost, recentActivityByPost, justInsertedPostIds,
-    markCommentPending, markRecentActivity,
+    markCommentPending, markRecentActivity, navigateToProject,
   } = ctx;
   const isLiked = (postLikes.myLikes || []).includes(post.id);
   const isReposted = (postReposts.myReposts || []).includes(post.id);
@@ -665,9 +665,12 @@ function PostCard({ post, ctx }) {
       {/* Project tag */}
       {post.project_title && (
         <div style={{ paddingLeft: 52, marginBottom: 12 }}>
-          <span style={{ fontSize: 11, color: textMuted, background: bg2, border: `1px solid ${border}`, borderRadius: 20, padding: "3px 10px", display: "inline-flex", alignItems: "center", gap: 4 }}>
+          <button className="hb" onClick={() => navigateToProject?.(post.project_id)}
+            style={{ fontSize: 11, color: textMuted, background: bg2, border: `1px solid ${border}`, borderRadius: 20, padding: "3px 10px", display: "inline-flex", alignItems: "center", gap: 4, cursor: navigateToProject ? "pointer" : "default", fontFamily: "inherit", transition: "opacity 0.15s" }}
+            onMouseEnter={e => { if (navigateToProject) e.currentTarget.style.opacity = "0.7"; }}
+            onMouseLeave={e => e.currentTarget.style.opacity = "1"}>
             <span style={{ fontSize: 9, opacity: 0.6 }}>↗</span> {post.project_title}
-          </span>
+          </button>
         </div>
       )}
 
@@ -3952,6 +3955,22 @@ const setViewingProfile = (user) => {
           {/* FEED TAB */}
           {exploreTab === "feed" && (() => {
             const firstName = profile?.name?.split(" ")[0] || "you";
+            const navigateToProject = (projectId) => {
+              if (!projectId) return;
+              const proj = projects.find(p => p.id === projectId);
+              if (!proj) return;
+              setActiveProject(proj);
+              loadProjectData(proj.id);
+              // Owner or accepted collaborator → workspace; everyone else → explore projects tab
+              const isCollaborator = applications.some(a => a.project_id === projectId && a.applicant_id === authUser?.id && normalizeApplicationStatus(a.status) === "accepted");
+              if (proj.owner_id === authUser?.id || isCollaborator) {
+                setAppScreen("workspace");
+                setProjectTab("tasks");
+              } else {
+                setAppScreen("explore");
+                setExploreTab("projects");
+              }
+            };
             const postCtx = {
               postLikes, postReposts, expandedComments, postComments, authUser, users,
               handleDeletePost, dark, border, text, textMuted, bg, bg2, btnP, inputStyle,
@@ -3959,6 +3978,7 @@ const setViewingProfile = (user) => {
               myInitials, setPostComments, profile, supabase,
               pendingLikeIds, commentPulseIds, pendingCommentByPost,
               recentActivityByPost, justInsertedPostIds, markCommentPending, markRecentActivity,
+              navigateToProject,
             };
             const quickActions = [
               { label: "share a project update", text: "Working on " },
@@ -5291,13 +5311,42 @@ const setViewingProfile = (user) => {
             )}
 
             {/* UPDATES */}
-            {projectTab === "updates" && (
+            {projectTab === "updates" && (() => {
+              const [shareToFeed, setShareToFeed] = React.useState(false);
+              const handlePostUpdateAndMaybeFeed = async () => {
+                await handlePostUpdate(activeProject.id);
+                if (shareToFeed && newUpdate.trim()) {
+                  const payload = {
+                    user_id: authUser.id,
+                    user_name: profile.name,
+                    user_initials: myInitials,
+                    user_role: profile.role || "",
+                    content: newUpdate,
+                    project_id: activeProject.id,
+                    project_title: activeProject.title,
+                  };
+                  const { data } = await supabase.from("posts").insert(payload).select().single();
+                  if (data) {
+                    setPosts(prev => [data, ...prev]);
+                    showToast("Shared to your feed.");
+                  }
+                }
+              };
+              return (
               <div>
                 <div style={{ display: "flex", gap: 10, marginBottom: 22, alignItems: "flex-start" }}>
                   <Avatar initials={myInitials} size={28} dark={dark} />
                   <div style={{ flex: 1 }}>
                     <MentionInput dark={dark} value={newUpdate} onChange={setNewUpdate} placeholder="post an update... (@mention someone)" users={users} style={{ ...inputStyle, resize: "none", fontSize: 12, padding: "8px 12px" }} rows={2} />
-                    {newUpdate.trim() && <button className="hb" onClick={() => handlePostUpdate(activeProject.id)} style={{ ...btnP, marginTop: 8, padding: "7px 14px", fontSize: 11 }}>post</button>}
+                    {newUpdate.trim() && (
+                      <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 8 }}>
+                        <button className="hb" onClick={handlePostUpdateAndMaybeFeed} style={{ ...btnP, padding: "7px 14px", fontSize: 11 }}>post</button>
+                        <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", userSelect: "none" }}>
+                          <input type="checkbox" checked={shareToFeed} onChange={e => setShareToFeed(e.target.checked)} style={{ cursor: "pointer" }} />
+                          <span style={{ fontSize: 11, color: textMuted }}>also share to feed</span>
+                        </label>
+                      </div>
+                    )}
                   </div>
                 </div>
                 {projectUpdates.length === 0 ? <div style={{ fontSize: 12, color: textMuted }}>no updates yet.</div>
@@ -5315,7 +5364,8 @@ const setViewingProfile = (user) => {
                   ))
                 }
               </div>
-            )}
+              );
+            })()}
 
             {/* TEAM */}
             {projectTab === "team" && (
