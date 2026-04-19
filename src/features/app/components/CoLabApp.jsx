@@ -3337,7 +3337,7 @@ const setViewingProfile = (user) => {
         {/* Nav items */}
         <div style={{ display: "flex", gap: 0, alignItems: "center" }}>
           {navItems.map(({ id, label, badge }) => (
-            <button key={id} onClick={() => { setAppScreen(id); setActiveProject(null); setViewingProfile(null); setViewFullProfile(null); setShowNotifications(false); }}
+            <button key={id} onClick={() => { setAppScreen(id); setActiveProject(null); setViewingProfile(null); setViewFullProfile(null); setShowNotifications(false); if (id === "explore") setExploreTab("feed"); }}
               style={{ position: "relative", background: appScreen === id && !activeProject && !showNotifications ? bg3 : "none", color: appScreen === id && !activeProject && !showNotifications ? text : textMuted, border: "none", borderRadius: 6, padding: "5px 5px", fontSize: 11, cursor: "pointer", fontFamily: "inherit", transition: "all 0.15s", whiteSpace: "nowrap", flexShrink: 0 }}>
               {label}
               {badge > 0 && <span style={{ position: "absolute", top: 2, right: 2, width: 5, height: 5, borderRadius: "50%", background: text, border: `1px solid ${bg}` }} />}
@@ -3846,8 +3846,13 @@ const setViewingProfile = (user) => {
 
             const hideItem = (id) => setHiddenFeedIds(prev => { const n = new Set(prev); n.add(id); return n; });
 
+            const acceptedProjectIds = new Set(
+              applications
+                .filter(a => a.applicant_id === authUser?.id && normalizeApplicationStatus(a.status) === "accepted")
+                .map(a => a.project_id)
+            );
             const followedProjectEvents = projects
-              .filter(p => following.includes(p.owner_id) && !p.archived && !p.is_private)
+              .filter(p => following.includes(p.owner_id) && !p.archived && !p.is_private && !acceptedProjectIds.has(p.id))
               .map(p => ({ _type: "project_created", id: `proj-${p.id}`, created_at: p.created_at, project: p }));
 
             const filteredPosts = posts.filter(post => matchesRegion((users.find(u => u.id === post.user_id)?.location), regionFilter, profile?.location));
@@ -4406,6 +4411,12 @@ const setViewingProfile = (user) => {
           </div>
 
           {/* Two col: my projects + applications */}
+          {(() => {
+            const collaboratingProjects = applications
+              .filter(a => a.applicant_id === authUser?.id && normalizeApplicationStatus(a.status) === "accepted")
+              .map(a => projects.find(p => p.id === a.project_id))
+              .filter(Boolean);
+            return (
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24, marginBottom: 36 }}>
             {/* My projects */}
             <div>
@@ -4472,6 +4483,24 @@ const setViewingProfile = (user) => {
                 ))}
               </div>
             )}
+            {/* Collaborating on */}
+            {collaboratingProjects.length > 0 && (
+              <div style={{ marginTop: 28 }}>
+                <div style={{ fontSize: 10, color: textMuted, letterSpacing: "1.5px", marginBottom: 14 }}>COLLABORATING ON</div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
+                  {collaboratingProjects.map((p, i, arr) => (
+                    <div key={p.id}
+                      style={{ background: bg2, borderRadius: i === 0 && arr.length === 1 ? 8 : i === 0 ? "8px 8px 0 0" : i === arr.length - 1 ? "0 0 8px 8px" : 0, border: `1px solid ${border}`, borderBottom: i < arr.length - 1 ? "none" : `1px solid ${border}`, padding: "12px 16px", cursor: "pointer", transition: "opacity 0.15s" }}
+                      onMouseEnter={e => e.currentTarget.style.opacity = "0.8"}
+                      onMouseLeave={e => e.currentTarget.style.opacity = "1"}
+                      onClick={() => { setActiveProject(p); loadProjectData(p.id); setProjectTab("tasks"); }}>
+                      <div style={{ fontSize: 13, color: text, letterSpacing: "-0.3px", marginBottom: 2 }}>{p.title}</div>
+                      <div style={{ fontSize: 11, color: textMuted }}>{p.owner_name} · {p.category}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
             </div>
 
             {/* Applications + recent activity */}
@@ -4492,11 +4521,17 @@ const setViewingProfile = (user) => {
                 : <div style={{ display: "flex", flexDirection: "column", gap: 1, marginBottom: 24 }}>
                     {projects.filter(p => appliedProjectIds.includes(p.id)).map((p,i,arr) => {
                       const myApp = applications.find(a => a.project_id === p.id && a.applicant_id === authUser?.id);
+                      const isAccepted = normalizeApplicationStatus(myApp?.status) === "accepted";
                       return (
-                        <div key={p.id} style={{ background: bg2, borderRadius: i === 0 && arr.length === 1 ? 8 : i === 0 ? "8px 8px 0 0" : i === arr.length - 1 ? "0 0 8px 8px" : 0, border: `1px solid ${border}`, borderBottom: i < arr.length - 1 ? "none" : `1px solid ${border}`, padding: "10px 16px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+                        <div key={p.id}
+                          style={{ background: bg2, borderRadius: i === 0 && arr.length === 1 ? 8 : i === 0 ? "8px 8px 0 0" : i === arr.length - 1 ? "0 0 8px 8px" : 0, border: `1px solid ${border}`, borderBottom: i < arr.length - 1 ? "none" : `1px solid ${border}`, padding: "10px 16px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, cursor: isAccepted ? "pointer" : "default", transition: "opacity 0.15s" }}
+                          onMouseEnter={e => { if (isAccepted) e.currentTarget.style.opacity = "0.8"; }}
+                          onMouseLeave={e => { if (isAccepted) e.currentTarget.style.opacity = "1"; }}
+                          onClick={() => { if (isAccepted) { setActiveProject(p); loadProjectData(p.id); setProjectTab("tasks"); } }}>
                           <div style={{ minWidth: 0 }}><div style={{ fontSize: 12, color: text, marginBottom: 1 }}>{p.title}</div><div style={{ fontSize: 10, color: textMuted }}>{p.owner_name}</div></div>
                           <div style={{ display: "flex", gap: 6, alignItems: "center", flexShrink: 0 }}>
-                            <span style={{ fontSize: 10, color: normalizeApplicationStatus(myApp?.status) === "accepted" ? text : textMuted, border: `1px solid ${border}`, borderRadius: 3, padding: "1px 6px" }}>{normalizeApplicationStatus(myApp?.status || "pending")}</span>
+                            <span style={{ fontSize: 10, color: isAccepted ? text : textMuted, border: `1px solid ${isAccepted ? text : border}`, borderRadius: 3, padding: "1px 6px" }}>{normalizeApplicationStatus(myApp?.status || "pending")}</span>
+                            {isAccepted && <span style={{ fontSize: 10, color: textMuted }}>open →</span>}
                             {normalizeApplicationStatus(myApp?.status) === "rejected" && <button className="hb" onClick={() => handleRemoveDeniedApp(myApp.id)} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontSize: 10, fontFamily: "inherit" }}>✕</button>}
                           </div>
                         </div>
@@ -4524,6 +4559,7 @@ const setViewingProfile = (user) => {
               )}
             </div>
           </div>
+          ); })()}
         </div>
       )}
 
