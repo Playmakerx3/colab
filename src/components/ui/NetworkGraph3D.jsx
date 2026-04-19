@@ -44,7 +44,7 @@ const MIN_ZOOM = 1;
 const MAX_ZOOM = 6;
 const FOV = 900; // perspective focal length — higher = less extreme depth distortion
 
-export default function NetworkGraph3D({ users, applications, projects, authUser, onNodeClick, dark, following = [], followers = [] }) {
+export default function NetworkGraph3D({ users, applications, projects, authUser, onNodeClick, onProjectNodeClick, dark, following = [], followers = [] }) {
   const canvasRef = useRef();
   const nodesRef = useRef([]);
   const rafRef = useRef();
@@ -135,7 +135,7 @@ export default function NetworkGraph3D({ users, applications, projects, authUser
     const skillPopulation = {};
     users.forEach(u => (u.skills || []).forEach(s => { skillPopulation[s] = (skillPopulation[s] || 0) + 1; }));
 
-    const nodes = users.filter(u => u.name?.trim()).map(u => {
+    const userNodes = users.filter(u => u.name?.trim()).map(u => {
       const isMe = u.id === authUser.id;
       const isCollab = collaboratorIds.has(u.id);
       const isMutual = !isCollab && mutualFollowIds.has(u.id);
@@ -147,7 +147,7 @@ export default function NetworkGraph3D({ users, applications, projects, authUser
       const target = skillCenter || macroCenter || fallback;
       const jitter = isCollab ? 32 : isMutual ? 42 : 30;
       return {
-        id: u.id, name: u.name, role: u.role || "", skills: u.skills || [],
+        id: u.id, name: u.name, role: u.role || "", skills: u.skills || [], nodeType: "user",
         primarySkill: primarySkill || null, macroCluster,
         color: getNodeColor(u.skills),
         isMe, isCollab, isMutual,
@@ -160,13 +160,46 @@ export default function NetworkGraph3D({ users, applications, projects, authUser
       };
     });
 
+    const projectNodes = projects
+      .filter((p) => p.title?.trim() && !p.archived)
+      .slice(0, 40)
+      .map((p) => {
+        const owner = users.find((u) => u.id === p.owner_id);
+        const ownerNode = userNodes.find((u) => u.id === p.owner_id);
+        const fallback = { x: cx + (Math.random() - 0.5) * 220, y: cy + (Math.random() - 0.5) * 220 };
+        const anchor = ownerNode ? { x: ownerNode.x, y: ownerNode.y } : fallback;
+        return {
+          id: `project:${p.id}`,
+          projectId: p.id,
+          projectRef: p,
+          name: p.title,
+          role: owner ? `by ${owner.name}` : "project",
+          skills: p.skills || [],
+          nodeType: "project",
+          primarySkill: (p.skills || []).find((s) => skillCenters[s]) || null,
+          macroCluster: getClusterName(p.skills),
+          color: dark ? "#f59e0b" : "#d97706",
+          isMe: false,
+          isCollab: false,
+          isMutual: false,
+          r: 5,
+          x: anchor.x + (Math.random() - 0.5) * 48,
+          y: anchor.y + (Math.random() - 0.5) * 48,
+          vx: 0,
+          vy: 0,
+          targetX: anchor.x,
+          targetY: anchor.y,
+        };
+      });
+
+    const nodes = [...userNodes, ...projectNodes];
     const collabLinks = [];
     collaboratorIds.forEach(cid => { if (users.find(u => u.id === cid)) collabLinks.push({ source: authUser.id, target: cid }); });
     const mutualLinks = [];
     mutualFollowIds.forEach(uid => { if (users.find(u => u.id === uid)) mutualLinks.push({ source: authUser.id, target: uid }); });
 
     return { nodes, collabLinks, mutualLinks, skillPopulation };
-  }, [users, applications, projects, authUser, dims, mutualFollowIds, getLayout]);
+  }, [users, applications, projects, authUser, dims, mutualFollowIds, getLayout, dark]);
 
   useEffect(() => { nodesRef.current = nodes.map(n => ({ ...n })); }, [nodes]);
 
@@ -465,10 +498,14 @@ export default function NetworkGraph3D({ users, applications, projects, authUser
     const rect = canvas.getBoundingClientRect();
     const hit = getHit(e.clientX - rect.left, e.clientY - rect.top);
     if (hit && !hit.isMe) {
+      if (hit.nodeType === "project" && hit.projectRef) {
+        onProjectNodeClick?.(hit.projectRef);
+        return;
+      }
       const user = users.find(u => u.id === hit.id);
       if (user) onNodeClick(user);
     }
-  }, [users, onNodeClick, getHit]);
+  }, [users, onNodeClick, onProjectNodeClick, getHit]);
 
   const handleContextMenu = useCallback((e) => e.preventDefault(), []);
 
