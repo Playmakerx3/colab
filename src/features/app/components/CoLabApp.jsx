@@ -4383,7 +4383,7 @@ const setViewingProfile = (user) => {
                               }} style={{ background: "none", border: "none", cursor: "pointer", padding: 0, textAlign: "left", fontFamily: "inherit" }}>
                                 <div style={{ fontSize: 14, color: text, fontWeight: 400, letterSpacing: "-0.2px", marginBottom: 6, lineHeight: 1.4 }}>{item.title}</div>
                               </button>
-                              <div style={{ fontSize: 10, color: textMuted }}>{item.user_name} · {relativeTime(item.created_at)} · ◫ {item.comment_count}</div>
+                              <div style={{ fontSize: 10, color: textMuted }}>{item.user_name} · {relativeTime(item.created_at)} · ... {item.comment_count}</div>
                             </div>
                             {!isOwn && (
                               <button className="hb" onClick={() => hideItem(item.id)} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontSize: 11, fontFamily: "inherit", opacity: 0.5, flexShrink: 0 }}>✕</button>
@@ -4691,7 +4691,7 @@ const setViewingProfile = (user) => {
             <div style={{ flex: 1, overflowY: "auto", minWidth: 0 }}>
               {!activeCommunity ? (
                 <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100%", gap: 12 }}>
-                  <div style={{ fontSize: 32 }}>◫</div>
+                  <div style={{ fontSize: 32 }}>...</div>
                   <div style={{ fontSize: 14, color: textMuted }}>Select a community to browse threads</div>
                   {joinedCommunities.length === 0 && <div style={{ fontSize: 12, color: textMuted, opacity: 0.6 }}>Join a community on the left to get started</div>}
                 </div>
@@ -4816,7 +4816,7 @@ const setViewingProfile = (user) => {
                         <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
                           <span style={{ fontSize: 10, color: textMuted }}>{post.user_name}</span>
                           <span style={{ fontSize: 10, color: textMuted }}>{relativeTime(post.created_at)}</span>
-                          <span style={{ fontSize: 10, color: textMuted }}>◫ {post.comment_count}</span>
+                          <span style={{ fontSize: 10, color: textMuted }}>... {post.comment_count}</span>
                         </div>
                       </div>
                     </div>
