@@ -47,6 +47,7 @@ export function useAppDataBootstrap({
   setTrendingProjects,
   setNotifications,
   setShowApplicationForm,
+  setTeamReviews,
 }) {
   const loadAllData = useCallback(async (userId) => {
     setLoading(true);
@@ -65,6 +66,7 @@ export function useAppDataBootstrap({
         repostsData,
         mentionNotifs,
         notifs,
+        reviewsData,
       } = await fetchAppBootstrapData(userId);
 
       setProjects(projs || []);
@@ -80,6 +82,7 @@ export function useAppDataBootstrap({
       setPostReposts({ myReposts: (repostsData || []).map(r => r.post_id) });
       setMentionNotifications(mentionNotifs || []);
       setNotifications((notifs || []).map(mapDbNotif));
+      setTeamReviews(reviewsData || []);
 
       const trending = [...(projs || [])].sort((a, b) => {
         const aCount = (apps || []).filter(ap => ap.project_id === a.id).length;
@@ -118,6 +121,7 @@ export function useAppDataBootstrap({
     setPosts,
     setProjects,
     setShowApplicationForm,
+    setTeamReviews,
     setTrendingProjects,
     setUsers,
   ]);

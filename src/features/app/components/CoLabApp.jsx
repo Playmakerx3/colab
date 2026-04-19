@@ -424,6 +424,87 @@ const GoogleDriveCard = ({ url, border, bg2, text, textMuted, compact = false })
   );
 };
 
+function TeamReviewModal({ project, authUser, applications, users, teamReviews, dark, bg, bg2, border, text, textMuted, btnP, btnG, onClose, onSubmit }) {
+  const teammates = [
+    ...(project.owner_id !== authUser?.id ? [{ id: project.owner_id, name: project.owner_name }] : []),
+    ...applications
+      .filter(a => a.project_id === project.id && normalizeApplicationStatus(a.status) === "accepted" && a.applicant_id !== authUser?.id)
+      .map(a => { const u = users.find(u => u.id === a.applicant_id); return { id: a.applicant_id, name: u?.name || "Collaborator" }; }),
+  ];
+  const [ratings, setRatings] = React.useState(() => {
+    const init = {};
+    teammates.forEach(t => { init[t.id] = 0; });
+    return init;
+  });
+  const [submitting, setSubmitting] = React.useState(false);
+  const [done, setDone] = React.useState(false);
+
+  const alreadyReviewed = teamReviews.some(r => r.project_id === project.id && r.reviewer_id === authUser?.id);
+
+  const handleSubmit = async () => {
+    setSubmitting(true);
+    const reviews = teammates.map(t => ({ project_id: project.id, reviewer_id: authUser.id, reviewee_id: t.id, rating: ratings[t.id] || 0 }));
+    await onSubmit(reviews);
+    setDone(true);
+    setSubmitting(false);
+  };
+
+  const GearRating = ({ userId }) => {
+    const val = ratings[userId] || 0;
+    return (
+      <div style={{ display: "flex", gap: 2 }}>
+        {[1,2,3,4,5].map(n => (
+          <button key={n} onClick={() => setRatings(prev => ({ ...prev, [userId]: n === val ? 0 : n }))}
+            style={{ background: "none", border: "none", cursor: "pointer", fontSize: 18, color: n <= val ? text : textMuted, padding: "2px 1px", lineHeight: 1, transition: "color 0.1s" }}>
+            ⚙
+          </button>
+        ))}
+      </div>
+    );
+  };
+
+  return (
+    <div onClick={onClose} style={{ position: "fixed", inset: 0, background: dark ? "rgba(0,0,0,0.92)" : "rgba(200,200,200,0.88)", zIndex: 300, display: "flex", alignItems: "center", justifyContent: "center", backdropFilter: "blur(12px)", padding: 16 }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: bg, border: `1px solid ${border}`, borderRadius: 16, padding: "32px 28px", width: "100%", maxWidth: 480, maxHeight: "90vh", overflowY: "auto" }}>
+        {done || alreadyReviewed ? (
+          <div style={{ textAlign: "center", padding: "12px 0" }}>
+            <div style={{ fontSize: 32, marginBottom: 16 }}>⚙</div>
+            <div style={{ fontSize: 18, color: text, fontWeight: 400, letterSpacing: "-0.5px", marginBottom: 8 }}>Reviews submitted.</div>
+            <div style={{ fontSize: 13, color: textMuted, marginBottom: 24, lineHeight: 1.7 }}>Your ratings help surface great collaborators to the community.</div>
+            <button onClick={onClose} style={{ ...btnP, padding: "10px 28px" }}>done</button>
+          </div>
+        ) : (
+          <>
+            <div style={{ marginBottom: 24 }}>
+              <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px", marginBottom: 8 }}>TEAM REVIEW</div>
+              <div style={{ fontSize: 20, color: text, fontWeight: 400, letterSpacing: "-0.5px", marginBottom: 4 }}>{project.title}</div>
+              <div style={{ fontSize: 13, color: textMuted, lineHeight: 1.6 }}>Rate your teammates 0–5 gears. These ratings are public and help rank top collaborators.</div>
+            </div>
+            {teammates.length === 0 ? (
+              <div style={{ fontSize: 13, color: textMuted, marginBottom: 24 }}>No teammates to review on this project.</div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 0, border: `1px solid ${border}`, borderRadius: 10, overflow: "hidden", marginBottom: 24 }}>
+                {teammates.map((t, i) => (
+                  <div key={t.id} style={{ padding: "14px 16px", background: bg2, borderBottom: i < teammates.length - 1 ? `1px solid ${border}` : "none", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
+                    <div style={{ fontSize: 13, color: text, fontWeight: 400 }}>{t.name}</div>
+                    <GearRating userId={t.id} />
+                  </div>
+                ))}
+              </div>
+            )}
+            <div style={{ display: "flex", gap: 10 }}>
+              <button onClick={onClose} style={{ ...btnG, flex: 1, textAlign: "center" }}>skip</button>
+              <button onClick={handleSubmit} disabled={submitting} style={{ ...btnP, flex: 2, textAlign: "center", opacity: submitting ? 0.7 : 1 }}>
+                {submitting ? "submitting..." : "submit reviews →"}
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function PostCard({ post, ctx }) {
   const {
     postLikes, postReposts, expandedComments, postComments, authUser, users,
@@ -869,6 +950,8 @@ function CoLab() {
   const [feedSort, setFeedSort] = useState("for-you");
   const [hiddenFeedIds, setHiddenFeedIds] = useState(new Set());
   const [followingOnly, setFollowingOnly] = useState(false);
+  const [teamReviews, setTeamReviews] = useState([]);
+  const [showTeamReview, setShowTeamReview] = useState(null); // project to review
   const [projectsSubTab, setProjectsSubTab] = useState("for-you");
   const [networkTab, setNetworkTab] = useState("graph");
   const [discoverSkillFilter, setDiscoverSkillFilter] = useState([]);
@@ -1315,6 +1398,7 @@ const setViewingProfile = (user) => {
     setTrendingProjects,
     setNotifications,
     setShowApplicationForm,
+    setTeamReviews,
   });
 
 
@@ -1489,6 +1573,26 @@ const setViewingProfile = (user) => {
   };
 
   const myProjects = projects.filter(p => p.owner_id === authUser?.id && !p.archived);
+
+  const userRatings = useMemo(() => {
+    const map = {};
+    teamReviews.forEach(r => {
+      if (!map[r.reviewee_id]) map[r.reviewee_id] = { sum: 0, count: 0 };
+      map[r.reviewee_id].sum += r.rating;
+      map[r.reviewee_id].count += 1;
+    });
+    return map;
+  }, [teamReviews]);
+
+  const shippedCollabCount = useMemo(() => {
+    const counts = {};
+    projects.filter(p => p.shipped).forEach(p => { counts[p.owner_id] = (counts[p.owner_id] || 0) + 1; });
+    applications.filter(a => normalizeApplicationStatus(a.status) === "accepted").forEach(a => {
+      const proj = projects.find(p => p.id === a.project_id);
+      if (proj?.shipped) counts[a.applicant_id] = (counts[a.applicant_id] || 0) + 1;
+    });
+    return counts;
+  }, [projects, applications]);
   const myPosts = posts.filter((p) => p.user_id === authUser?.id);
   const hasNoProfileActivity = myProjects.length === 0 && myPosts.length === 0;
   const suggestedConnectUsers = useMemo(() => {
@@ -3783,6 +3887,43 @@ const setViewingProfile = (user) => {
                   </div>
                 )}
 
+                {/* Top Collaborators */}
+                {(() => {
+                  const topCollabs = users
+                    .filter(u => u.id !== authUser?.id && userRatings[u.id]?.count > 0)
+                    .map(u => ({
+                      ...u,
+                      avgRating: userRatings[u.id].sum / userRatings[u.id].count,
+                      reviewCount: userRatings[u.id].count,
+                      shipped: shippedCollabCount[u.id] || 0,
+                      score: (userRatings[u.id].sum / userRatings[u.id].count) * 0.6 + (shippedCollabCount[u.id] || 0) * 0.4,
+                    }))
+                    .sort((a, b) => b.score - a.score)
+                    .slice(0, 5);
+                  if (topCollabs.length === 0) return null;
+                  return (
+                    <div>
+                      <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px", marginBottom: 12 }}>TOP COLLABORATORS</div>
+                      <div style={{ border: `1px solid ${border}`, borderRadius: 10, overflow: "hidden" }}>
+                        {topCollabs.map((u, i, arr) => (
+                          <div key={u.id} onClick={() => setViewingProfile(u)} style={{ padding: "10px 14px", background: bg2, borderBottom: i < arr.length - 1 ? `1px solid ${border}` : "none", cursor: "pointer", display: "flex", gap: 10, alignItems: "center", transition: "opacity 0.15s" }}
+                            onMouseEnter={e => e.currentTarget.style.opacity = "0.7"} onMouseLeave={e => e.currentTarget.style.opacity = "1"}>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ fontSize: 12, fontWeight: 500, color: text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{u.name}</div>
+                              <div style={{ fontSize: 10, color: textMuted }}>{u.shipped} shipped · {u.reviewCount} review{u.reviewCount !== 1 ? "s" : ""}</div>
+                            </div>
+                            <div style={{ flexShrink: 0, display: "flex", gap: 1, alignItems: "center" }}>
+                              {[1,2,3,4,5].map(n => (
+                                <span key={n} style={{ fontSize: 11, color: n <= Math.round(u.avgRating) ? text : textMuted, opacity: n <= Math.round(u.avgRating) ? 1 : 0.3 }}>⚙</span>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
+
               </div>{/* end sidebar */}
             </div>
           )}
@@ -4596,7 +4737,12 @@ const setViewingProfile = (user) => {
                 );
               })()}
               {activeProject.shipped && (
-                <span style={{ fontSize: 10, padding: "2px 8px", borderRadius: 3, border: "1px solid #22c55e", color: "#22c55e" }}>shipped</span>
+                <>
+                  <span style={{ fontSize: 10, padding: "2px 8px", borderRadius: 3, border: "1px solid #22c55e", color: "#22c55e" }}>shipped</span>
+                  {!teamReviews.some(r => r.project_id === activeProject.id && r.reviewer_id === authUser?.id) && (
+                    <button className="hb" onClick={() => setShowTeamReview(activeProject)} style={{ fontSize: 10, padding: "3px 10px", borderRadius: 6, border: `1px solid ${border}`, background: "none", color: textMuted, cursor: "pointer", fontFamily: "inherit" }}>⚙ rate team</button>
+                  )}
+                </>
               )}
               {activeProject.owner_id === authUser?.id && !activeProject.shipped && (
                 <>
@@ -5764,6 +5910,25 @@ const setViewingProfile = (user) => {
 
       {toast && <div style={{ position: "fixed", bottom: 24, left: "50%", transform: "translateX(-50%)", background: text, color: bg, padding: "11px 20px", borderRadius: 8, fontSize: 11, zIndex: 300, animation: "tin 0.3s ease", whiteSpace: "nowrap" }}>{toast}</div>}
 
+      {showTeamReview && (
+        <TeamReviewModal
+          project={showTeamReview}
+          authUser={authUser}
+          applications={applications}
+          users={users}
+          teamReviews={teamReviews}
+          dark={dark} bg={bg} bg2={bg2} border={border} text={text} textMuted={textMuted} btnP={btnP} btnG={btnG}
+          onClose={() => setShowTeamReview(null)}
+          onSubmit={async (reviews) => {
+            const { data } = await supabase.from("team_reviews").upsert(reviews, { onConflict: "project_id,reviewer_id,reviewee_id" }).select();
+            if (data) setTeamReviews(prev => {
+              const existing = prev.filter(r => !(r.project_id === showTeamReview.id && r.reviewer_id === authUser.id));
+              return [...existing, ...data];
+            });
+          }}
+        />
+      )}
+
       {showShipModal && (
         <div onClick={() => setShowShipModal(false)} style={{ position: "fixed", inset: 0, background: dark ? "rgba(0,0,0,0.92)" : "rgba(200,200,200,0.88)", zIndex: 300, display: "flex", alignItems: "center", justifyContent: "center", backdropFilter: "blur(12px)", padding: 16 }}>
           <div onClick={e => e.stopPropagation()} style={{ background: bg, border: `1px solid ${border}`, borderRadius: 16, padding: "28px", width: "100%", maxWidth: 460 }}>
@@ -5783,7 +5948,12 @@ const setViewingProfile = (user) => {
             />
             <div style={{ display: "flex", gap: 8 }}>
               <button className="hb" onClick={() => setShowShipModal(false)} style={{ ...btnG, flex: 1 }}>later</button>
-              <button className="hb" onClick={() => handleShipProject(activeProject?.id, shipPostContent)} style={{ ...btnP, flex: 2 }}>ship it →</button>
+              <button className="hb" onClick={async () => {
+                const proj = activeProject;
+                await handleShipProject(proj?.id, shipPostContent);
+                const hasTeammates = applications.some(a => a.project_id === proj?.id && normalizeApplicationStatus(a.status) === "accepted") || proj?.owner_id !== authUser?.id;
+                if (hasTeammates) setTimeout(() => setShowTeamReview(proj), 400);
+              }} style={{ ...btnP, flex: 2 }}>ship it →</button>
             </div>
           </div>
         </div>

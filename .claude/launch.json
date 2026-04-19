@@ -4,13 +4,13 @@
     {
       "name": "Vite Dev Server",
       "runtimeExecutable": "/opt/homebrew/bin/node",
-      "runtimeArgs": ["/Users/mahal/Desktop/colab/node_modules/.bin/vite"],
+      "runtimeArgs": ["/Users/mahal/Desktop/colab/node_modules/.bin/vite", "--root", "/Users/mahal/Desktop/colab", "--port", "5173"],
       "port": 5173
     },
     {
       "name": "Vite Preview",
       "runtimeExecutable": "/opt/homebrew/bin/node",
-      "runtimeArgs": ["/Users/mahal/Desktop/colab/node_modules/.bin/vite", "preview"],
+      "runtimeArgs": ["/Users/mahal/Desktop/colab/node_modules/.bin/vite", "preview", "--root", "/Users/mahal/Desktop/colab", "--port", "4173"],
       "port": 4173
     }
   ]
