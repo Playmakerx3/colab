@@ -2855,7 +2855,7 @@ const setViewingProfile = (user) => {
                         <div style={{ display: "flex", gap: 8, marginTop: "auto" }}>
                           <button
                             onClick={() => {
-                              if (!isFollowing) handleSwipe("like", u);
+                              if (!isFollowing) { handleFollow(u.id); handleSwipe("like", u); }
                             }}
                             style={{ flex: 1, padding: "7px 0", fontSize: 11, borderRadius: 7, cursor: isFollowing ? "default" : "pointer", fontFamily: "inherit", transition: "all 0.15s",
                               background: isFollowing ? "none" : text, color: isFollowing ? textMuted : bg, border: `1px solid ${isFollowing ? border : text}` }}>
