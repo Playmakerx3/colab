@@ -3996,7 +3996,6 @@ const setViewingProfile = (user) => {
     { id: "network", label: "network" },
     { id: "workspace", label: "work" },
     { id: "communities", label: "communities" },
-    { id: "notifications", label: "notifs", badge: unreadNotifs },
     { id: "messages", label: "msgs", badge: unreadDms },
     { id: "profile", label: profile?.username ? `@${profile.username}` : profile?.name?.split(" ")[0]?.toLowerCase() || "me" },
   ];
@@ -4167,9 +4166,12 @@ const setViewingProfile = (user) => {
         <>
           <div onClick={() => setShowNotifications(false)} style={{ position: "fixed", inset: 0, zIndex: 199 }} />
           <div className="notif-w" style={{ position: "fixed", top: 58, right: 16, width: 340, background: bg, border: `1px solid ${border}`, borderRadius: 12, zIndex: 200, animation: "slideIn 0.2s ease", boxShadow: dark ? "0 8px 32px rgba(0,0,0,0.6)" : "0 8px 32px rgba(0,0,0,0.1)", maxHeight: "80vh", overflowY: "auto" }}>
-            <div style={{ padding: "12px 16px", borderBottom: `1px solid ${border}`, fontSize: 11, color: textMuted, letterSpacing: "1px", display: "flex", justifyContent: "space-between" }}>
+            <div style={{ padding: "12px 16px", borderBottom: `1px solid ${border}`, fontSize: 11, color: textMuted, letterSpacing: "1px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               NOTIFICATIONS
-              {notifications.length > 0 && <button className="hb" onClick={markAllNotificationsRead} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontFamily: "inherit", fontSize: 10 }}>mark all read</button>}
+              <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                {notifications.length > 0 && <button className="hb" onClick={markAllNotificationsRead} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontFamily: "inherit", fontSize: 10 }}>mark all read</button>}
+                <button className="hb" onClick={() => { setShowNotifications(false); setAppScreen("notifications"); }} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontFamily: "inherit", fontSize: 10 }}>view all →</button>
+              </div>
             </div>
             {notifications.length === 0 && mentionNotifications.length === 0 ? <div style={{ padding: "24px 16px", fontSize: 12, color: textMuted, textAlign: "center" }}>✓ You're all caught up.</div>
               : <>
