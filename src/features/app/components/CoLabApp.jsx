@@ -4584,9 +4584,9 @@ const setViewingProfile = (user) => {
               handleSaveFeedPostEdit,
             };
             const quickActions = [
-              { label: "share a project update", text: "Working on " },
-              { label: "need collaborators", text: "Looking for someone who can " },
-              { label: "open to work", text: "I'm available to collaborate on " },
+              { label: "↗ share update", text: "Working on " },
+              { label: "+ need collaborators", text: "Looking for someone who can " },
+              { label: "◎ open to work", text: "I'm available to collaborate on " },
             ];
             // ── Feed data prep ─────────────────────────────────────────────
             const mySkillSet = new Set(profile?.skills || []);
@@ -4756,10 +4756,10 @@ const setViewingProfile = (user) => {
                   </button>
                 )}
 
-                {/* Compose box — personalized */}
-                <div style={{ background: bg2, border: `1px solid ${border}`, borderRadius: 14, padding: "20px", marginBottom: 28 }}>
+                {/* Compose box */}
+                <div style={{ borderBottom: `1px solid ${border}`, paddingBottom: 16, marginBottom: 28 }}>
                   <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
-                    <Avatar initials={myInitials} src={profile?.avatar_url} size={44} dark={dark} />
+                    <Avatar initials={myInitials} src={profile?.avatar_url} size={36} dark={dark} />
                     <div style={{ flex: 1 }}>
                       <textarea
                         ref={feedComposerRef}
@@ -4767,14 +4767,14 @@ const setViewingProfile = (user) => {
                         value={newPostContent}
                         onChange={e => setNewPostContent(e.target.value)}
                         rows={newPostContent || autoOpenComposer ? 4 : 2}
-                        style={{ ...inputStyle, resize: "none", fontSize: 13, padding: "10px 14px", background: bg3, borderColor: "transparent", lineHeight: 1.7, width: "100%" }}
+                        style={{ background: "none", border: "none", outline: "none", resize: "none", fontSize: 14, padding: "4px 0", color: text, lineHeight: 1.65, width: "100%", fontFamily: "inherit" }}
                       />
-                      {/* Quick action chips — always show */}
+                      {/* Quick action chips */}
                       {!newPostContent && !autoOpenComposer && (
                         <div style={{ display: "flex", gap: 6, marginTop: 10, flexWrap: "wrap" }}>
                           {quickActions.map(({ label, text }) => (
                             <button key={label} className="hb" onClick={() => { setNewPostContent(text); feedComposerRef.current?.focus(); }}
-                              style={{ fontSize: 11, padding: "4px 10px", background: "none", border: `1px solid ${border}`, borderRadius: 999, color: textMuted, cursor: "pointer", fontFamily: "inherit", transition: "all 0.15s" }}>
+                              style={{ fontSize: 11, padding: "4px 12px", background: bg2, border: `1px solid ${border}`, borderRadius: 999, color: textMuted, cursor: "pointer", fontFamily: "inherit", transition: "all 0.15s", letterSpacing: "0.1px" }}>
                               {label}
                             </button>
                           ))}
