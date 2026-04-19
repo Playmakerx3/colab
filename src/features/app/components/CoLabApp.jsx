@@ -4364,7 +4364,7 @@ const setViewingProfile = (user) => {
                           </div>
                           <div style={{ display: "flex", gap: 14, alignItems: "flex-start" }}>
                             <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2, flexShrink: 0, width: 36 }}>
-                              <span style={{ fontSize: 12, color: textMuted }}>▲</span>
+                              <span style={{ fontSize: 12, color: textMuted }}>+</span>
                               <span style={{ fontSize: 12, fontWeight: 500, color: text }}>{item.upvotes}</span>
                             </div>
                             <div style={{ flex: 1, minWidth: 0 }}>
@@ -4706,7 +4706,7 @@ const setViewingProfile = (user) => {
                     {/* Vote */}
                     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, flexShrink: 0 }}>
                       <button className="hb" onClick={() => handleVote(activeThread)}
-                        style={{ background: "none", border: "none", cursor: "pointer", fontSize: 18, color: communityVotes[activeThread.id] ? text : textMuted, lineHeight: 1, padding: "2px 6px" }}>▲</button>
+                        style={{ background: "none", border: "none", cursor: "pointer", fontSize: 18, color: communityVotes[activeThread.id] ? text : textMuted, lineHeight: 1, padding: "2px 6px" }}>+</button>
                       <span style={{ fontSize: 13, fontWeight: 500, color: text }}>{activeThread.upvotes}</span>
                     </div>
                     <div style={{ flex: 1 }}>
@@ -4806,7 +4806,7 @@ const setViewingProfile = (user) => {
                       {/* Vote */}
                       <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2, flexShrink: 0, width: 36 }}>
                         <button className="hb" onClick={e => { e.stopPropagation(); handleVote(post); }}
-                          style={{ background: "none", border: "none", cursor: "pointer", fontSize: 14, color: communityVotes[post.id] ? text : textMuted, padding: "2px", lineHeight: 1 }}>▲</button>
+                          style={{ background: "none", border: "none", cursor: "pointer", fontSize: 14, color: communityVotes[post.id] ? text : textMuted, padding: "2px", lineHeight: 1 }}>+</button>
                         <span style={{ fontSize: 12, fontWeight: 500, color: communityVotes[post.id] ? text : textMuted }}>{post.upvotes}</span>
                       </div>
                       {/* Content */}
