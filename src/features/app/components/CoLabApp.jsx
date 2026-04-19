@@ -4736,16 +4736,18 @@ const setViewingProfile = (user) => {
                 )}
 
                 {/* Sort + following filter */}
-                <div style={{ display: "flex", gap: 10, marginBottom: 24, alignItems: "center", flexWrap: "wrap" }}>
-                  <div style={{ display: "flex", gap: 4, background: bg2, borderRadius: 8, padding: 3, border: `1px solid ${border}` }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: `1px solid ${border}`, marginBottom: 24 }}>
+                  <div style={{ display: "flex" }}>
                     {[["for-you", "for you"], ["recent", "recent"], ["top", "top"]].map(([val, label]) => (
-                      <button key={val} className="hb" onClick={() => { setFeedSort(val); setFeedPage(1); }} style={{ padding: "5px 14px", borderRadius: 6, fontSize: 11, cursor: "pointer", fontFamily: "inherit", border: "none", background: feedSort === val ? (dark ? "#fff" : "#111") : "transparent", color: feedSort === val ? (dark ? "#111" : "#fff") : textMuted, transition: "all 0.15s", fontWeight: feedSort === val ? 500 : 400 }}>
+                      <button key={val} className="hb" onClick={() => { setFeedSort(val); setFeedPage(1); }}
+                        style={{ background: "none", border: "none", borderBottom: feedSort === val ? `1px solid ${text}` : "1px solid transparent", color: feedSort === val ? text : textMuted, padding: "8px 16px 8px 0", fontSize: 11, cursor: "pointer", fontFamily: "inherit", marginRight: 8, transition: "all 0.15s" }}>
                         {label}
                       </button>
                     ))}
                   </div>
-                  <button className="hb" onClick={() => setFollowingOnly(prev => !prev)} style={{ fontSize: 11, padding: "5px 14px", borderRadius: 8, border: `1px solid ${followingOnly ? text : border}`, background: followingOnly ? (dark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.05)") : "none", color: followingOnly ? text : textMuted, cursor: "pointer", fontFamily: "inherit", transition: "all 0.15s" }}>
-                    following only
+                  <button className="hb" onClick={() => setFollowingOnly(prev => !prev)}
+                    style={{ fontSize: 10, padding: "3px 10px", borderRadius: 999, border: `1px solid ${followingOnly ? text : border}`, background: "none", color: followingOnly ? text : textMuted, cursor: "pointer", fontFamily: "inherit", transition: "all 0.15s", marginBottom: 6, letterSpacing: "0.2px" }}>
+                    {followingOnly ? "✓ following" : "following"}
                   </button>
                 </div>
 
