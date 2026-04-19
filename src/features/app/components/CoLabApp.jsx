@@ -4649,8 +4649,8 @@ const setViewingProfile = (user) => {
               <span style={{ fontSize: 13, flexShrink: 0, color: isActive ? text : textMuted, fontFamily: "inherit", lineHeight: 1 }}>{COMMUNITY_SYMBOLS[c.slug] || c.emoji}</span>
               <span style={{ flex: 1, fontSize: 12, color: isActive ? text : textMuted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.name}</span>
               <button className="hb" onClick={e => { e.stopPropagation(); isJoined ? handleLeave(c.id) : handleJoin(c.id); }}
-                style={{ fontSize: 9, padding: "2px 7px", borderRadius: 20, border: `1px solid ${isJoined ? border : text}`, background: isJoined ? "none" : text, color: isJoined ? textMuted : bg, cursor: "pointer", fontFamily: "inherit", flexShrink: 0 }}>
-                {isJoined ? "joined" : "+ join"}
+                style={{ fontSize: 10, padding: "3px 9px", borderRadius: 6, border: `1px solid ${border}`, background: "none", color: isJoined ? text : textMuted, cursor: "pointer", fontFamily: "inherit", flexShrink: 0, letterSpacing: "0.2px" }}>
+                {isJoined ? "joined ✓" : "+ join"}
               </button>
             </div>
           );
