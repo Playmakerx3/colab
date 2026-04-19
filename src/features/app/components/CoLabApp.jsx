@@ -1611,6 +1611,7 @@ const setViewingProfile = (user) => {
       .profile-banner-card { min-height: 140px !important; }
       .profile-banner-canvas { height: 140px !important; }
     }
+    .community-drawer-toggle { display: none; }
     @media (max-width: 768px) {
       .desktop-nav-items { display: none !important; }
       .app-shell { padding-bottom: 58px !important; }
@@ -1622,6 +1623,7 @@ const setViewingProfile = (user) => {
       .msgs-has-thread .msgs-left { display: none !important; }
       .msgs-no-thread .msgs-right { display: none !important; }
       .msgs-back { display: flex !important; }
+      .community-drawer-toggle { display: flex !important; }
       .communities-wrap { position: relative; }
       .communities-sidebar {
         position: fixed !important;
@@ -5416,7 +5418,7 @@ const setViewingProfile = (user) => {
             <div className="communities-main" style={{ flex: 1, overflowY: "auto", minWidth: 0 }}>
               {!activeCommunity ? (
                 <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100%", gap: 12 }}>
-                  <button className="hb" onClick={() => setShowCommunityDrawer(true)} style={{ background: "none", border: `1px solid ${border}`, borderRadius: 8, padding: "6px 10px", fontSize: 11, cursor: "pointer", color: textMuted, fontFamily: "inherit" }}>☰ communities</button>
+                  <button className="hb community-drawer-toggle" onClick={() => setShowCommunityDrawer(true)} style={{ background: "none", border: `1px solid ${border}`, borderRadius: 8, padding: "6px 10px", fontSize: 11, cursor: "pointer", color: textMuted, fontFamily: "inherit" }}>☰ communities</button>
                   <div style={{ fontSize: 32 }}>...</div>
                   <div style={{ fontSize: 14, color: textMuted }}>Select a community to browse threads</div>
                   {joinedCommunities.length === 0 && <div style={{ fontSize: 12, color: textMuted, opacity: 0.6 }}>Join a community on the left to get started</div>}
@@ -5424,7 +5426,7 @@ const setViewingProfile = (user) => {
               ) : activeThread ? (
                 /* Thread detail */
                 <div className="community-main-inner" style={{ maxWidth: 1100, margin: "0 auto", padding: "32px 40px" }}>
-                  <button className="hb" onClick={() => setShowCommunityDrawer(true)} style={{ background: "none", border: `1px solid ${border}`, borderRadius: 8, padding: "6px 10px", fontSize: 11, cursor: "pointer", color: textMuted, fontFamily: "inherit", marginBottom: 12 }}>☰ communities</button>
+                  <button className="hb community-drawer-toggle" onClick={() => setShowCommunityDrawer(true)} style={{ background: "none", border: `1px solid ${border}`, borderRadius: 8, padding: "6px 10px", fontSize: 11, cursor: "pointer", color: textMuted, fontFamily: "inherit", marginBottom: 12 }}>☰ communities</button>
                   <button className="hb" onClick={() => setActiveThread(null)}
                     style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontFamily: "inherit", fontSize: 12, marginBottom: 24, padding: 0, display: "flex", alignItems: "center", gap: 6 }}>
                     ← back to {activeCommunity.name}
@@ -5518,7 +5520,7 @@ const setViewingProfile = (user) => {
               ) : (
                 /* Thread list */
                 <div className="community-main-inner" style={{ maxWidth: 1100, margin: "0 auto", padding: "32px 40px" }}>
-                  <button className="hb" onClick={() => setShowCommunityDrawer(true)} style={{ background: "none", border: `1px solid ${border}`, borderRadius: 8, padding: "6px 10px", fontSize: 11, cursor: "pointer", color: textMuted, fontFamily: "inherit", marginBottom: 12 }}>☰ communities</button>
+                  <button className="hb community-drawer-toggle" onClick={() => setShowCommunityDrawer(true)} style={{ background: "none", border: `1px solid ${border}`, borderRadius: 8, padding: "6px 10px", fontSize: 11, cursor: "pointer", color: textMuted, fontFamily: "inherit", marginBottom: 12 }}>☰ communities</button>
                   {/* Community header */}
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24, flexWrap: "wrap", gap: 12 }}>
                     <div>
