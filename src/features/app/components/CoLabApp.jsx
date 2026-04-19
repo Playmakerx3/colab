@@ -4146,11 +4146,11 @@ const setViewingProfile = (user) => {
         <div style={{ display: "flex", alignItems: "center", gap: 0, flexShrink: 0 }}>
           <button onClick={() => { setShowNotifications(!showNotifications); if (!showNotifications) setNotifications(prev => prev.map(n => ({ ...n, read: true }))); }}
             style={{ position: "relative", background: showNotifications ? bg3 : "none", border: "none", borderRadius: 6, padding: "5px 6px", cursor: "pointer", color: textMuted, fontSize: 12, fontFamily: "inherit" }}>
-            ◎{unreadNotifs > 0 && <span style={{ position: "absolute", top: -2, right: -2, minWidth: 14, height: 14, borderRadius: 999, background: text, color: bg, border: `1px solid ${bg}`, fontSize: 9, display: "inline-flex", alignItems: "center", justifyContent: "center", padding: "0 3px", lineHeight: 1 }}>{Math.min(unreadNotifs, 99)}</span>}
+            🔔{unreadNotifs > 0 && <span style={{ position: "absolute", top: -2, right: -2, minWidth: 14, height: 14, borderRadius: 999, background: text, color: bg, border: `1px solid ${bg}`, fontSize: 9, display: "inline-flex", alignItems: "center", justifyContent: "center", padding: "0 3px", lineHeight: 1 }}>{Math.min(unreadNotifs, 99)}</span>}
           </button>
           <button onClick={() => setShowSettings(true)}
             style={{ background: "none", border: "none", borderRadius: 6, padding: "5px 6px", cursor: "pointer", color: textMuted, fontSize: 12, fontFamily: "inherit" }}>
-            +
+            ⚙︎
           </button>
         </div>
       </nav>
