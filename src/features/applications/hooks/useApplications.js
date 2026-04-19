@@ -24,6 +24,7 @@ export function useApplications({
   const [applicationForm, setApplicationForm] = useState({
     skills: [],
     availability: "",
+    role: "",
     motivation: "",
     portfolio_url: "",
   });
@@ -32,7 +33,7 @@ export function useApplications({
 
   const openApplicationForm = (project) => {
     const matchingSkills = (project?.skills || []).filter((s) => (profile?.skills || []).includes(s));
-    setApplicationForm({ skills: matchingSkills, availability: "", motivation: "", portfolio_url: "" });
+    setApplicationForm({ skills: matchingSkills, availability: "", role: "", motivation: "", portfolio_url: "" });
     setApplicationSuccess(false);
     setShowApplicationForm(project);
   };
@@ -86,6 +87,7 @@ export function useApplications({
       applicantBio: profile.bio || "",
       applicantSkills: applicationForm.skills || [],
       availability: applicationForm.availability || "",
+      role: applicationForm.role || null,
       motivation: applicationForm.motivation || "",
       portfolioUrl: applicationForm.portfolio_url || "",
     });

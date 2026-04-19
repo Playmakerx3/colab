@@ -127,6 +127,7 @@ export function useProjectWorkspace({
       description,
       category: newProject.category || CATEGORIES[0],
       skills: Array.isArray(newProject.skills) ? newProject.skills : [],
+      open_roles: Array.isArray(newProject.openRoles) ? newProject.openRoles : [],
       max_collaborators: Number.isFinite(newProject.maxCollaborators) ? newProject.maxCollaborators : 2,
       location: (newProject.location || profile?.location || "").trim(),
       goals: newProject.goals?.trim() || null,
@@ -190,7 +191,7 @@ export function useProjectWorkspace({
         });
       }
 
-      setNewProject({ title: "", description: "", category: CATEGORIES[0], skills: [], maxCollaborators: 2, location: "", goals: "", timeline: "", is_private: false, coverImageFile: null });
+      setNewProject({ title: "", description: "", category: CATEGORIES[0], skills: [], openRoles: [], maxCollaborators: 2, location: "", goals: "", timeline: "", is_private: false, coverImageFile: null });
       setShowCreate(false);
       setActiveProject(data);
       loadProjectData(data.id);

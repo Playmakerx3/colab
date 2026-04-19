@@ -14,6 +14,8 @@ create policy "Reporters can view own reports" on reports for select using (auth
 alter table posts add column if not exists edited_at timestamptz;
 alter table projects add column if not exists cover_image_url text;
 alter table tasks add column if not exists priority text default 'medium';
+alter table projects add column if not exists open_roles text[] default '{}';
+alter table applications add column if not exists role text;
 */
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import LandingPage from "../../landing/LandingPage";
@@ -587,7 +589,7 @@ function PostCard({ post, ctx }) {
     commentPulseIds, pendingCommentByPost, recentActivityByPost, justInsertedPostIds,
     markCommentPending, markRecentActivity, navigateToProject, postMenuOpenId, setPostMenuOpenId,
     openReportModal, editingFeedPostId, setEditingFeedPostId, editingFeedPostContent, setEditingFeedPostContent,
-    handleSaveFeedPostEdit,
+    handleSaveFeedPostEdit, showToast,
   } = ctx;
   const isLiked = (postLikes.myLikes || []).includes(post.id);
   const isReposted = (postReposts.myReposts || []).includes(post.id);
@@ -606,6 +608,15 @@ function PostCard({ post, ctx }) {
   }, [post.media_url, post.content]);
   const [localComment, setLocalComment] = React.useState("");
   const mySkillSet = React.useMemo(() => new Set(profile?.skills || []), [profile]);
+  const copyPostLink = async () => {
+    try {
+      await navigator.clipboard.writeText(`https://collaborativelaboratories.com/post/${post.id}`);
+      showToast("Link copied");
+      setPostMenuOpenId(null);
+    } catch {
+      showToast("Couldn't copy link");
+    }
+  };
 
   const submitComment = async () => {
     if (!localComment.trim()) return;
@@ -694,6 +705,7 @@ function PostCard({ post, ctx }) {
               <button className="hb" onClick={() => setPostMenuOpenId((prev) => (prev === post.id ? null : post.id))} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontSize: 14, fontFamily: "inherit" }}>⋯</button>
               {postMenuOpenId === post.id && (
                 <div style={{ position: "absolute", right: 0, top: 22, background: dark ? "#111" : "#fff", border: `1px solid ${border}`, borderRadius: 8, minWidth: 120, zIndex: 20 }}>
+                  <button className="hb" onClick={copyPostLink} style={{ width: "100%", textAlign: "left", background: "none", border: "none", color: text, padding: "8px 10px", fontFamily: "inherit", fontSize: 11, cursor: "pointer" }}>copy link</button>
                   <button className="hb" onClick={() => openReportModal({ contentType: "post", contentId: post.id, label: "post" })} style={{ width: "100%", textAlign: "left", background: "none", border: "none", color: text, padding: "8px 10px", fontFamily: "inherit", fontSize: 11, cursor: "pointer" }}>report</button>
                   {isOwner && <button className="hb" onClick={() => { setEditingFeedPostId(post.id); setEditingFeedPostContent(post.content || ""); setPostMenuOpenId(null); }} style={{ width: "100%", textAlign: "left", background: "none", border: "none", color: text, padding: "8px 10px", fontFamily: "inherit", fontSize: 11, cursor: "pointer" }}>edit</button>}
                   {isOwner && <button className="hb" onClick={() => { handleDeletePost(post.id); setPostMenuOpenId(null); }} style={{ width: "100%", textAlign: "left", background: "none", border: "none", color: "#ef4444", padding: "8px 10px", fontFamily: "inherit", fontSize: 11, cursor: "pointer" }}>delete</button>}
@@ -828,6 +840,9 @@ function PostCard({ post, ctx }) {
           }}
         >
           ◎ {comments.length > 0 ? <span>{comments.length}</span> : <span>{isOpen ? "hide" : "comment"}</span>}
+        </button>
+        <button className="hb" onClick={copyPostLink} style={{ background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: 12, color: textMuted }}>
+          ↗ share
         </button>
       </div>
 
@@ -1181,7 +1196,7 @@ function CoLab() {
   const [search, setSearch] = useState("");
   const [toast, setToast] = useState(null);
   const [showCreate, setShowCreate] = useState(false);
-  const [newProject, setNewProject] = useState({ title: "", description: "", category: CATEGORIES[0], skills: [], maxCollaborators: 2, location: "", goals: "", timeline: "", is_private: false, coverImageFile: null });
+  const [newProject, setNewProject] = useState({ title: "", description: "", category: CATEGORIES[0], skills: [], openRoles: [], maxCollaborators: 2, location: "", goals: "", timeline: "", is_private: false, coverImageFile: null });
   const [createProjectError, setCreateProjectError] = useState("");
   const [isCreatingProject, setIsCreatingProject] = useState(false);
   const [newTaskText, setNewTaskText] = useState("");
@@ -1227,6 +1242,7 @@ function CoLab() {
   const [exploreFiltersClearedNotice, setExploreFiltersClearedNotice] = useState(false);
   const [showCommunityDrawer, setShowCommunityDrawer] = useState(false);
   const [dismissOnboardingChecklist, setDismissOnboardingChecklist] = useState(false);
+  const [dismissFirstProjectFlow, setDismissFirstProjectFlow] = useState(() => localStorage.getItem("colab_first_flow_done") === "1");
   const [hasBrowsedProjects, setHasBrowsedProjects] = useState(false);
   const [profileLinkCopied, setProfileLinkCopied] = useState(false);
   const [showCollaboratorsList, setShowCollaboratorsList] = useState(false);
@@ -1351,6 +1367,24 @@ const setViewingProfile = (user) => {
   const getMatchScore = (p) => (profile?.skills || []).filter(s => (p.skills || []).includes(s)).length;
   const unreadDms = dmThreads.filter(t => t.unread && t.id !== activeDmThread?.id).length;
   const unreadNotifs = notifications.filter((n) => !n.read).length + mentionNotifications.length;
+  const notificationGroups = useMemo(() => {
+    const grouped = { replies: [], invites: [], taskAssigned: [], follows: [], applications: [], mentions: [] };
+    notifications.forEach((n) => {
+      if (n.type === "invite") grouped.invites.push(n);
+      else if (n.type === "task_assigned") grouped.taskAssigned.push(n);
+      else if (n.type === "follow") grouped.follows.push(n);
+      else if (["application", "application_status"].includes(n.type)) grouped.applications.push(n);
+      else if (n.type === "mention") grouped.mentions.push(n);
+      else grouped.replies.push(n);
+    });
+    mentionNotifications.forEach((n) => grouped.mentions.push({ ...n, _source: "mention_notifications" }));
+    return grouped;
+  }, [notifications, mentionNotifications]);
+  const markAllNotificationsRead = async () => {
+    if (!authUser?.id) return;
+    await supabase.from("notifications").update({ read: true }).eq("user_id", authUser.id);
+    await loadAllData(authUser.id);
+  };
   const acceptedProjectApplicants = useMemo(() => (
     activeProject
       ? applications.filter((a) => a.project_id === activeProject.id && a.status === "accepted")
@@ -1890,6 +1924,14 @@ const setViewingProfile = (user) => {
       showToast("Unfollowed.");
     } else {
       await supabase.from("follows").insert({ follower_id: authUser.id, following_id: userId });
+      await supabase.from("notifications").insert({
+        user_id: userId,
+        type: "follow",
+        text: `${profile.name || "Someone"} followed you`,
+        entity_id: authUser.id,
+        project_id: null,
+        read: false,
+      });
       setFollowing(prev => [...prev, userId]);
       showToast("Following!");
     }
@@ -2432,6 +2474,7 @@ const setViewingProfile = (user) => {
           <div style={{ fontSize: 12, color: textMuted, lineHeight: 1.65, marginBottom: 10 }}>{(p.description || "").slice(0, 100)}...</div>
           <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
             {(p.skills || []).map(s => <span key={s} style={{ fontSize: 10, padding: "2px 8px", borderRadius: 3, border: `1px solid ${(profile?.skills || []).includes(s) ? (dark ? "#ffffff35" : "#00000025") : border}`, color: (profile?.skills || []).includes(s) ? text : textMuted, fontWeight: (profile?.skills || []).includes(s) ? 500 : 400 }}>{s}</span>)}
+            {(p.open_roles || []).map((role) => <span key={`role-${p.id}-${role}`} style={{ fontSize: 10, padding: "2px 8px", borderRadius: 999, border: `1px solid ${border}`, color: textMuted }}>role: {role}</span>)}
           </div>
         </div>
         <div style={{ textAlign: "right", flexShrink: 0 }}>
@@ -2622,6 +2665,13 @@ const setViewingProfile = (user) => {
                   {AVAILABILITY.map(a => <option key={a}>{a}</option>)}
                 </select>
               </div>
+              <div><label style={labelStyle}>APPLYING AS</label>
+                <select style={inputStyle} value={applicationForm.role || ""} onChange={e => setApplicationForm({ ...applicationForm, role: e.target.value })}>
+                  <option value="">Select role...</option>
+                  {(project.open_roles || []).map((r) => <option key={r} value={r}>{r}</option>)}
+                  <option value="Other">Other</option>
+                </select>
+              </div>
               <div><label style={labelStyle}>WHY DO YOU WANT TO JOIN?</label>
                 <textarea style={{ ...inputStyle, resize: "none" }} rows={4} placeholder="Tell the project owner why you're a great fit..." value={applicationForm.motivation} onChange={e => setApplicationForm({ ...applicationForm, motivation: e.target.value })} />
               </div>
@@ -2663,7 +2713,7 @@ const setViewingProfile = (user) => {
                         <Avatar initials={a.applicant_initials} src={users.find(u => u.id === a.applicant_id)?.avatar_url} size={36} dark={dark} />
                         <div>
                           <div style={{ fontSize: 13, color: text, fontWeight: 500 }}>{a.applicant_name}</div>
-                          <div style={{ fontSize: 11, color: textMuted }}>{a.applicant_role} · {a.availability}</div>
+                          <div style={{ fontSize: 11, color: textMuted }}>{a.applicant_role} · {a.availability}{a.role ? ` · applying as ${a.role}` : ""}</div>
                         </div>
                       </div>
                       <div style={{ fontSize: 11, color: textMuted }}>view →</div>
@@ -2681,6 +2731,7 @@ const setViewingProfile = (user) => {
                   </div>
                   <div style={{ display: "flex", flexDirection: "column", gap: 14, marginBottom: 20 }}>
                     {selectedApplicant.availability && <div><div style={labelStyle}>AVAILABILITY</div><div style={{ fontSize: 13, color: text }}>{selectedApplicant.availability}</div></div>}
+                    {selectedApplicant.role && <div><div style={labelStyle}>APPLYING AS</div><div style={{ fontSize: 13, color: text }}>{selectedApplicant.role}</div></div>}
                     {selectedApplicant.motivation && <div><div style={labelStyle}>WHY THEY WANT TO JOIN</div><div style={{ fontSize: 13, color: textMuted, lineHeight: 1.7 }}>{selectedApplicant.motivation}</div></div>}
                     {selectedApplicant.applicant_bio && <div><div style={labelStyle}>BIO</div><div style={{ fontSize: 13, color: textMuted, lineHeight: 1.7 }}>{selectedApplicant.applicant_bio}</div></div>}
                     {selectedApplicant.portfolio_url && <div><div style={labelStyle}>PORTFOLIO</div><a href={selectedApplicant.portfolio_url} target="_blank" rel="noreferrer" style={{ fontSize: 13, color: text }}>{selectedApplicant.portfolio_url}</a></div>}
@@ -3943,6 +3994,7 @@ const setViewingProfile = (user) => {
     { id: "network", label: "network" },
     { id: "workspace", label: "work" },
     { id: "communities", label: "communities" },
+    { id: "notifications", label: "notifs", badge: unreadNotifs },
     { id: "messages", label: "msgs", badge: unreadDms },
     { id: "profile", label: profile?.username ? `@${profile.username}` : profile?.name?.split(" ")[0]?.toLowerCase() || "me" },
   ];
@@ -4115,11 +4167,7 @@ const setViewingProfile = (user) => {
           <div className="notif-w" style={{ position: "fixed", top: 58, right: 16, width: 340, background: bg, border: `1px solid ${border}`, borderRadius: 12, zIndex: 200, animation: "slideIn 0.2s ease", boxShadow: dark ? "0 8px 32px rgba(0,0,0,0.6)" : "0 8px 32px rgba(0,0,0,0.1)", maxHeight: "80vh", overflowY: "auto" }}>
             <div style={{ padding: "12px 16px", borderBottom: `1px solid ${border}`, fontSize: 11, color: textMuted, letterSpacing: "1px", display: "flex", justifyContent: "space-between" }}>
               NOTIFICATIONS
-              {notifications.length > 0 && <button className="hb" onClick={async () => {
-                const ids = notifications.map(n => n.id);
-                setNotifications([]);
-                await supabase.from("notifications").update({ read: true }).in("id", ids);
-              }} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontFamily: "inherit", fontSize: 10 }}>clear all</button>}
+              {notifications.length > 0 && <button className="hb" onClick={markAllNotificationsRead} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontFamily: "inherit", fontSize: 10 }}>mark all read</button>}
             </div>
             {notifications.length === 0 && mentionNotifications.length === 0 ? <div style={{ padding: "24px 16px", fontSize: 12, color: textMuted, textAlign: "center" }}>✓ You're all caught up.</div>
               : <>
@@ -4596,7 +4644,7 @@ const setViewingProfile = (user) => {
               recentActivityByPost, justInsertedPostIds, markCommentPending, markRecentActivity,
               navigateToProject, postMenuOpenId, setPostMenuOpenId, openReportModal,
               editingFeedPostId, setEditingFeedPostId, editingFeedPostContent, setEditingFeedPostContent,
-              handleSaveFeedPostEdit,
+              handleSaveFeedPostEdit, showToast,
             };
             const quickActions = [
               { label: "#share-update", text: "Working on " },
@@ -4691,6 +4739,13 @@ const setViewingProfile = (user) => {
             const FEED_PAGE_SIZE = 20;
             const pagedFeed = visibleFeed.slice(0, feedPage * FEED_PAGE_SIZE);
             const hasMoreFeed = pagedFeed.length < visibleFeed.length;
+            const joinedAt = profile?.created_at || authUser?.created_at;
+            const joinedWithin48Hours = joinedAt ? (Date.now() - new Date(joinedAt).getTime()) < 48 * 3600000 : false;
+            const showFirstProjectFlow = appScreen === "explore"
+              && exploreTab === "feed"
+              && visibleFeed.length === 0
+              && joinedWithin48Hours
+              && !dismissFirstProjectFlow;
 
             // Trending: top 3 liked posts in last 7 days with skill overlap
             const trendingPosts = posts
@@ -4774,6 +4829,21 @@ const setViewingProfile = (user) => {
                 )}
 
                 {/* Compose box */}
+                {showFirstProjectFlow && (
+                  <div style={{ border: `1px solid ${border}`, borderRadius: 10, padding: 20, marginBottom: 20 }}>
+                    <div style={{ fontSize: 16, color: text, marginBottom: 8 }}>Welcome to CoLab, {firstName}.</div>
+                    <div style={{ fontSize: 13, color: textMuted, marginBottom: 12 }}>Here's how to get the most out of it:</div>
+                    <div style={{ fontSize: 13, color: textMuted, lineHeight: 1.8, marginBottom: 14 }}>
+                      <div>→ Browse open projects</div>
+                      <div>→ Post what you're building</div>
+                      <div>→ Join a community</div>
+                    </div>
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <button className="hb" onClick={() => { localStorage.setItem("colab_first_flow_done", "1"); setDismissFirstProjectFlow(true); setAppScreen("explore"); setExploreTab("projects"); }} style={btnP}>Browse projects →</button>
+                      <button className="hb" onClick={() => { localStorage.setItem("colab_first_flow_done", "1"); setDismissFirstProjectFlow(true); }} style={btnG}>Skip</button>
+                    </div>
+                  </div>
+                )}
                 <div style={{ marginBottom: 28 }}>
                   <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
                     <Avatar initials={myInitials} src={profile?.avatar_url} size={32} dark={dark} style={{ marginTop: 4, flexShrink: 0 }} />
@@ -5161,6 +5231,14 @@ const setViewingProfile = (user) => {
               {(activeProject.skills || []).map(s => { const m = (profile?.skills || []).includes(s); return <span key={s} style={{ fontSize: 11, padding: "3px 10px", border: `1px solid ${m ? (dark ? "#ffffff45" : "#00000030") : border}`, borderRadius: 3, color: m ? text : textMuted, fontWeight: m ? 500 : 400 }}>{s}{m ? " ★" : ""}</span>; })}
             </div>
           </div>
+          {(activeProject.open_roles || []).length > 0 && (
+            <div style={{ marginBottom: 22 }}>
+              <div style={labelStyle}>OPEN ROLES</div>
+              <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
+                {(activeProject.open_roles || []).map((role) => <span key={`active-role-${role}`} style={{ fontSize: 11, padding: "3px 10px", border: `1px solid ${border}`, borderRadius: 999, color: textMuted }}>{role}</span>)}
+              </div>
+            </div>
+          )}
           {getMatchScore(activeProject) > 0 && <div style={{ padding: "10px 14px", background: bg2, border: `1px solid ${border}`, borderRadius: 8, fontSize: 12, color: textMuted, marginBottom: 18 }}>you match <strong style={{ color: text }}>{getMatchScore(activeProject)}</strong> of the skills needed.</div>}
           {appliedProjectIds.includes(activeProject.id)
             ? <div style={{ textAlign: "center", padding: 12, background: bg2, borderRadius: 8, color: textMuted, fontSize: 12, border: `1px solid ${border}` }}>applied — waiting to hear back</div>
@@ -5172,6 +5250,85 @@ const setViewingProfile = (user) => {
       )}
 
       {/* COMMUNITIES */}
+      {!viewFullProfile && appScreen === "notifications" && (
+        <div style={{ maxWidth: 980, margin: "0 auto", padding: "28px 20px" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+            <div>
+              <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px", marginBottom: 6 }}>NOTIFICATIONS</div>
+              <div style={{ fontSize: 20, color: text }}>All activity</div>
+            </div>
+            <button className="hb" onClick={markAllNotificationsRead} style={{ ...btnG, fontSize: 11 }}>mark all read</button>
+          </div>
+          {Object.values(notificationGroups).every((items) => items.length === 0) ? (
+            <div style={{ fontSize: 14, color: textMuted, textAlign: "center", padding: "50px 0" }}>You're all caught up ✓</div>
+          ) : (
+            <div style={{ border: `1px solid ${border}`, borderRadius: 10, overflow: "hidden" }}>
+              {[
+                ["replies", "Replies", "↩"],
+                ["invites", "Invites", "✉"],
+                ["taskAssigned", "Task assigned", "•"],
+                ["follows", "Follows", "+"],
+                ["applications", "Applications", "◈"],
+                ["mentions", "Mentions", "@"],
+              ].map(([key, label, icon]) => notificationGroups[key].length > 0 && (
+                <div key={key}>
+                  <div style={{ padding: "10px 14px", borderBottom: `1px solid ${border}`, fontSize: 10, color: textMuted, letterSpacing: "1px", background: bg2 }}>{label.toUpperCase()}</div>
+                  {notificationGroups[key].map((n, idx) => (
+                    <button
+                      key={`${key}-${n.id}-${idx}`}
+                      className="hb"
+                      onClick={async () => {
+                        if (!n.read && n._source !== "mention_notifications") {
+                          await supabase.from("notifications").update({ read: true }).eq("id", n.id);
+                          setNotifications((prev) => prev.map((item) => (item.id === n.id ? { ...item, read: true } : item)));
+                        }
+                        if (n._source === "mention_notifications" && !n.read) {
+                          await supabase.from("mention_notifications").update({ read: true }).eq("id", n.id);
+                          setMentionNotifications((prev) => prev.filter((item) => item.id !== n.id));
+                        }
+                        if (n.type === "follow" || key === "follows") {
+                          const u = users.find((x) => x.id === (n.userId || n.entity_id || n.entityId));
+                          if (u) setViewingProfile(u);
+                          return;
+                        }
+                        if (String(n.type || "").includes("reply") || String(n.type || "").includes("community")) {
+                          setAppScreen("communities");
+                          return;
+                        }
+                        if (n.project_id || n.projectId) {
+                          const proj = projects.find((p) => p.id === (n.project_id || n.projectId));
+                          if (proj) { setActiveProject(proj); loadProjectData(proj.id); setAppScreen("workspace"); setProjectTab("tasks"); }
+                          return;
+                        }
+                        if (n.postId) { setAppScreen("network"); return; }
+                        if (n.entity_id || n.entityId) {
+                          const u = users.find((x) => x.id === (n.entity_id || n.entityId));
+                          if (u) setViewingProfile(u);
+                        }
+                      }}
+                      style={{ width: "100%", textAlign: "left", background: "none", border: "none", borderBottom: `1px solid ${border}`, padding: "12px 14px", cursor: "pointer", fontFamily: "inherit", display: "flex", justifyContent: "space-between", gap: 12 }}
+                    >
+                      <div style={{ display: "flex", gap: 10, minWidth: 0 }}>
+                        <span style={{ color: textMuted }}>{icon}</span>
+                        <div style={{ minWidth: 0 }}>
+                          <div style={{ fontSize: 12, color: text }}>
+                            {n.type === "follow"
+                              ? `${users.find((u) => u.id === (n.userId || n.entity_id || n.entityId))?.name || "Someone"} followed you`
+                              : n.text || `${n.from_name || "Someone"} mentioned you`}
+                          </div>
+                          <div style={{ fontSize: 11, color: textMuted }}>{relativeTime(n.createdAt || n.created_at)}</div>
+                        </div>
+                      </div>
+                      {!n.read && <span style={{ width: 7, height: 7, borderRadius: "50%", background: text, marginTop: 5, flexShrink: 0 }} />}
+                    </button>
+                  ))}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {!viewFullProfile && appScreen === "communities" && (() => {
         const joinedCommunities = communities.filter(c => joinedCommunityIds.includes(c.id));
         const otherCommunities = communities.filter(c => !joinedCommunityIds.includes(c.id));
@@ -6254,7 +6411,7 @@ const setViewingProfile = (user) => {
                               />
                             ) : (
                               <div onClick={(e) => { e.stopPropagation(); setEditingTaskId(task.id); setEditingTaskTitle(task.text || ""); }} style={{ fontSize: 12, color: text, marginBottom: 6, lineHeight: 1.4, display: "flex", gap: 6, alignItems: "center" }}>
-                                <span style={{ width: 7, height: 7, borderRadius: "50%", background: task.priority === "high" ? "#ef4444" : task.priority === "low" ? "#22c55e" : "#f59e0b", flexShrink: 0 }} />
+                                {task.priority && <span style={{ width: 4, height: 4, borderRadius: "50%", background: task.priority === "high" ? "#ef4444" : task.priority === "medium" ? "#f59e0b" : task.priority === "low" ? "#22c55e" : "transparent", flexShrink: 0 }} />}
                                 {task.text}
                               </div>
                             )}
@@ -7249,6 +7406,7 @@ const setViewingProfile = (user) => {
                   {SKILLS.map(s => { const sel = newProject.skills.includes(s); return <button key={s} className="hb" onClick={() => setNewProject({ ...newProject, skills: sel ? newProject.skills.filter(x => x !== s) : [...newProject.skills, s] })} style={{ padding: "3px 10px", borderRadius: 3, fontSize: 10, cursor: "pointer", fontFamily: "inherit", background: sel ? text : "none", color: sel ? bg : textMuted, border: `1px solid ${sel ? text : border}`, transition: "all 0.15s" }}>{s}</button>; })}
                 </div>
               </div>
+              <div><label style={labelStyle}>OPEN ROLES</label><input style={inputStyle} placeholder="Designer, Backend Dev, Marketing" value={(newProject.openRoles || []).join(", ")} onChange={e => setNewProject({ ...newProject, openRoles: e.target.value.split(",").map((role) => role.trim()).filter(Boolean) })} /></div>
               <div><label style={labelStyle}>COLLABORATORS NEEDED</label><select style={inputStyle} value={newProject.maxCollaborators} onChange={e => setNewProject({ ...newProject, maxCollaborators: parseInt(e.target.value) })}>{[1,2,3,4,5,6,7,8,9,10].map(n => <option key={n} value={n}>{n}</option>)}</select></div>
               <div><label style={labelStyle}>LOCATION (optional)</label><input style={inputStyle} placeholder="City, remote, or global" value={newProject.location} onChange={e => setNewProject({ ...newProject, location: e.target.value })} /></div>
               <div><label style={labelStyle}>GOALS / CHECKPOINTS (optional)</label><textarea style={{ ...inputStyle, resize: "none" }} rows={3} placeholder="What does done look like? List key milestones or deliverables..." value={newProject.goals} onChange={e => setNewProject({ ...newProject, goals: e.target.value })} /></div>
@@ -7270,7 +7428,7 @@ const setViewingProfile = (user) => {
               )}
             </div>
             <div style={{ display: "flex", gap: 10, marginTop: 18 }}>
-              <button className="hb" onClick={() => { if (isCreatingProject) return; setShowCreate(false); setCreateProjectError(""); setNewProject({ title: "", description: "", category: CATEGORIES[0], skills: [], maxCollaborators: 2, location: "", goals: "", timeline: "", is_private: false, coverImageFile: null }); }} style={btnG}>cancel</button>
+              <button className="hb" onClick={() => { if (isCreatingProject) return; setShowCreate(false); setCreateProjectError(""); setNewProject({ title: "", description: "", category: CATEGORIES[0], skills: [], openRoles: [], maxCollaborators: 2, location: "", goals: "", timeline: "", is_private: false, coverImageFile: null }); }} style={btnG}>cancel</button>
               <button className="hb" onClick={handlePostProject} disabled={isCreatingProject} style={{ ...btnP, flex: 1, opacity: isCreatingProject ? 0.7 : 1, cursor: isCreatingProject ? "wait" : "pointer" }}>{isCreatingProject ? "posting..." : "post →"}</button>
             </div>
           </div>
