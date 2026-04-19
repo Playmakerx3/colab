@@ -1058,6 +1058,7 @@ function CoLab() {
   const [inviteError, setInviteError] = useState("");
   const [showDeployExplainer, setShowDeployExplainer] = useState(false);
   const [showShipModal, setShowShipModal] = useState(false);
+  const [shareUpdateToFeed, setShareUpdateToFeed] = useState(false);
   const [shipPostContent, setShipPostContent] = useState("");
   const [githubCommits, setGithubCommits] = useState([]);
   const [githubRepoInput, setGithubRepoInput] = useState("");
@@ -5311,28 +5312,7 @@ const setViewingProfile = (user) => {
             )}
 
             {/* UPDATES */}
-            {projectTab === "updates" && (() => {
-              const [shareToFeed, setShareToFeed] = React.useState(false);
-              const handlePostUpdateAndMaybeFeed = async () => {
-                await handlePostUpdate(activeProject.id);
-                if (shareToFeed && newUpdate.trim()) {
-                  const payload = {
-                    user_id: authUser.id,
-                    user_name: profile.name,
-                    user_initials: myInitials,
-                    user_role: profile.role || "",
-                    content: newUpdate,
-                    project_id: activeProject.id,
-                    project_title: activeProject.title,
-                  };
-                  const { data } = await supabase.from("posts").insert(payload).select().single();
-                  if (data) {
-                    setPosts(prev => [data, ...prev]);
-                    showToast("Shared to your feed.");
-                  }
-                }
-              };
-              return (
+            {projectTab === "updates" && (
               <div>
                 <div style={{ display: "flex", gap: 10, marginBottom: 22, alignItems: "flex-start" }}>
                   <Avatar initials={myInitials} size={28} dark={dark} />
@@ -5340,9 +5320,26 @@ const setViewingProfile = (user) => {
                     <MentionInput dark={dark} value={newUpdate} onChange={setNewUpdate} placeholder="post an update... (@mention someone)" users={users} style={{ ...inputStyle, resize: "none", fontSize: 12, padding: "8px 12px" }} rows={2} />
                     {newUpdate.trim() && (
                       <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 8 }}>
-                        <button className="hb" onClick={handlePostUpdateAndMaybeFeed} style={{ ...btnP, padding: "7px 14px", fontSize: 11 }}>post</button>
+                        <button className="hb" onClick={async () => {
+                          const updateText = newUpdate;
+                          await handlePostUpdate(activeProject.id);
+                          if (shareUpdateToFeed && updateText.trim()) {
+                            const payload = {
+                              user_id: authUser.id,
+                              user_name: profile.name,
+                              user_initials: myInitials,
+                              user_role: profile.role || "",
+                              content: updateText,
+                              project_id: activeProject.id,
+                              project_title: activeProject.title,
+                            };
+                            const { data } = await supabase.from("posts").insert(payload).select().single();
+                            if (data) { setPosts(prev => [data, ...prev]); showToast("Shared to your feed."); }
+                          }
+                          setShareUpdateToFeed(false);
+                        }} style={{ ...btnP, padding: "7px 14px", fontSize: 11 }}>post</button>
                         <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", userSelect: "none" }}>
-                          <input type="checkbox" checked={shareToFeed} onChange={e => setShareToFeed(e.target.checked)} style={{ cursor: "pointer" }} />
+                          <input type="checkbox" checked={shareUpdateToFeed} onChange={e => setShareUpdateToFeed(e.target.checked)} style={{ cursor: "pointer" }} />
                           <span style={{ fontSize: 11, color: textMuted }}>also share to feed</span>
                         </label>
                       </div>
@@ -5364,8 +5361,7 @@ const setViewingProfile = (user) => {
                   ))
                 }
               </div>
-              );
-            })()}
+            )}
 
             {/* TEAM */}
             {projectTab === "team" && (
