@@ -12,6 +12,7 @@ import { useAuthBootstrap } from "../../../hooks/useAuthBootstrap";
 import { signIn, signOut, signUp } from "../../../services/authService";
 import { useProfileState } from "../../profile/hooks/useProfileState";
 import { useAppDataBootstrap } from "../hooks/useAppDataBootstrap";
+import { fetchCommunityPosts, fetchThreadComments, fetchTopCommunityPosts } from "../services/appDataBootstrapService";
 import { useRealtimeSubscriptions } from "../../realtime/hooks/useRealtimeSubscriptions";
 import { useMessaging } from "../../messaging/hooks/useMessaging";
 import { useApplications } from "../../applications/hooks/useApplications";
@@ -955,6 +956,25 @@ function CoLab() {
   const [followingOnly, setFollowingOnly] = useState(false);
   const [teamReviews, setTeamReviews] = useState([]);
   const [showTeamReview, setShowTeamReview] = useState(null); // project to review
+  // Communities
+  const [communities, setCommunities] = useState([]);
+  const [joinedCommunityIds, setJoinedCommunityIds] = useState([]);
+  const [communityVotes, setCommunityVotes] = useState({}); // { postId: true }
+  const [activeCommunity, setActiveCommunity] = useState(null);
+  const [communityPosts, setCommunityPosts] = useState([]);
+  const [communityPostsLoading, setCommunityPostsLoading] = useState(false);
+  const [activeThread, setActiveThread] = useState(null);
+  const [threadComments, setThreadComments] = useState({});
+  const [communitySort, setCommunitySort] = useState("hot");
+  const [showCreatePost, setShowCreatePost] = useState(false);
+  const [showCreateCommunity, setShowCreateCommunity] = useState(false);
+  const [newThreadTitle, setNewThreadTitle] = useState("");
+  const [newThreadContent, setNewThreadContent] = useState("");
+  const [newCommunityName, setNewCommunityName] = useState("");
+  const [newCommunityDesc, setNewCommunityDesc] = useState("");
+  const [newCommunityEmoji, setNewCommunityEmoji] = useState("💬");
+  const [newCommentText, setNewCommentText] = useState("");
+  const [topCommunityPosts, setTopCommunityPosts] = useState([]);
   const [projectsSubTab, setProjectsSubTab] = useState("for-you");
   const [networkTab, setNetworkTab] = useState("graph");
   const [discoverSkillFilter, setDiscoverSkillFilter] = useState([]);
@@ -1404,6 +1424,9 @@ const setViewingProfile = (user) => {
     setNotifications,
     setShowApplicationForm,
     setTeamReviews,
+    setCommunities,
+    setJoinedCommunityIds,
+    setCommunityVotes,
   });
 
 
@@ -1968,6 +1991,12 @@ const setViewingProfile = (user) => {
     const dismissed = localStorage.getItem(`onboarding-guide-dismissed:${authUser.id}`) === "true";
     setHideFirstTimeGuide(dismissed);
   }, [authUser?.id]);
+
+  // Load top community posts for feed when joined communities change
+  useEffect(() => {
+    if (joinedCommunityIds.length === 0) { setTopCommunityPosts([]); return; }
+    fetchTopCommunityPosts(joinedCommunityIds).then(posts => setTopCommunityPosts(posts));
+  }, [joinedCommunityIds.join(",")]);
 
   useEffect(() => {
     if (!activeProject?.id) return;
@@ -3331,6 +3360,7 @@ const setViewingProfile = (user) => {
     { id: "explore", label: "explore" },
     { id: "network", label: "network" },
     { id: "workspace", label: "work" },
+    { id: "communities", label: "communities" },
     { id: "messages", label: "msgs", badge: unreadDms },
     { id: "profile", label: profile?.username ? `@${profile.username}` : profile?.name?.split(" ")[0]?.toLowerCase() || "me" },
   ];
@@ -4002,7 +4032,8 @@ const setViewingProfile = (user) => {
               const ageHours = (Date.now() - new Date(item.created_at)) / 3600000;
               const freshness = Math.exp(-ageHours / 96); // ~4-day half-life
               const likeBoost = item._type === "post" ? Math.min((item.like_count || 0) * 0.15, 3) : 0;
-              return overlap * 2.5 + (isFollowed ? 3 : 0) + freshness * 5 + likeBoost;
+              const communityBoost = item._type === "community_post" ? Math.min((item.upvotes || 0) * 0.3 + (item.comment_count || 0) * 0.2, 4) : 0;
+              return overlap * 2.5 + (isFollowed ? 3 : 0) + freshness * 5 + likeBoost + communityBoost;
             };
 
             const diversifyFeed = (items) => {
@@ -4044,7 +4075,17 @@ const setViewingProfile = (user) => {
               .map(p => ({ _type: "project_created", id: `proj-${p.id}`, created_at: p.created_at, project: p }));
 
             const filteredPosts = posts.filter(post => matchesRegion((users.find(u => u.id === post.user_id)?.location), regionFilter, profile?.location));
-            const baseList = [...filteredPosts.map(p => ({ ...p, _type: "post" })), ...followedProjectEvents];
+            // Hot community posts from joined communities surfaced in feed
+            const hotCommunityFeedItems = topCommunityPosts.map(cp => ({
+              ...cp,
+              _type: "community_post",
+              id: `cp-${cp.id}`,
+              _communityName: cp.communities?.name || "",
+              _communityEmoji: cp.communities?.emoji || "💬",
+              _communityId: cp.community_id,
+              _originalId: cp.id,
+            }));
+            const baseList = [...filteredPosts.map(p => ({ ...p, _type: "post" })), ...followedProjectEvents, ...hotCommunityFeedItems];
             const followFilteredList = followingOnly
               ? baseList.filter(item => {
                   const aid = item.user_id || item.project?.owner_id;
@@ -4308,6 +4349,45 @@ const setViewingProfile = (user) => {
                       );
                     }
 
+                    // Community post surfaced in feed
+                    if (item._type === "community_post") {
+                      return (
+                        <div key={item.id} style={{ padding: "18px 0", borderBottom: `1px solid ${border}` }}>
+                          <div style={{ fontSize: 9, color: textMuted, letterSpacing: "1.5px", marginBottom: 10, display: "flex", alignItems: "center", gap: 6 }}>
+                            <span>{item._communityEmoji}</span>
+                            <span>TRENDING IN {item._communityName.toUpperCase()}</span>
+                          </div>
+                          <div style={{ display: "flex", gap: 14, alignItems: "flex-start" }}>
+                            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2, flexShrink: 0, width: 36 }}>
+                              <span style={{ fontSize: 12, color: textMuted }}>▲</span>
+                              <span style={{ fontSize: 12, fontWeight: 500, color: text }}>{item.upvotes}</span>
+                            </div>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <button className="hb" onClick={async () => {
+                                setAppScreen("communities");
+                                const comm = communities.find(c => c.id === item._communityId);
+                                if (comm) {
+                                  setActiveCommunity(comm);
+                                  setCommunityPostsLoading(true);
+                                  const { posts: cPosts } = await fetchCommunityPosts(comm.id);
+                                  setCommunityPosts(cPosts);
+                                  setCommunityPostsLoading(false);
+                                  const fullPost = cPosts.find(p => p.id === item._originalId);
+                                  if (fullPost) { setActiveThread(fullPost); setNewCommentText(""); const comments = await fetchThreadComments(fullPost.id); setThreadComments(prev => ({ ...prev, [fullPost.id]: comments })); }
+                                }
+                              }} style={{ background: "none", border: "none", cursor: "pointer", padding: 0, textAlign: "left", fontFamily: "inherit" }}>
+                                <div style={{ fontSize: 14, color: text, fontWeight: 400, letterSpacing: "-0.2px", marginBottom: 6, lineHeight: 1.4 }}>{item.title}</div>
+                              </button>
+                              <div style={{ fontSize: 10, color: textMuted }}>{item.user_name} · {relativeTime(item.created_at)} · 💬 {item.comment_count}</div>
+                            </div>
+                            {!isOwn && (
+                              <button className="hb" onClick={() => hideItem(item.id)} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontSize: 11, fontFamily: "inherit", opacity: 0.5, flexShrink: 0 }}>✕</button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    }
+
                     // Regular post — wrap with reason chip + hide
                     return (
                       <div key={item.id} style={{ position: "relative" }}>
@@ -4437,6 +4517,311 @@ const setViewingProfile = (user) => {
           }
         </div>
       )}
+
+      {/* COMMUNITIES */}
+      {!viewFullProfile && appScreen === "communities" && (() => {
+        const joinedCommunities = communities.filter(c => joinedCommunityIds.includes(c.id));
+        const otherCommunities = communities.filter(c => !joinedCommunityIds.includes(c.id));
+
+        const loadCommunity = async (community) => {
+          setActiveCommunity(community);
+          setActiveThread(null);
+          setCommunityPostsLoading(true);
+          const { posts } = await fetchCommunityPosts(community.id);
+          setCommunityPosts(posts);
+          setCommunityPostsLoading(false);
+        };
+
+        const handleJoin = async (communityId) => {
+          const { error } = await supabase.from("community_members").insert({ community_id: communityId, user_id: authUser.id });
+          if (!error) setJoinedCommunityIds(prev => [...prev, communityId]);
+        };
+
+        const handleLeave = async (communityId) => {
+          await supabase.from("community_members").delete().eq("community_id", communityId).eq("user_id", authUser.id);
+          setJoinedCommunityIds(prev => prev.filter(id => id !== communityId));
+          if (activeCommunity?.id === communityId) { setActiveCommunity(null); setCommunityPosts([]); }
+        };
+
+        const handleVote = async (post) => {
+          const hasVoted = communityVotes[post.id];
+          if (hasVoted) {
+            // un-vote
+            await supabase.from("community_post_votes").delete().eq("post_id", post.id).eq("user_id", authUser.id);
+            await supabase.from("community_posts").update({ upvotes: Math.max(0, post.upvotes - 1) }).eq("id", post.id);
+            setCommunityVotes(prev => { const n = { ...prev }; delete n[post.id]; return n; });
+            setCommunityPosts(prev => prev.map(p => p.id === post.id ? { ...p, upvotes: Math.max(0, p.upvotes - 1) } : p));
+          } else {
+            await supabase.from("community_post_votes").insert({ post_id: post.id, user_id: authUser.id });
+            await supabase.from("community_posts").update({ upvotes: post.upvotes + 1 }).eq("id", post.id);
+            setCommunityVotes(prev => ({ ...prev, [post.id]: true }));
+            setCommunityPosts(prev => prev.map(p => p.id === post.id ? { ...p, upvotes: p.upvotes + 1 } : p));
+          }
+        };
+
+        const handleCreatePost = async () => {
+          if (!newThreadTitle.trim() || !activeCommunity) return;
+          const payload = {
+            community_id: activeCommunity.id,
+            user_id: authUser.id,
+            user_name: profile.name,
+            user_initials: myInitials,
+            title: newThreadTitle.trim(),
+            content: newThreadContent.trim() || null,
+            upvotes: 0,
+            comment_count: 0,
+          };
+          const { data, error } = await supabase.from("community_posts").insert(payload).select().single();
+          if (!error && data) {
+            setCommunityPosts(prev => [data, ...prev]);
+            setNewThreadTitle("");
+            setNewThreadContent("");
+            setShowCreatePost(false);
+            showToast("Thread posted.");
+          }
+        };
+
+        const handleCreateCommunity = async () => {
+          if (!newCommunityName.trim()) return;
+          const slug = newCommunityName.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+          const payload = { name: newCommunityName.trim(), slug, description: newCommunityDesc.trim() || null, emoji: newCommunityEmoji, created_by: authUser.id };
+          const { data, error } = await supabase.from("communities").insert(payload).select().single();
+          if (error) { showToast("Community name taken or invalid."); return; }
+          if (data) {
+            setCommunities(prev => [...prev, data].sort((a, b) => a.name.localeCompare(b.name)));
+            await supabase.from("community_members").insert({ community_id: data.id, user_id: authUser.id, role: "admin" });
+            setJoinedCommunityIds(prev => [...prev, data.id]);
+            setNewCommunityName("");
+            setNewCommunityDesc("");
+            setNewCommunityEmoji("💬");
+            setShowCreateCommunity(false);
+            loadCommunity(data);
+            showToast("Community created.");
+          }
+        };
+
+        const openThread = async (post) => {
+          setActiveThread(post);
+          setNewCommentText("");
+          if (!threadComments[post.id]) {
+            const comments = await fetchThreadComments(post.id);
+            setThreadComments(prev => ({ ...prev, [post.id]: comments }));
+          }
+        };
+
+        const handleAddComment = async (postId, content) => {
+          if (!content.trim()) return;
+          const payload = { post_id: postId, user_id: authUser.id, user_name: profile.name, user_initials: myInitials, content: content.trim() };
+          const { data } = await supabase.from("community_comments").insert(payload).select().single();
+          if (data) {
+            setThreadComments(prev => ({ ...prev, [postId]: [...(prev[postId] || []), data] }));
+            await supabase.from("community_posts").update({ comment_count: (activeThread?.comment_count || 0) + 1 }).eq("id", postId);
+            setActiveThread(prev => prev ? { ...prev, comment_count: (prev.comment_count || 0) + 1 } : prev);
+            setCommunityPosts(prev => prev.map(p => p.id === postId ? { ...p, comment_count: (p.comment_count || 0) + 1 } : p));
+          }
+        };
+
+        const sortedPosts = [...communityPosts].sort((a, b) => {
+          if (communitySort === "hot") {
+            const ageA = (Date.now() - new Date(a.created_at).getTime()) / 3600000;
+            const ageB = (Date.now() - new Date(b.created_at).getTime()) / 3600000;
+            const scoreA = (a.upvotes * 2 + a.comment_count * 1.5) * Math.exp(-ageA / 48);
+            const scoreB = (b.upvotes * 2 + b.comment_count * 1.5) * Math.exp(-ageB / 48);
+            return scoreB - scoreA;
+          }
+          if (communitySort === "top") return b.upvotes - a.upvotes;
+          return new Date(b.created_at) - new Date(a.created_at); // new
+        });
+
+        const CommunityListItem = ({ c }) => {
+          const isJoined = joinedCommunityIds.includes(c.id);
+          const isActive = activeCommunity?.id === c.id;
+          return (
+            <div onClick={() => loadCommunity(c)}
+              style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 12px", borderRadius: 6, cursor: "pointer", background: isActive ? bg3 : "none", transition: "background 0.1s" }}
+              onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = bg2; }}
+              onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = "none"; }}>
+              <span style={{ fontSize: 16, flexShrink: 0 }}>{c.emoji}</span>
+              <span style={{ flex: 1, fontSize: 12, color: isActive ? text : textMuted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.name}</span>
+              <button className="hb" onClick={e => { e.stopPropagation(); isJoined ? handleLeave(c.id) : handleJoin(c.id); }}
+                style={{ fontSize: 9, padding: "2px 7px", borderRadius: 20, border: `1px solid ${isJoined ? border : text}`, background: isJoined ? "none" : text, color: isJoined ? textMuted : bg, cursor: "pointer", fontFamily: "inherit", flexShrink: 0 }}>
+                {isJoined ? "joined" : "+ join"}
+              </button>
+            </div>
+          );
+        };
+
+        return (
+          <div style={{ display: "flex", height: "calc(100vh - 50px)", overflow: "hidden" }}>
+
+            {/* Left sidebar */}
+            <div style={{ width: 240, borderRight: `1px solid ${border}`, display: "flex", flexDirection: "column", flexShrink: 0, overflowY: "auto" }}>
+              <div style={{ padding: "24px 16px 12px" }}>
+                <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px", marginBottom: 16 }}>COMMUNITIES</div>
+
+                {joinedCommunities.length > 0 && (
+                  <div style={{ marginBottom: 20 }}>
+                    <div style={{ fontSize: 9, color: textMuted, letterSpacing: "1.5px", marginBottom: 6, paddingLeft: 12 }}>JOINED</div>
+                    {joinedCommunities.map(c => <CommunityListItem key={c.id} c={c} />)}
+                  </div>
+                )}
+
+                {otherCommunities.length > 0 && (
+                  <div style={{ marginBottom: 20 }}>
+                    <div style={{ fontSize: 9, color: textMuted, letterSpacing: "1.5px", marginBottom: 6, paddingLeft: 12 }}>ALL COMMUNITIES</div>
+                    {otherCommunities.map(c => <CommunityListItem key={c.id} c={c} />)}
+                  </div>
+                )}
+              </div>
+
+              <div style={{ padding: "0 16px 24px", marginTop: "auto" }}>
+                <button className="hb" onClick={() => setShowCreateCommunity(true)}
+                  style={{ width: "100%", padding: "8px 12px", fontSize: 11, borderRadius: 6, border: `1px solid ${border}`, background: "none", color: textMuted, cursor: "pointer", fontFamily: "inherit", textAlign: "left" }}>
+                  + create community
+                </button>
+              </div>
+            </div>
+
+            {/* Main area */}
+            <div style={{ flex: 1, overflowY: "auto", minWidth: 0 }}>
+              {!activeCommunity ? (
+                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100%", gap: 12 }}>
+                  <div style={{ fontSize: 32 }}>💬</div>
+                  <div style={{ fontSize: 14, color: textMuted }}>Select a community to browse threads</div>
+                  {joinedCommunities.length === 0 && <div style={{ fontSize: 12, color: textMuted, opacity: 0.6 }}>Join a community on the left to get started</div>}
+                </div>
+              ) : activeThread ? (
+                /* Thread detail */
+                <div style={{ maxWidth: 720, margin: "0 auto", padding: "32px 24px" }}>
+                  <button className="hb" onClick={() => setActiveThread(null)}
+                    style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontFamily: "inherit", fontSize: 12, marginBottom: 24, padding: 0, display: "flex", alignItems: "center", gap: 6 }}>
+                    ← back to {activeCommunity.emoji} {activeCommunity.name}
+                  </button>
+                  <div style={{ display: "flex", gap: 16, alignItems: "flex-start", marginBottom: 24 }}>
+                    {/* Vote */}
+                    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, flexShrink: 0 }}>
+                      <button className="hb" onClick={() => handleVote(activeThread)}
+                        style={{ background: "none", border: "none", cursor: "pointer", fontSize: 18, color: communityVotes[activeThread.id] ? text : textMuted, lineHeight: 1, padding: "2px 6px" }}>▲</button>
+                      <span style={{ fontSize: 13, fontWeight: 500, color: text }}>{activeThread.upvotes}</span>
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 20, fontWeight: 400, letterSpacing: "-0.5px", color: text, marginBottom: 10, lineHeight: 1.3 }}>{activeThread.title}</div>
+                      <div style={{ fontSize: 11, color: textMuted, marginBottom: 16 }}>
+                        {activeThread.user_name} · {relativeTime(activeThread.created_at)}
+                      </div>
+                      {activeThread.content && (
+                        <div style={{ fontSize: 13, color: text, lineHeight: 1.75, whiteSpace: "pre-wrap", marginBottom: 24, padding: "16px", background: bg2, borderRadius: 8, border: `1px solid ${border}` }}>
+                          {activeThread.content}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Comments */}
+                  <div style={{ borderTop: `1px solid ${border}`, paddingTop: 24 }}>
+                    <div style={{ fontSize: 12, color: textMuted, letterSpacing: "1px", marginBottom: 20 }}>
+                      {(threadComments[activeThread.id] || []).length} COMMENT{(threadComments[activeThread.id] || []).length !== 1 ? "S" : ""}
+                    </div>
+
+                    {/* Comment composer */}
+                    <div style={{ display: "flex", gap: 10, marginBottom: 24 }}>
+                      <Avatar initials={myInitials} size={28} dark={dark} />
+                      <div style={{ flex: 1 }}>
+                        <textarea value={newCommentText} onChange={e => setNewCommentText(e.target.value)}
+                          placeholder="add a comment..."
+                          style={{ ...inputStyle, resize: "none", fontSize: 12, padding: "8px 12px", minHeight: 60, width: "100%", boxSizing: "border-box" }}
+                          rows={2}
+                        />
+                        {newCommentText.trim() && (
+                          <button className="hb" onClick={async () => {
+                            const text = newCommentText;
+                            setNewCommentText("");
+                            await handleAddComment(activeThread.id, text);
+                          }} style={{ ...btnP, marginTop: 6, padding: "6px 14px", fontSize: 11 }}>reply</button>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Comments list */}
+                    {(threadComments[activeThread.id] || []).map(c => (
+                      <div key={c.id} style={{ display: "flex", gap: 10, marginBottom: 16, paddingBottom: 16, borderBottom: `1px solid ${border}` }}>
+                        <Avatar initials={c.user_initials} size={28} dark={dark} />
+                        <div style={{ flex: 1 }}>
+                          <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 6 }}>
+                            <span style={{ fontSize: 12, fontWeight: 500, color: text }}>{c.user_name}</span>
+                            <span style={{ fontSize: 10, color: textMuted }}>{relativeTime(c.created_at)}</span>
+                          </div>
+                          <div style={{ fontSize: 13, color: text, lineHeight: 1.65 }}>{c.content}</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                /* Thread list */
+                <div style={{ maxWidth: 760, margin: "0 auto", padding: "32px 24px" }}>
+                  {/* Community header */}
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24, flexWrap: "wrap", gap: 12 }}>
+                    <div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+                        <span style={{ fontSize: 28 }}>{activeCommunity.emoji}</span>
+                        <div style={{ fontSize: 22, fontWeight: 400, letterSpacing: "-0.5px", color: text }}>{activeCommunity.name}</div>
+                      </div>
+                      {activeCommunity.description && <div style={{ fontSize: 12, color: textMuted, maxWidth: 480, lineHeight: 1.6 }}>{activeCommunity.description}</div>}
+                    </div>
+                    <div style={{ display: "flex", gap: 8 }}>
+                      {joinedCommunityIds.includes(activeCommunity.id) ? (
+                        <button className="hb" onClick={() => setShowCreatePost(true)} style={{ ...btnP, padding: "8px 16px", fontSize: 12 }}>+ new thread</button>
+                      ) : (
+                        <button className="hb" onClick={() => handleJoin(activeCommunity.id)} style={{ ...btnP, padding: "8px 16px", fontSize: 12 }}>+ join to post</button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Sort tabs */}
+                  <div style={{ display: "flex", gap: 0, borderBottom: `1px solid ${border}`, marginBottom: 20 }}>
+                    {["hot", "new", "top"].map(s => (
+                      <button key={s} className="hb" onClick={() => setCommunitySort(s)}
+                        style={{ background: "none", border: "none", borderBottom: communitySort === s ? `1px solid ${text}` : "1px solid transparent", color: communitySort === s ? text : textMuted, padding: "8px 16px 8px 0", fontSize: 11, cursor: "pointer", fontFamily: "inherit", marginRight: 12, transition: "all 0.15s" }}>
+                        {s}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Threads */}
+                  {communityPostsLoading ? <Spinner dark={dark} /> : sortedPosts.length === 0 ? (
+                    <div style={{ textAlign: "center", padding: "48px 0", color: textMuted, fontSize: 13 }}>
+                      No threads yet.{joinedCommunityIds.includes(activeCommunity.id) ? " Be the first to post." : " Join to start the conversation."}
+                    </div>
+                  ) : sortedPosts.map(post => (
+                    <div key={post.id} onClick={() => openThread(post)}
+                      style={{ display: "flex", gap: 14, padding: "16px 0", borderBottom: `1px solid ${border}`, cursor: "pointer", transition: "opacity 0.15s" }}
+                      onMouseEnter={e => e.currentTarget.style.opacity = "0.8"}
+                      onMouseLeave={e => e.currentTarget.style.opacity = "1"}>
+                      {/* Vote */}
+                      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2, flexShrink: 0, width: 36 }}>
+                        <button className="hb" onClick={e => { e.stopPropagation(); handleVote(post); }}
+                          style={{ background: "none", border: "none", cursor: "pointer", fontSize: 14, color: communityVotes[post.id] ? text : textMuted, padding: "2px", lineHeight: 1 }}>▲</button>
+                        <span style={{ fontSize: 12, fontWeight: 500, color: communityVotes[post.id] ? text : textMuted }}>{post.upvotes}</span>
+                      </div>
+                      {/* Content */}
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 14, color: text, fontWeight: 400, letterSpacing: "-0.2px", marginBottom: 6, lineHeight: 1.4 }}>{post.title}</div>
+                        {post.content && <div style={{ fontSize: 12, color: textMuted, lineHeight: 1.5, marginBottom: 8, overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>{post.content}</div>}
+                        <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
+                          <span style={{ fontSize: 10, color: textMuted }}>{post.user_name}</span>
+                          <span style={{ fontSize: 10, color: textMuted }}>{relativeTime(post.created_at)}</span>
+                          <span style={{ fontSize: 10, color: textMuted }}>💬 {post.comment_count}</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* NETWORK */}
       {!viewFullProfile && appScreen === "network" && renderNetwork()}
@@ -5979,6 +6364,85 @@ const setViewingProfile = (user) => {
             });
           }}
         />
+      )}
+
+      {/* Create Community Thread modal */}
+      {showCreatePost && activeCommunity && (
+        <div onClick={() => setShowCreatePost(false)} style={{ position: "fixed", inset: 0, background: dark ? "rgba(0,0,0,0.92)" : "rgba(200,200,200,0.88)", zIndex: 300, display: "flex", alignItems: "center", justifyContent: "center", backdropFilter: "blur(12px)", padding: 16 }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: bg, border: `1px solid ${border}`, borderRadius: 16, padding: "28px", width: "100%", maxWidth: 520 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+              <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px" }}>NEW THREAD · {activeCommunity.emoji} {activeCommunity.name.toUpperCase()}</div>
+              <button onClick={() => setShowCreatePost(false)} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontSize: 16, fontFamily: "inherit" }}>✕</button>
+            </div>
+            <input value={newThreadTitle} onChange={e => setNewThreadTitle(e.target.value)}
+              placeholder="Thread title"
+              style={{ ...inputStyle, fontSize: 16, fontWeight: 400, letterSpacing: "-0.3px", marginBottom: 12, padding: "10px 14px" }}
+            />
+            <textarea value={newThreadContent} onChange={e => setNewThreadContent(e.target.value)}
+              placeholder="What do you want to discuss? (optional)"
+              style={{ ...inputStyle, resize: "none", minHeight: 100, fontSize: 13, lineHeight: 1.7, marginBottom: 16 }}
+            />
+            <div style={{ display: "flex", gap: 8 }}>
+              <button className="hb" onClick={() => setShowCreatePost(false)} style={{ ...btnG, flex: 1 }}>cancel</button>
+              <button className="hb" onClick={async () => {
+                if (!newThreadTitle.trim()) return;
+                const payload = {
+                  community_id: activeCommunity.id, user_id: authUser.id, user_name: profile.name,
+                  user_initials: myInitials, title: newThreadTitle.trim(),
+                  content: newThreadContent.trim() || null, upvotes: 0, comment_count: 0,
+                };
+                const { data, error } = await supabase.from("community_posts").insert(payload).select().single();
+                if (!error && data) {
+                  setCommunityPosts(prev => [data, ...prev]);
+                  setNewThreadTitle(""); setNewThreadContent(""); setShowCreatePost(false);
+                  showToast("Thread posted.");
+                }
+              }} style={{ ...btnP, flex: 2 }} disabled={!newThreadTitle.trim()}>post thread →</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Create Community modal */}
+      {showCreateCommunity && (
+        <div onClick={() => setShowCreateCommunity(false)} style={{ position: "fixed", inset: 0, background: dark ? "rgba(0,0,0,0.92)" : "rgba(200,200,200,0.88)", zIndex: 300, display: "flex", alignItems: "center", justifyContent: "center", backdropFilter: "blur(12px)", padding: 16 }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: bg, border: `1px solid ${border}`, borderRadius: 16, padding: "28px", width: "100%", maxWidth: 440 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+              <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px" }}>CREATE COMMUNITY</div>
+              <button onClick={() => setShowCreateCommunity(false)} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontSize: 16, fontFamily: "inherit" }}>✕</button>
+            </div>
+            <div style={{ display: "flex", gap: 10, marginBottom: 12 }}>
+              <input value={newCommunityEmoji} onChange={e => setNewCommunityEmoji(e.target.value)}
+                style={{ ...inputStyle, width: 52, textAlign: "center", fontSize: 20, padding: "8px", flexShrink: 0 }} maxLength={2} />
+              <input value={newCommunityName} onChange={e => setNewCommunityName(e.target.value)}
+                placeholder="Community name"
+                style={{ ...inputStyle, flex: 1, fontSize: 14, padding: "8px 12px" }} />
+            </div>
+            <textarea value={newCommunityDesc} onChange={e => setNewCommunityDesc(e.target.value)}
+              placeholder="What is this community about? (optional)"
+              style={{ ...inputStyle, resize: "none", minHeight: 80, fontSize: 13, lineHeight: 1.7, marginBottom: 16 }}
+            />
+            <div style={{ display: "flex", gap: 8 }}>
+              <button className="hb" onClick={() => setShowCreateCommunity(false)} style={{ ...btnG, flex: 1 }}>cancel</button>
+              <button className="hb" onClick={async () => {
+                if (!newCommunityName.trim()) return;
+                const slug = newCommunityName.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+                const payload = { name: newCommunityName.trim(), slug, description: newCommunityDesc.trim() || null, emoji: newCommunityEmoji || "💬", created_by: authUser.id };
+                const { data, error } = await supabase.from("communities").insert(payload).select().single();
+                if (error) { showToast("Name taken or invalid. Try another."); return; }
+                if (data) {
+                  setCommunities(prev => [...prev, data].sort((a, b) => a.name.localeCompare(b.name)));
+                  await supabase.from("community_members").insert({ community_id: data.id, user_id: authUser.id, role: "admin" });
+                  setJoinedCommunityIds(prev => [...prev, data.id]);
+                  setNewCommunityName(""); setNewCommunityDesc(""); setNewCommunityEmoji("💬");
+                  setShowCreateCommunity(false);
+                  setAppScreen("communities");
+                  showToast("Community created!");
+                }
+              }} style={{ ...btnP, flex: 2 }} disabled={!newCommunityName.trim()}>create →</button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Deploy explainer (step 1) */}

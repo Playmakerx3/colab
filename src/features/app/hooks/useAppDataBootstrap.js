@@ -48,6 +48,9 @@ export function useAppDataBootstrap({
   setNotifications,
   setShowApplicationForm,
   setTeamReviews,
+  setCommunities,
+  setJoinedCommunityIds,
+  setCommunityVotes,
 }) {
   const loadAllData = useCallback(async (userId) => {
     setLoading(true);
@@ -67,6 +70,9 @@ export function useAppDataBootstrap({
         mentionNotifs,
         notifs,
         reviewsData,
+        communitiesData,
+        myMembershipsData,
+        myVotesData,
       } = await fetchAppBootstrapData(userId);
 
       setProjects(projs || []);
@@ -83,6 +89,12 @@ export function useAppDataBootstrap({
       setMentionNotifications(mentionNotifs || []);
       setNotifications((notifs || []).map(mapDbNotif));
       setTeamReviews(reviewsData || []);
+      setCommunities(communitiesData || []);
+      setJoinedCommunityIds((myMembershipsData || []).map(m => m.community_id));
+      // votes: { postId: true }
+      const votesMap = {};
+      (myVotesData || []).forEach(v => { votesMap[v.post_id] = true; });
+      setCommunityVotes(votesMap);
 
       const trending = [...(projs || [])].sort((a, b) => {
         const aCount = (apps || []).filter(ap => ap.project_id === a.id).length;
@@ -124,6 +136,9 @@ export function useAppDataBootstrap({
     setTeamReviews,
     setTrendingProjects,
     setUsers,
+    setCommunities,
+    setJoinedCommunityIds,
+    setCommunityVotes,
   ]);
 
   return { loadAllData };
