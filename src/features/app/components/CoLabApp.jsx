@@ -4365,8 +4365,40 @@ const setViewingProfile = (user) => {
                           </div>
                           <div style={{ display: "flex", gap: 14, alignItems: "flex-start" }}>
                             <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2, flexShrink: 0, width: 36 }}>
-                              <span style={{ fontSize: 12, color: textMuted }}>+</span>
+                              <button className="hb" onClick={async e => {
+                                e.stopPropagation();
+                                const pid = item._originalId;
+                                const cur = topCommunityPosts.find(p => p.id === pid);
+                                const votes = cur?.upvotes ?? item.upvotes;
+                                if (communityVotes[pid]) {
+                                  await supabase.from("community_post_votes").delete().eq("post_id", pid).eq("user_id", authUser.id);
+                                  await supabase.from("community_posts").update({ upvotes: Math.max(0, votes - 1) }).eq("id", pid);
+                                  setCommunityVotes(prev => { const n = { ...prev }; delete n[pid]; return n; });
+                                } else {
+                                  if (communityDownvotes[pid]) { setCommunityDownvotes(prev => { const n = { ...prev }; delete n[pid]; return n; }); }
+                                  await supabase.from("community_post_votes").insert({ post_id: pid, user_id: authUser.id });
+                                  await supabase.from("community_posts").update({ upvotes: votes + 1 }).eq("id", pid);
+                                  setCommunityVotes(prev => ({ ...prev, [pid]: true }));
+                                }
+                              }} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 14, color: communityVotes[item._originalId] ? text : textMuted, padding: "2px", lineHeight: 1, fontFamily: "inherit" }}>+</button>
                               <span style={{ fontSize: 12, fontWeight: 500, color: text }}>{item.upvotes}</span>
+                              <button className="hb" onClick={async e => {
+                                e.stopPropagation();
+                                const pid = item._originalId;
+                                const cur = topCommunityPosts.find(p => p.id === pid);
+                                const votes = cur?.upvotes ?? item.upvotes;
+                                if (communityDownvotes[pid]) {
+                                  await supabase.from("community_posts").update({ upvotes: votes + 1 }).eq("id", pid);
+                                  setCommunityDownvotes(prev => { const n = { ...prev }; delete n[pid]; return n; });
+                                } else {
+                                  if (communityVotes[pid]) {
+                                    await supabase.from("community_post_votes").delete().eq("post_id", pid).eq("user_id", authUser.id);
+                                    setCommunityVotes(prev => { const n = { ...prev }; delete n[pid]; return n; });
+                                  }
+                                  await supabase.from("community_posts").update({ upvotes: votes - 1 }).eq("id", pid);
+                                  setCommunityDownvotes(prev => ({ ...prev, [pid]: true }));
+                                }
+                              }} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 14, color: communityDownvotes[item._originalId] ? text : textMuted, padding: "2px", lineHeight: 1, fontFamily: "inherit" }}>−</button>
                             </div>
                             <div style={{ flex: 1, minWidth: 0 }}>
                               <button className="hb" onClick={async () => {
