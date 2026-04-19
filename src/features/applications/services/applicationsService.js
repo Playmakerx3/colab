@@ -9,6 +9,7 @@ export const createApplication = async ({
   applicantBio,
   applicantSkills,
   availability,
+  role,
   motivation,
   portfolioUrl,
 }) => {
@@ -21,6 +22,7 @@ export const createApplication = async ({
     applicant_bio: applicantBio,
     applicant_skills: applicantSkills,
     availability,
+    role,
     motivation,
     portfolio_url: portfolioUrl,
     status: "pending",
