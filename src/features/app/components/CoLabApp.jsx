@@ -786,7 +786,7 @@ function PostCard({ post, ctx }) {
             </div>
           )}
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            <Avatar initials={myInitials} size={26} dark={dark} />
+            <Avatar initials={myInitials} src={profile?.avatar_url} size={26} dark={dark} />
             <input
               placeholder="write a comment..."
               value={localComment}
@@ -848,7 +848,7 @@ function MentionInput({ value, onChange, onKeyDown, placeholder, users, style, r
           {suggestions.map(u => (
             <button key={u.id} onClick={() => selectUser(u)} style={{ width: "100%", padding: "8px 12px", background: "none", border: "none", color: dark ? "#fff" : "#000", cursor: "pointer", textAlign: "left", fontSize: 12, fontFamily: "inherit", display: "flex", gap: 8, alignItems: "center" }}
               onMouseEnter={e => e.currentTarget.style.background = dark ? "#1a1a1a" : "#f0f0f0"} onMouseLeave={e => e.currentTarget.style.background = "none"}>
-              <Avatar initials={initials(u.name)} size={24} dark={dark} />
+              <Avatar initials={initials(u.name)} src={u.avatar_url} size={24} dark={dark} />
               <div><div style={{ fontSize: 12, color: dark ? "#fff" : "#000" }}>{u.name}</div><div style={{ fontSize: 10, color: dark ? "#555" : "#aaa" }}>{u.role}</div></div>
             </button>
           ))}
@@ -973,6 +973,7 @@ function CoLab() {
   const [appScreen, setAppScreen] = useState("explore");
   const [exploreTab, setExploreTab] = useState("feed");
   const [feedSort, setFeedSort] = useState("for-you");
+  const [feedPage, setFeedPage] = useState(1);
   const [hiddenFeedIds, setHiddenFeedIds] = useState(new Set());
   const [followingOnly, setFollowingOnly] = useState(false);
   const [teamReviews, setTeamReviews] = useState([]);
@@ -2165,7 +2166,7 @@ const setViewingProfile = (user) => {
         onMouseEnter={e => e.currentTarget.style.borderColor = text} onMouseLeave={e => e.currentTarget.style.borderColor = border}>
         <div style={{ display: "flex", gap: 12, alignItems: "flex-start", marginBottom: 10 }}>
           <div style={{ position: "relative", flexShrink: 0 }}>
-            <Avatar initials={initials(u.name)} size={44} dark={dark} />
+            <Avatar initials={initials(u.name)} src={u.avatar_url} size={44} dark={dark} />
             <span style={{ position: "absolute", top: 1, right: 1, width: 7, height: 7, borderRadius: "50%", background: capacityStatus === "On Project" ? "#f97316" : "#22c55e", border: `1.5px solid ${bg2}` }} />
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
@@ -2759,7 +2760,7 @@ const setViewingProfile = (user) => {
           <div>
             <div style={{ background: bg2, border: `1px solid ${border}`, borderRadius: 14, padding: "18px", marginBottom: 32 }}>
               <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
-                <Avatar initials={myInitials} size={40} dark={dark} />
+                <Avatar initials={myInitials} src={profile?.avatar_url} size={40} dark={dark} />
                 <div style={{ flex: 1 }}>
                   <textarea
                     ref={feedComposerRef}
@@ -3006,7 +3007,7 @@ const setViewingProfile = (user) => {
                         {/* Top row */}
                         <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
                           <button onClick={() => setViewingProfile(u)} style={{ background: "none", border: "none", cursor: "pointer", padding: 0, flexShrink: 0 }}>
-                            <Avatar initials={initials(u.name)} size={44} dark={dark} />
+                            <Avatar initials={initials(u.name)} src={u.avatar_url} size={44} dark={dark} />
                           </button>
                           <div style={{ flex: 1, minWidth: 0 }}>
                             <button onClick={() => setViewingProfile(u)} style={{ background: "none", border: "none", cursor: "pointer", padding: 0, textAlign: "left", display: "block", width: "100%" }}>
@@ -3117,7 +3118,7 @@ const setViewingProfile = (user) => {
                         return (
                           <div key={u.id} style={{ background: bg2, border: `1px solid ${border}`, borderRadius: 10, padding: "14px 16px", display: "flex", alignItems: "center", gap: 12 }}>
                             <button onClick={() => setViewingProfile(u)} style={{ background: "none", border: "none", cursor: "pointer", padding: 0, flexShrink: 0 }}>
-                              <Avatar initials={initials(u.name)} size={36} dark={dark} />
+                              <Avatar initials={initials(u.name)} src={u.avatar_url} size={36} dark={dark} />
                             </button>
                             <div style={{ flex: 1, minWidth: 0 }}>
                               <button onClick={() => setViewingProfile(u)} style={{ background: "none", border: "none", cursor: "pointer", padding: 0, fontFamily: "inherit" }}>
@@ -3506,7 +3507,7 @@ const setViewingProfile = (user) => {
                 {globalSearch.length > 0 && users.filter(u => u.id !== authUser?.id && u.name?.toLowerCase().includes(globalSearch.toLowerCase())).slice(0, 3).map(u => (
                   <button key={u.id} onClick={() => { setViewFullProfile(u); setGlobalSearch(""); setShowGlobalSearch(false); }} style={{ width: "100%", padding: "10px 12px", background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", display: "flex", gap: 10, alignItems: "center", textAlign: "left", borderTop: `1px solid ${border}` }}
                     onMouseEnter={e => e.currentTarget.style.background = bg2} onMouseLeave={e => e.currentTarget.style.background = "none"}>
-                    <Avatar initials={initials(u.name)} size={28} dark={dark} />
+                    <Avatar initials={initials(u.name)} src={u.avatar_url} size={28} dark={dark} />
                     <div>
                       <div style={{ fontSize: 13, color: text }}>{u.name}</div>
                       <div style={{ fontSize: 11, color: textMuted }}>{u.role}</div>
@@ -3553,7 +3554,7 @@ const setViewingProfile = (user) => {
                 <button key={u.id} onClick={() => { setViewFullProfile(u); setGlobalSearch(""); setShowGlobalSearch(false); }}
                   style={{ width: "100%", padding: "8px 14px", background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", display: "flex", gap: 8, alignItems: "center", textAlign: "left" }}
                   onMouseEnter={e => e.currentTarget.style.background = bg2} onMouseLeave={e => e.currentTarget.style.background = "none"}>
-                  <Avatar initials={initials(u.name)} size={22} dark={dark} />
+                  <Avatar initials={initials(u.name)} src={u.avatar_url} size={22} dark={dark} />
                   <div>
                     <div style={{ fontSize: 11, color: text }}>{u.name}</div>
                     <div style={{ fontSize: 10, color: textMuted }}>{u.role}</div>
@@ -3731,7 +3732,7 @@ const setViewingProfile = (user) => {
                 .map(u => (
                   <button key={u.id} onClick={() => { openDm(u); setShowNewDm(false); setNewDmSearch(""); }} style={{ display: "flex", gap: 12, alignItems: "center", padding: "10px 12px", background: "none", border: "none", borderRadius: 8, cursor: "pointer", textAlign: "left", fontFamily: "inherit", width: "100%" }}
                     onMouseEnter={e => e.currentTarget.style.background = bg2} onMouseLeave={e => e.currentTarget.style.background = "none"}>
-                    <Avatar initials={initials(u.name)} size={36} dark={dark} />
+                    <Avatar initials={initials(u.name)} src={u.avatar_url} size={36} dark={dark} />
                     <div style={{ minWidth: 0 }}>
                       <div style={{ fontSize: 13, color: text }}>{u.name}</div>
                       <div style={{ fontSize: 11, color: textMuted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{u.role}{u.username ? ` · @${u.username}` : ""}</div>
@@ -3784,7 +3785,7 @@ const setViewingProfile = (user) => {
                 <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                   {collabs.map((c) => (
                     <div key={c.user.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 12px", border: `1px solid ${border}`, borderRadius: 10, background: bg2 }}>
-                      <Avatar initials={initials(c.user.name)} size={34} dark={dark} />
+                      <Avatar initials={initials(c.user.name)} src={c.user.avatar_url} size={34} dark={dark} />
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ fontSize: 13, color: text }}>{c.user.name}</div>
                         <div style={{ fontSize: 11, color: textMuted }}>{c.user.role || "collaborator"}</div>
@@ -3892,7 +3893,7 @@ const setViewingProfile = (user) => {
                   {listUsers.map((u, i) => (
                     <div key={u.id} onClick={() => { setShowFollowList(null); setViewFullProfile(u); }} style={{ display: "flex", gap: 14, alignItems: "center", padding: "14px 16px", background: bg2, borderRadius: i === 0 && listUsers.length === 1 ? 10 : i === 0 ? "10px 10px 0 0" : i === listUsers.length - 1 ? "0 0 10px 10px" : 0, border: `1px solid ${border}`, borderBottom: i < listUsers.length - 1 ? "none" : `1px solid ${border}`, cursor: "pointer", transition: "opacity 0.15s" }}
                       onMouseEnter={e => e.currentTarget.style.opacity = "0.7"} onMouseLeave={e => e.currentTarget.style.opacity = "1"}>
-                      <Avatar initials={initials(u.name)} size={40} dark={dark} />
+                      <Avatar initials={initials(u.name)} src={u.avatar_url} size={40} dark={dark} />
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ fontSize: 14, color: text, marginBottom: 2 }}>{u.name}</div>
                         {u.username && <div style={{ fontSize: 11, color: textMuted }}>@{u.username}</div>}
@@ -4188,6 +4189,9 @@ const setViewingProfile = (user) => {
             });
             const mergedFeed = feedSort === "for-you" ? forYouFeed : feedSort === "top" ? topFeed : chronoFeed;
             const visibleFeed = mergedFeed.filter(item => !hiddenFeedIds.has(item.id));
+            const FEED_PAGE_SIZE = 20;
+            const pagedFeed = visibleFeed.slice(0, feedPage * FEED_PAGE_SIZE);
+            const hasMoreFeed = pagedFeed.length < visibleFeed.length;
 
             // Trending: top 3 liked posts in last 7 days with skill overlap
             const trendingPosts = posts
@@ -4235,7 +4239,7 @@ const setViewingProfile = (user) => {
                 <div style={{ display: "flex", gap: 10, marginBottom: 24, alignItems: "center", flexWrap: "wrap" }}>
                   <div style={{ display: "flex", gap: 4, background: bg2, borderRadius: 8, padding: 3, border: `1px solid ${border}` }}>
                     {[["for-you", "for you"], ["recent", "recent"], ["top", "top"]].map(([val, label]) => (
-                      <button key={val} className="hb" onClick={() => setFeedSort(val)} style={{ padding: "5px 14px", borderRadius: 6, fontSize: 11, cursor: "pointer", fontFamily: "inherit", border: "none", background: feedSort === val ? (dark ? "#fff" : "#111") : "transparent", color: feedSort === val ? (dark ? "#111" : "#fff") : textMuted, transition: "all 0.15s", fontWeight: feedSort === val ? 500 : 400 }}>
+                      <button key={val} className="hb" onClick={() => { setFeedSort(val); setFeedPage(1); }} style={{ padding: "5px 14px", borderRadius: 6, fontSize: 11, cursor: "pointer", fontFamily: "inherit", border: "none", background: feedSort === val ? (dark ? "#fff" : "#111") : "transparent", color: feedSort === val ? (dark ? "#111" : "#fff") : textMuted, transition: "all 0.15s", fontWeight: feedSort === val ? 500 : 400 }}>
                         {label}
                       </button>
                     ))}
@@ -4255,7 +4259,7 @@ const setViewingProfile = (user) => {
                 {/* Compose box — personalized */}
                 <div style={{ background: bg2, border: `1px solid ${border}`, borderRadius: 14, padding: "20px", marginBottom: 28 }}>
                   <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
-                    <Avatar initials={myInitials} size={44} dark={dark} />
+                    <Avatar initials={myInitials} src={profile?.avatar_url} size={44} dark={dark} />
                     <div style={{ flex: 1 }}>
                       <textarea
                         ref={feedComposerRef}
@@ -4376,7 +4380,7 @@ const setViewingProfile = (user) => {
                       <button className="hb" onClick={() => feedComposerRef.current?.focus()} style={btnP}>Post something →</button>
                     </div>
                   )
-                  : visibleFeed.map(item => {
+                  : pagedFeed.map(item => {
                     const reason = getReasonLabel(item);
                     const isOwn = (item.user_id || item.project?.owner_id) === authUser?.id;
 
@@ -4521,6 +4525,15 @@ const setViewingProfile = (user) => {
                       </div>
                     );
                   })}
+
+                {hasMoreFeed && (
+                  <div style={{ padding: "24px 0", textAlign: "center" }}>
+                    <button className="hb" onClick={() => setFeedPage(p => p + 1)}
+                      style={{ ...btnG, padding: "10px 28px", fontSize: 12 }}>
+                      load more
+                    </button>
+                  </div>
+                )}
                 </div>{/* end left column */}
 
                 {/* Right: sidebar */}
@@ -4534,7 +4547,7 @@ const setViewingProfile = (user) => {
                         {suggestedPeople.map((u, i) => (
                           <div key={u.id} style={{ padding: "10px 14px", borderBottom: i < suggestedPeople.length - 1 ? `1px solid ${border}` : "none", display: "flex", gap: 10, alignItems: "center", background: bg2 }}>
                             <button onClick={() => setViewingProfile(u)} style={{ background: "none", border: "none", cursor: "pointer", padding: 0, flexShrink: 0 }}>
-                              <Avatar initials={initials(u.name)} size={30} dark={dark} />
+                              <Avatar initials={initials(u.name)} src={u.avatar_url} size={30} dark={dark} />
                             </button>
                             <div style={{ flex: 1, minWidth: 0 }}>
                               <button onClick={() => setViewingProfile(u)} style={{ background: "none", border: "none", cursor: "pointer", padding: 0, textAlign: "left" }}>
@@ -4924,7 +4937,7 @@ const setViewingProfile = (user) => {
 
                     {/* Comment composer */}
                     <div style={{ display: "flex", gap: 10, marginBottom: 24 }}>
-                      <Avatar initials={myInitials} size={28} dark={dark} />
+                      <Avatar initials={myInitials} src={profile?.avatar_url} size={28} dark={dark} />
                       <div style={{ flex: 1 }}>
                         <textarea value={newCommentText} onChange={e => setNewCommentText(e.target.value)}
                           placeholder="add a comment..."
@@ -5063,7 +5076,7 @@ const setViewingProfile = (user) => {
                       onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = bg2; }}
                       onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = "none"; }}>
                       <div style={{ position: "relative", flexShrink: 0 }}>
-                        <Avatar initials={initials(other.name)} size={36} dark={dark} />
+                        <Avatar initials={initials(other.name)} src={other.avatar_url} size={36} dark={dark} />
                         {unreadCount > 0 && <span style={{ position: "absolute", top: -2, right: -2, minWidth: 16, height: 16, borderRadius: 8, background: text, color: bg, fontSize: 10, fontWeight: 600, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 4px", border: `2px solid ${bg}`, lineHeight: 1 }}>{unreadCount}</span>}
                       </div>
                       <div style={{ minWidth: 0, flex: 1 }}>
@@ -5085,7 +5098,7 @@ const setViewingProfile = (user) => {
               <>
                 <div style={{ padding: "16px 20px", borderBottom: `1px solid ${border}`, display: "flex", gap: 12, alignItems: "center" }}>
                   <button className="msgs-back hb" onClick={() => setActiveDmThread(null)} style={{ display: "none", background: "none", border: "none", color: textMuted, cursor: "pointer", fontFamily: "inherit", fontSize: 18, padding: "0 8px 0 0", lineHeight: 1 }}>‹</button>
-                  <Avatar initials={initials(activeDmThread.otherUser?.name)} size={32} dark={dark} />
+                  <Avatar initials={initials(activeDmThread.otherUser?.name)} src={activeDmThread.otherUser?.avatar_url} size={32} dark={dark} />
                   <div style={{ flex: 1 }}>
                     <div style={{ fontSize: 14, color: text, fontWeight: 500 }}>{activeDmThread.otherUser?.name}</div>
                     <div style={{ fontSize: 11, color: textMuted }}>{activeDmThread.otherUser?.role}</div>
@@ -5909,7 +5922,7 @@ const setViewingProfile = (user) => {
             {projectTab === "updates" && (
               <div>
                 <div style={{ display: "flex", gap: 10, marginBottom: 22, alignItems: "flex-start" }}>
-                  <Avatar initials={myInitials} size={28} dark={dark} />
+                  <Avatar initials={myInitials} src={profile?.avatar_url} size={28} dark={dark} />
                   <div style={{ flex: 1 }}>
                     <MentionInput dark={dark} value={newUpdate} onChange={setNewUpdate} placeholder="post an update... (@mention someone)" users={users} style={{ ...inputStyle, resize: "none", fontSize: 12, padding: "8px 12px" }} rows={2} />
                     {newUpdate.trim() && (
@@ -6164,7 +6177,7 @@ const setViewingProfile = (user) => {
             <div style={{ flexShrink: 0 }}>
               <div className="profile-identity-row" style={{ display: "flex", gap: 16, alignItems: "center", marginBottom: 12 }}>
                 <div style={{ position: "relative", flexShrink: 0 }}>
-                  <Avatar initials={initials(viewFullProfile.name)} size={52} dark={dark} />
+                  <Avatar initials={initials(viewFullProfile.name)} src={viewFullProfile.avatar_url} size={52} dark={dark} />
                   <span style={{ position: "absolute", top: 2, right: 2, width: 8, height: 8, borderRadius: "50%", background: getCapacityStatus(viewFullProfile.id) === "On Project" ? "#f97316" : "#22c55e", border: `1.5px solid ${bg}` }} />
                 </div>
                 <div>
@@ -6261,7 +6274,7 @@ const setViewingProfile = (user) => {
                 <div style={{ flexShrink: 0 }}>
                   <div className="profile-identity-row" style={{ display: "flex", gap: 16, alignItems: "center", marginBottom: 12 }}>
                     <div style={{ position: "relative", flexShrink: 0 }}>
-                      <Avatar initials={myInitials} size={52} dark={dark} />
+                      <Avatar initials={myInitials} src={profile?.avatar_url} size={52} dark={dark} />
                       <span style={{ position: "absolute", top: 2, right: 2, width: 8, height: 8, borderRadius: "50%", background: getCapacityStatus(authUser?.id) === "On Project" ? "#f97316" : "#22c55e", border: `1.5px solid ${bg}` }} />
                     </div>
                     <div>
@@ -6416,6 +6429,37 @@ const setViewingProfile = (user) => {
           ) : (
             <div>
               <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px", marginBottom: 20 }}>EDIT PROFILE</div>
+
+              {/* Avatar upload */}
+              <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 22 }}>
+                <div style={{ position: "relative", flexShrink: 0 }}>
+                  <Avatar initials={myInitials} src={profile?.avatar_url} size={64} dark={dark} />
+                  <label style={{ position: "absolute", inset: 0, borderRadius: "50%", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.45)", opacity: 0, transition: "opacity 0.15s" }}
+                    onMouseEnter={e => e.currentTarget.style.opacity = "1"}
+                    onMouseLeave={e => e.currentTarget.style.opacity = "0"}>
+                    <span style={{ fontSize: 10, color: "#fff", fontFamily: "inherit", letterSpacing: "0.5px" }}>change</span>
+                    <input type="file" accept="image/*" style={{ display: "none" }} onChange={async e => {
+                      const file = e.target.files[0];
+                      if (!file) return;
+                      showToast("Uploading...");
+                      const ext = file.name.split(".").pop();
+                      const path = `avatars/${authUser.id}/avatar.${ext}`;
+                      const { error } = await supabase.storage.from("user-uploads").upload(path, file, { upsert: true });
+                      if (error) { showToast("Upload failed."); return; }
+                      const { data: urlData } = supabase.storage.from("user-uploads").getPublicUrl(path);
+                      const avatarUrl = `${urlData.publicUrl}?t=${Date.now()}`;
+                      setProfile(prev => ({ ...prev, avatar_url: avatarUrl }));
+                      await supabase.from("profiles").update({ avatar_url: avatarUrl }).eq("id", authUser.id);
+                      showToast("Photo updated.");
+                    }} />
+                  </label>
+                </div>
+                <div>
+                  <div style={{ fontSize: 13, color: text, fontWeight: 500, marginBottom: 4 }}>{profile?.name || "Your Name"}</div>
+                  <div style={{ fontSize: 11, color: textMuted }}>hover photo to change</div>
+                </div>
+              </div>
+
               <div style={{ display: "flex", flexDirection: "column", gap: 14, marginBottom: 22 }}>
                 <div><label style={labelStyle}>DISPLAY NAME</label><input style={inputStyle} value={profile?.name || ""} onChange={e => setProfile({ ...profile, name: e.target.value })} /></div>
                 <div><label style={labelStyle}>USERNAME</label>
