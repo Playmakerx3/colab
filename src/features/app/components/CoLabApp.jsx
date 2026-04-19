@@ -3882,7 +3882,7 @@ const setViewingProfile = (user) => {
               .slice(0, 3);
 
             return (
-              <div>
+              <div style={{ maxWidth: 620, margin: "0 auto" }}>
                 <style>{`
                   @keyframes feedPulse { 0% { transform: scale(1); } 45% { transform: scale(1.08); } 100% { transform: scale(1); } }
                   @keyframes feedPostAppear { 0% { opacity: 0; transform: translateY(-8px); } 100% { opacity: 1; transform: translateY(0); } }
