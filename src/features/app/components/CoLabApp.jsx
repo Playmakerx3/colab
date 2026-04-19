@@ -1053,6 +1053,7 @@ function CoLab() {
   const [showInvitePanel, setShowInvitePanel] = useState(false);
   const [inviteLoading, setInviteLoading] = useState(false);
   const [inviteError, setInviteError] = useState("");
+  const [showDeployExplainer, setShowDeployExplainer] = useState(false);
   const [showShipModal, setShowShipModal] = useState(false);
   const [shipPostContent, setShipPostContent] = useState("");
   const [githubCommits, setGithubCommits] = useState([]);
@@ -1593,6 +1594,27 @@ const setViewingProfile = (user) => {
     });
     return counts;
   }, [projects, applications]);
+
+  const autoFeaturedProjects = useMemo(() => {
+    const now = Date.now();
+    return projects
+      .filter(p => !p.archived && !p.is_private && !p.shipped)
+      .map(p => {
+        const appCount = applications.filter(a => a.project_id === p.id).length;
+        const ageMs = now - new Date(p.created_at).getTime();
+        const ageDays = ageMs / (1000 * 60 * 60 * 24);
+        const freshness = Math.max(0, 30 - ageDays) / 30; // 1.0 = brand new, 0.0 = 30+ days old
+        const skillBreadth = (p.skills_needed || []).length;
+        const ownerRating = userRatings[p.owner_id]?.count > 0
+          ? (userRatings[p.owner_id].sum / userRatings[p.owner_id].count)
+          : 0;
+        const score = appCount * 2 + freshness * 10 + skillBreadth * 0.3 + ownerRating * 0.5;
+        return { ...p, _featuredScore: score };
+      })
+      .sort((a, b) => b._featuredScore - a._featuredScore)
+      .slice(0, 3);
+  }, [projects, applications, userRatings]);
+
   const myPosts = posts.filter((p) => p.user_id === authUser?.id);
   const hasNoProfileActivity = myProjects.length === 0 && myPosts.length === 0;
   const suggestedConnectUsers = useMemo(() => {
@@ -3854,17 +3876,16 @@ const setViewingProfile = (user) => {
                   ))}
                 </div>
 
-                {/* Featured */}
-                {projects.filter(p => p.featured && !p.archived && !p.is_private).length > 0 && (
+                {/* Featured (algorithm-driven) */}
+                {autoFeaturedProjects.length > 0 && (
                   <div>
                     <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px", marginBottom: 12 }}>★ FEATURED</div>
                     <div style={{ border: `1px solid ${border}`, borderRadius: 10, overflow: "hidden" }}>
-                      {projects.filter(p => p.featured && !p.archived && !p.is_private).slice(0, 3).map((p, i, arr) => (
+                      {autoFeaturedProjects.map((p, i, arr) => (
                         <div key={p.id} onClick={() => { setActiveProject(p); loadProjectData(p.id); }} style={{ padding: "10px 14px", background: bg2, borderBottom: i < arr.length - 1 ? `1px solid ${border}` : "none", cursor: "pointer", transition: "opacity 0.15s" }}
                           onMouseEnter={e => e.currentTarget.style.opacity = "0.7"} onMouseLeave={e => e.currentTarget.style.opacity = "1"}>
                           <div style={{ fontSize: 12, fontWeight: 500, color: text, marginBottom: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.title}</div>
                           <div style={{ fontSize: 10, color: textMuted }}>{p.owner_name} · {p.category}</div>
-                          {p.shipped && <div style={{ fontSize: 10, color: "#22c55e", marginTop: 2 }}>shipped ✓</div>}
                         </div>
                       ))}
                     </div>
@@ -4592,7 +4613,10 @@ const setViewingProfile = (user) => {
                             <span style={{ fontSize: 10, padding: "2px 8px", borderRadius: 999, border: `1px solid ${border}`, color: health.status === PROJECT_HEALTH.ACTIVE ? "#22c55e" : health.status === PROJECT_HEALTH.AT_RISK ? "#f59e0b" : "#ef4444" }}>
                               {health.status}
                             </span>
-                            {pendingApps > 0 && <button className="hb" onClick={e => { e.stopPropagation(); openReviewApplicants(p); }} style={{ fontSize: 10, padding: "2px 8px", border: `1px solid ${border}`, borderRadius: 4, background: "none", color: text, cursor: "pointer", fontFamily: "inherit", flexShrink: 0 }}>review</button>}
+                            <div style={{ display: "flex", gap: 4, alignItems: "center", flexShrink: 0 }}>
+                              {pendingApps > 0 && <button className="hb" onClick={e => { e.stopPropagation(); openReviewApplicants(p); }} style={{ fontSize: 10, padding: "2px 8px", border: `1px solid ${border}`, borderRadius: 4, background: "none", color: text, cursor: "pointer", fontFamily: "inherit" }}>review</button>}
+                              {!p.shipped && <button className="hb" onClick={e => { e.stopPropagation(); handleArchiveProject(p.id); }} style={{ fontSize: 10, padding: "2px 8px", border: "none", borderRadius: 4, background: "none", color: textMuted, cursor: "pointer", fontFamily: "inherit", opacity: 0.5 }} title="Archive project">archive</button>}
+                            </div>
                           </div>
                           {/* Task-based progress */}
                           {(() => {
@@ -4745,27 +4769,9 @@ const setViewingProfile = (user) => {
                 </>
               )}
               {activeProject.owner_id === authUser?.id && !activeProject.shipped && (
-                <>
-                  <button className="hb" onClick={() => handleMarkProjectCompleted(activeProject.id)}
-                    style={{ background: "none", border: `1px solid ${border}`, borderRadius: 6, padding: "4px 10px", fontSize: 10, cursor: "pointer", color: textMuted, fontFamily: "inherit" }}>
-                    mark completed
-                  </button>
-                  <button className="hb" onClick={() => { setShipPostContent(`just shipped: ${activeProject.title}. built it with the team on CoLab.`); setShowShipModal(true); }}
-                    style={{ background: "none", border: `1px solid ${border}`, borderRadius: 6, padding: "4px 10px", fontSize: 10, cursor: "pointer", color: textMuted, fontFamily: "inherit" }}>
-                    ship it
-                  </button>
-                </>
-              )}
-              {activeProject.owner_id === authUser?.id && (
-                <button className="hb" onClick={() => handleToggleFeatured(activeProject.id, !activeProject.featured)}
-                  style={{ background: activeProject.featured ? text : "none", border: `1px solid ${border}`, borderRadius: 6, padding: "4px 10px", fontSize: 10, cursor: "pointer", color: activeProject.featured ? bg : textMuted, fontFamily: "inherit" }}>
-                  {activeProject.featured ? "★ featured" : "feature"}
-                </button>
-              )}
-              {activeProject.owner_id === authUser?.id && (
-                <button className="hb" onClick={() => handleArchiveProject(activeProject.id)}
+                <button className="hb" onClick={() => { setShipPostContent(`just deployed: ${activeProject.title}. built it with the team on CoLab.`); setShowDeployExplainer(true); }}
                   style={{ background: "none", border: `1px solid ${border}`, borderRadius: 6, padding: "4px 10px", fontSize: 10, cursor: "pointer", color: textMuted, fontFamily: "inherit" }}>
-                  archive
+                  deploy
                 </button>
               )}
             </div>
@@ -5929,17 +5935,55 @@ const setViewingProfile = (user) => {
         />
       )}
 
+      {/* Deploy explainer (step 1) */}
+      {showDeployExplainer && (
+        <div onClick={() => setShowDeployExplainer(false)} style={{ position: "fixed", inset: 0, background: dark ? "rgba(0,0,0,0.92)" : "rgba(200,200,200,0.88)", zIndex: 300, display: "flex", alignItems: "center", justifyContent: "center", backdropFilter: "blur(12px)", padding: 16 }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: bg, border: `1px solid ${border}`, borderRadius: 16, padding: "32px", width: "100%", maxWidth: 420 }}>
+            <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px", marginBottom: 16 }}>DEPLOY</div>
+            <div style={{ fontSize: 22, fontWeight: 400, letterSpacing: "-1px", color: text, marginBottom: 16, lineHeight: 1.3 }}>Ready to go live?</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 28 }}>
+              <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
+                <span style={{ fontSize: 16, lineHeight: 1 }}>✓</span>
+                <div>
+                  <div style={{ fontSize: 13, color: text, marginBottom: 2 }}>Marks the project as complete</div>
+                  <div style={{ fontSize: 11, color: textMuted, lineHeight: 1.5 }}>No more tasks will be added. The project status locks in as deployed.</div>
+                </div>
+              </div>
+              <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
+                <span style={{ fontSize: 16, lineHeight: 1 }}>✦</span>
+                <div>
+                  <div style={{ fontSize: 13, color: text, marginBottom: 2 }}>Shares a post with your network</div>
+                  <div style={{ fontSize: 11, color: textMuted, lineHeight: 1.5 }}>You'll write a short note about what you built — visible to everyone on CoLab.</div>
+                </div>
+              </div>
+              <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
+                <span style={{ fontSize: 16, lineHeight: 1 }}>★</span>
+                <div>
+                  <div style={{ fontSize: 13, color: text, marginBottom: 2 }}>Unlocks team reviews</div>
+                  <div style={{ fontSize: 11, color: textMuted, lineHeight: 1.5 }}>Your collaborators will be prompted to rate each other. Ratings build your reputation on CoLab.</div>
+                </div>
+              </div>
+            </div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button className="hb" onClick={() => setShowDeployExplainer(false)} style={{ ...btnG, flex: 1 }}>cancel</button>
+              <button className="hb" onClick={() => { setShowDeployExplainer(false); setShowShipModal(true); }} style={{ ...btnP, flex: 2 }}>continue →</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Deploy post modal (step 2) */}
       {showShipModal && (
         <div onClick={() => setShowShipModal(false)} style={{ position: "fixed", inset: 0, background: dark ? "rgba(0,0,0,0.92)" : "rgba(200,200,200,0.88)", zIndex: 300, display: "flex", alignItems: "center", justifyContent: "center", backdropFilter: "blur(12px)", padding: 16 }}>
           <div onClick={e => e.stopPropagation()} style={{ background: bg, border: `1px solid ${border}`, borderRadius: 16, padding: "28px", width: "100%", maxWidth: 460 }}>
-            <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px", marginBottom: 8 }}>SHIP IT</div>
+            <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px", marginBottom: 8 }}>DEPLOY</div>
             {(() => {
               const openCount = tasks.filter(t => t.project_id === activeProject?.id && !t.done).length;
               return openCount === 0
                 ? <div style={{ fontSize: 18, fontWeight: 400, letterSpacing: "-0.5px", color: text, marginBottom: 6 }}>All tasks complete.</div>
                 : <div style={{ fontSize: 18, fontWeight: 400, letterSpacing: "-0.5px", color: text, marginBottom: 6 }}>{openCount} task{openCount !== 1 ? "s" : ""} still open.</div>;
             })()}
-            <div style={{ fontSize: 12, color: textMuted, marginBottom: 20 }}>Mark this project as shipped and share what you built with your network.</div>
+            <div style={{ fontSize: 12, color: textMuted, marginBottom: 20 }}>Write a note about what you built — it'll be shared with your network.</div>
             <textarea
               value={shipPostContent}
               onChange={e => setShipPostContent(e.target.value)}
@@ -5947,13 +5991,13 @@ const setViewingProfile = (user) => {
               style={{ ...inputStyle, resize: "none", minHeight: 100, fontSize: 13, lineHeight: 1.7, marginBottom: 16 }}
             />
             <div style={{ display: "flex", gap: 8 }}>
-              <button className="hb" onClick={() => setShowShipModal(false)} style={{ ...btnG, flex: 1 }}>later</button>
+              <button className="hb" onClick={() => setShowShipModal(false)} style={{ ...btnG, flex: 1 }}>back</button>
               <button className="hb" onClick={async () => {
                 const proj = activeProject;
                 await handleShipProject(proj?.id, shipPostContent);
                 const hasTeammates = applications.some(a => a.project_id === proj?.id && normalizeApplicationStatus(a.status) === "accepted") || proj?.owner_id !== authUser?.id;
                 if (hasTeammates) setTimeout(() => setShowTeamReview(proj), 400);
-              }} style={{ ...btnP, flex: 2 }}>ship it →</button>
+              }} style={{ ...btnP, flex: 2 }}>deploy →</button>
             </div>
           </div>
         </div>
