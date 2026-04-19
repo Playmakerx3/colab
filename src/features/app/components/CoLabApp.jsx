@@ -1043,6 +1043,8 @@ function CoLab() {
   const [exploreTab, setExploreTab] = useState("feed");
   const [feedSort, setFeedSort] = useState("for-you");
   const [feedPage, setFeedPage] = useState(1);
+  const [composerFocused, setComposerFocused] = useState(false);
+  const [composerPlaceholderIdx, setComposerPlaceholderIdx] = useState(0);
   const [hiddenFeedIds, setHiddenFeedIds] = useState(new Set());
   const [followingOnly, setFollowingOnly] = useState(false);
   const [teamReviews, setTeamReviews] = useState([]);
@@ -1139,6 +1141,19 @@ function CoLab() {
   const [newPostMediaType, setNewPostMediaType] = useState(""); // image|video|audio|youtube|pdf
   const [autoOpenComposer, setAutoOpenComposer] = useState(false);
   const [expandedComments, setExpandedComments] = useState({});
+
+  const COMPOSER_PLACEHOLDERS = [
+    "What are you shipping?",
+    "Who are you looking for?",
+    "What did you just learn?",
+    "What are you building?",
+    "Got a win to share?",
+  ];
+  useEffect(() => {
+    if (composerFocused) return;
+    const t = setInterval(() => setComposerPlaceholderIdx(i => (i + 1) % COMPOSER_PLACEHOLDERS.length), 3000);
+    return () => clearInterval(t);
+  }, [composerFocused]);
   const [projectFiles, setProjectFiles] = useState([]);
   const [projectDocs, setProjectDocs] = useState([]);
   const [activeDoc, setActiveDoc] = useState(null);
@@ -4584,9 +4599,9 @@ const setViewingProfile = (user) => {
               handleSaveFeedPostEdit,
             };
             const quickActions = [
-              { label: "↗ share update", text: "Working on " },
-              { label: "+ need collaborators", text: "Looking for someone who can " },
-              { label: "◎ open to work", text: "I'm available to collaborate on " },
+              { label: "#share-update", text: "Working on " },
+              { label: "#collaborators", text: "Looking for someone who can " },
+              { label: "#open-to-work", text: "I'm available to collaborate on " },
             ];
             // ── Feed data prep ─────────────────────────────────────────────
             const mySkillSet = new Set(profile?.skills || []);
@@ -4759,24 +4774,25 @@ const setViewingProfile = (user) => {
                 )}
 
                 {/* Compose box */}
-                <div style={{ borderBottom: `1px solid ${border}`, paddingBottom: 16, marginBottom: 28 }}>
+                <div style={{ marginBottom: 28 }}>
                   <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
-                    <Avatar initials={myInitials} src={profile?.avatar_url} size={36} dark={dark} />
-                    <div style={{ flex: 1 }}>
+                    <Avatar initials={myInitials} src={profile?.avatar_url} size={32} dark={dark} style={{ marginTop: 4, flexShrink: 0 }} />
+                    <div style={{ flex: 1, borderBottom: `1px solid ${composerFocused || newPostContent ? text : border}`, paddingBottom: composerFocused || newPostContent ? 12 : 8, transition: "border-color 0.2s" }}>
                       <textarea
                         ref={feedComposerRef}
-                        placeholder={`What are you building, ${firstName}?`}
+                        placeholder={COMPOSER_PLACEHOLDERS[composerPlaceholderIdx]}
                         value={newPostContent}
                         onChange={e => setNewPostContent(e.target.value)}
-                        rows={newPostContent || autoOpenComposer ? 4 : 2}
-                        style={{ background: "none", border: "none", outline: "none", resize: "none", fontSize: 14, padding: "4px 0", color: text, lineHeight: 1.65, width: "100%", fontFamily: "inherit" }}
+                        onFocus={() => setComposerFocused(true)}
+                        onBlur={() => { if (!newPostContent) setComposerFocused(false); }}
+                        style={{ background: "none", border: "none", outline: "none", resize: "none", fontSize: 14, padding: "2px 0", color: text, lineHeight: 1.65, width: "100%", fontFamily: "inherit", height: composerFocused || newPostContent ? "72px" : "26px", transition: "height 0.2s ease", overflow: "hidden" }}
                       />
-                      {/* Quick action chips */}
-                      {!newPostContent && !autoOpenComposer && (
-                        <div style={{ display: "flex", gap: 6, marginTop: 10, flexWrap: "wrap" }}>
+                      {/* Hashtag chips — shown when idle */}
+                      {!newPostContent && !composerFocused && !autoOpenComposer && (
+                        <div style={{ display: "flex", gap: 10, marginTop: 6, flexWrap: "wrap" }}>
                           {quickActions.map(({ label, text }) => (
-                            <button key={label} className="hb" onClick={() => { setNewPostContent(text); feedComposerRef.current?.focus(); }}
-                              style={{ fontSize: 11, padding: "4px 12px", background: bg2, border: `1px solid ${border}`, borderRadius: 999, color: textMuted, cursor: "pointer", fontFamily: "inherit", transition: "all 0.15s", letterSpacing: "0.1px" }}>
+                            <button key={label} className="hb" onClick={() => { setNewPostContent(text); setComposerFocused(true); feedComposerRef.current?.focus(); }}
+                              style={{ fontSize: 11, padding: "0", background: "none", border: "none", color: textMuted, cursor: "pointer", fontFamily: "inherit", opacity: 0.7, letterSpacing: "0.1px" }}>
                               {label}
                             </button>
                           ))}
