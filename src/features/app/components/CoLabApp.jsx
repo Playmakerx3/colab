@@ -1,3 +1,20 @@
+/* SQL MIGRATIONS TO RUN:
+create table if not exists reports (
+  id uuid default gen_random_uuid() primary key,
+  reporter_id uuid not null,
+  content_type text not null,
+  content_id uuid not null,
+  reason text not null,
+  details text,
+  created_at timestamptz default now()
+);
+alter table reports enable row level security;
+create policy "Anyone can submit a report" on reports for insert with check (auth.uid() = reporter_id);
+create policy "Reporters can view own reports" on reports for select using (auth.uid() = reporter_id);
+alter table posts add column if not exists edited_at timestamptz;
+alter table projects add column if not exists cover_image_url text;
+alter table tasks add column if not exists priority text default 'medium';
+*/
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import LandingPage from "../../landing/LandingPage";
 import { supabase } from "../../../supabase";
@@ -53,6 +70,7 @@ const normalizeApplicationStatus = (status) => {
 
 const applicationStatusStyles = {
   pending: { label: "pending", color: "#f59e0b" },
+  invited: { label: "invited", color: "#60a5fa" },
   accepted: { label: "accepted", color: "#22c55e" },
   rejected: { label: "rejected", color: "#ef4444" },
 };
@@ -534,7 +552,9 @@ function PostCard({ post, ctx }) {
     setViewingProfile, handleLike, handleRepost, setExpandedComments, loadComments,
     myInitials, setPostComments, profile, supabase, pendingLikeIds,
     commentPulseIds, pendingCommentByPost, recentActivityByPost, justInsertedPostIds,
-    markCommentPending, markRecentActivity, navigateToProject,
+    markCommentPending, markRecentActivity, navigateToProject, postMenuOpenId, setPostMenuOpenId,
+    openReportModal, editingFeedPostId, setEditingFeedPostId, editingFeedPostContent, setEditingFeedPostContent,
+    handleSaveFeedPostEdit,
   } = ctx;
   const isLiked = (postLikes.myLikes || []).includes(post.id);
   const isReposted = (postReposts.myReposts || []).includes(post.id);
@@ -552,7 +572,6 @@ function PostCard({ post, ctx }) {
     return isGoogleDriveUrl(linkedUrl || "") ? linkedUrl : null;
   }, [post.media_url, post.content]);
   const [localComment, setLocalComment] = React.useState("");
-  const [hovered, setHovered] = React.useState(false);
   const mySkillSet = React.useMemo(() => new Set(profile?.skills || []), [profile]);
 
   const submitComment = async () => {
@@ -598,8 +617,6 @@ function PostCard({ post, ctx }) {
 
   return (
     <div
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
       style={{
         borderBottom: `1px solid ${border}`,
         padding: "24px 0",
@@ -640,15 +657,34 @@ function PostCard({ post, ctx }) {
                 )}
               </div>
             </div>
-            {isOwner && hovered && (
-              <button className="hb" onClick={() => handleDeletePost(post.id)} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontSize: 11, fontFamily: "inherit", opacity: 0.6 }}>✕</button>
-            )}
+            <div style={{ position: "relative" }}>
+              <button className="hb" onClick={() => setPostMenuOpenId((prev) => (prev === post.id ? null : post.id))} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontSize: 14, fontFamily: "inherit" }}>⋯</button>
+              {postMenuOpenId === post.id && (
+                <div style={{ position: "absolute", right: 0, top: 22, background: dark ? "#111" : "#fff", border: `1px solid ${border}`, borderRadius: 8, minWidth: 120, zIndex: 20 }}>
+                  <button className="hb" onClick={() => openReportModal({ contentType: "post", contentId: post.id, label: "post" })} style={{ width: "100%", textAlign: "left", background: "none", border: "none", color: text, padding: "8px 10px", fontFamily: "inherit", fontSize: 11, cursor: "pointer" }}>report</button>
+                  {isOwner && <button className="hb" onClick={() => { setEditingFeedPostId(post.id); setEditingFeedPostContent(post.content || ""); setPostMenuOpenId(null); }} style={{ width: "100%", textAlign: "left", background: "none", border: "none", color: text, padding: "8px 10px", fontFamily: "inherit", fontSize: 11, cursor: "pointer" }}>edit</button>}
+                  {isOwner && <button className="hb" onClick={() => { handleDeletePost(post.id); setPostMenuOpenId(null); }} style={{ width: "100%", textAlign: "left", background: "none", border: "none", color: "#ef4444", padding: "8px 10px", fontFamily: "inherit", fontSize: 11, cursor: "pointer" }}>delete</button>}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>
 
       {/* Content */}
-      <div style={{ fontSize: 14, color: text, lineHeight: 1.75, marginBottom: 14, paddingLeft: 52, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{linkifyText(post.content, text)}</div>
+      {editingFeedPostId === post.id ? (
+        <div style={{ marginBottom: 14, paddingLeft: 52 }}>
+          <textarea value={editingFeedPostContent} onChange={(e) => setEditingFeedPostContent(e.target.value)} rows={4} style={{ ...inputStyle, fontSize: 13, resize: "vertical" }} />
+          <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+            <button className="hb" onClick={() => handleSaveFeedPostEdit(post)} style={{ ...btnP, padding: "6px 12px", fontSize: 11 }}>save</button>
+            <button className="hb" onClick={() => { setEditingFeedPostId(null); setEditingFeedPostContent(""); }} style={{ background: "none", border: `1px solid ${border}`, borderRadius: 6, color: textMuted, padding: "6px 12px", fontSize: 11, fontFamily: "inherit", cursor: "pointer" }}>cancel</button>
+          </div>
+        </div>
+      ) : (
+        <div style={{ fontSize: 14, color: text, lineHeight: 1.75, marginBottom: 14, paddingLeft: 52, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+          {linkifyText(post.content, text)}{post.edited_at && <span style={{ fontSize: 10, color: textMuted, marginLeft: 8 }}>(edited)</span>}
+        </div>
+      )}
 
       {/* Media */}
       {post.media_url && !isGoogleDriveUrl(post.media_url) && (
@@ -1089,7 +1125,7 @@ function CoLab() {
   const [search, setSearch] = useState("");
   const [toast, setToast] = useState(null);
   const [showCreate, setShowCreate] = useState(false);
-  const [newProject, setNewProject] = useState({ title: "", description: "", category: CATEGORIES[0], skills: [], maxCollaborators: 2, location: "", goals: "", timeline: "", is_private: false });
+  const [newProject, setNewProject] = useState({ title: "", description: "", category: CATEGORIES[0], skills: [], maxCollaborators: 2, location: "", goals: "", timeline: "", is_private: false, coverImageFile: null });
   const [createProjectError, setCreateProjectError] = useState("");
   const [isCreatingProject, setIsCreatingProject] = useState(false);
   const [newTaskText, setNewTaskText] = useState("");
@@ -1128,7 +1164,7 @@ function CoLab() {
   const [editingTaskId, setEditingTaskId] = useState(null);
   const [editingTaskTitle, setEditingTaskTitle] = useState("");
   const [taskEditorTaskId, setTaskEditorTaskId] = useState(null);
-  const [taskEditorDraft, setTaskEditorDraft] = useState({ assigneeId: "", dueDate: "", description: "" });
+  const [taskEditorDraft, setTaskEditorDraft] = useState({ assigneeId: "", dueDate: "", description: "", priority: "medium" });
   const [taskUpdatePendingById, setTaskUpdatePendingById] = useState({});
   const [hideFirstTimeGuide, setHideFirstTimeGuide] = useState(false);
   const [projectLastReadAt, setProjectLastReadAt] = useState({});
@@ -1140,6 +1176,18 @@ function CoLab() {
   const [showCollaboratorsList, setShowCollaboratorsList] = useState(false);
   const [discoverSwipes, setDiscoverSwipes] = useState(null); // null=unloaded, Set=loaded
   const [discoverMatch, setDiscoverMatch] = useState(null); // matched user object
+  const [postMenuOpenId, setPostMenuOpenId] = useState(null);
+  const [communityMenuOpenId, setCommunityMenuOpenId] = useState(null);
+  const [reportModal, setReportModal] = useState(null); // { contentType, contentId, label }
+  const [reportReason, setReportReason] = useState("Spam");
+  const [reportDetails, setReportDetails] = useState("");
+  const [editingFeedPostId, setEditingFeedPostId] = useState(null);
+  const [editingFeedPostContent, setEditingFeedPostContent] = useState("");
+  const [showInviteUserModal, setShowInviteUserModal] = useState(false);
+  const [inviteSearch, setInviteSearch] = useState("");
+  const [inviteTargetUser, setInviteTargetUser] = useState(null);
+  const [newTaskPriority, setNewTaskPriority] = useState("medium");
+  const [coverUploading, setCoverUploading] = useState(false);
 
   const messagesEndRef = useRef(null);
   const dmEndRef = useRef(null);
@@ -1346,6 +1394,16 @@ const setViewingProfile = (user) => {
       showToast("Task update failed. Changes rolled back.");
     } else {
       setTasks((prev) => prev.map((task) => (task.id === taskId ? data : task)));
+      if (updates.assigned_to && updates.assigned_to !== previousTask.assigned_to && updates.assigned_to !== authUser?.id && activeProject?.id) {
+        await supabase.from("notifications").insert({
+          user_id: updates.assigned_to,
+          type: "task_assigned",
+          text: `You've been assigned a task in ${activeProject.title}: ${data.text}`,
+          entity_id: data.id,
+          project_id: activeProject.id,
+          read: false,
+        });
+      }
     }
     setTaskUpdatePendingById((prev) => {
       const next = { ...prev };
@@ -1361,6 +1419,7 @@ const setViewingProfile = (user) => {
       assigneeId: task.assigned_to || "",
       dueDate: task.due_date || "",
       description: task.description || "",
+      priority: task.priority || "medium",
     });
   };
 
@@ -2255,6 +2314,9 @@ const setViewingProfile = (user) => {
         onMouseEnter={e => e.currentTarget.style.opacity = "0.65"} onMouseLeave={e => e.currentTarget.style.opacity = "1"}
         onClick={() => { setActiveProject(p); loadProjectData(p.id); }}>
         <div>
+          {p.cover_image_url && (
+            <img src={p.cover_image_url} alt={`${p.title} cover`} style={{ width: "100%", height: 86, objectFit: "cover", borderRadius: 8, border: `1px solid ${border}`, marginBottom: 10 }} />
+          )}
           <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 8, flexWrap: "wrap" }}>
             <button onClick={e => { e.stopPropagation(); if (owner) setViewingProfile(owner); }} style={{ background: "none", border: "none", cursor: "pointer", padding: 0, display: "flex", alignItems: "center", gap: 6 }}>
               <Avatar initials={p.owner_initials} src={owner?.avatar_url} size={20} dark={dark} />
@@ -2551,6 +2613,134 @@ const setViewingProfile = (user) => {
     }
   };
 
+  const openReportModal = ({ contentType, contentId, label }) => {
+    setReportModal({ contentType, contentId, label });
+    setReportReason("Spam");
+    setReportDetails("");
+    setPostMenuOpenId(null);
+    setCommunityMenuOpenId(null);
+  };
+
+  const submitReport = async () => {
+    if (!reportModal || !authUser?.id) return;
+    const payload = {
+      reporter_id: authUser.id,
+      content_type: reportModal.contentType,
+      content_id: reportModal.contentId,
+      reason: reportReason,
+      details: reportDetails.trim() || null,
+      created_at: new Date().toISOString(),
+    };
+    const { error } = await supabase.from("reports").insert(payload);
+    if (error) {
+      showToast("Couldn't submit report. Please try again.");
+      return;
+    }
+    showToast("Report submitted. Thank you.");
+    setReportModal(null);
+  };
+
+  const handleSaveFeedPostEdit = async (post) => {
+    const newContent = editingFeedPostContent.trim();
+    if (!newContent) return;
+    const editedAt = new Date().toISOString();
+    const { error } = await supabase
+      .from("posts")
+      .update({ content: newContent, edited_at: editedAt })
+      .eq("id", post.id)
+      .eq("user_id", authUser.id);
+    if (error) {
+      showToast("Could not save post edits.");
+      return;
+    }
+    setPosts((prev) => prev.map((p) => (p.id === post.id ? { ...p, content: newContent, edited_at: editedAt } : p)));
+    setEditingFeedPostId(null);
+    setEditingFeedPostContent("");
+    showToast("Post updated.");
+  };
+
+  const filteredInviteUsers = useMemo(() => {
+    if (!activeProject || !showInviteUserModal) return [];
+    const term = inviteSearch.trim().toLowerCase();
+    const acceptedIds = new Set(applications.filter((a) => a.project_id === activeProject.id && a.status === "accepted").map((a) => a.applicant_id));
+    const invitedIds = new Set(applications.filter((a) => a.project_id === activeProject.id && a.status === "invited").map((a) => a.applicant_id));
+    return users
+      .filter((u) => u.id !== activeProject.owner_id && u.id !== authUser?.id && !acceptedIds.has(u.id) && !invitedIds.has(u.id))
+      .filter((u) => !term || (u.name || "").toLowerCase().includes(term) || (u.username || "").toLowerCase().includes(term))
+      .slice(0, 20);
+  }, [activeProject, applications, authUser?.id, inviteSearch, showInviteUserModal, users]);
+
+  const confirmDirectInvite = async () => {
+    if (!activeProject || !inviteTargetUser) return;
+    const createdAt = new Date().toISOString();
+    const { data, error } = await supabase.from("applications").insert({
+      project_id: activeProject.id,
+      applicant_id: inviteTargetUser.id,
+      applicant_name: inviteTargetUser.name,
+      applicant_initials: initials(inviteTargetUser.name),
+      applicant_role: inviteTargetUser.role || "",
+      applicant_bio: inviteTargetUser.bio || "",
+      applicant_skills: inviteTargetUser.skills || [],
+      status: "invited",
+      created_at: createdAt,
+    }).select().single();
+    if (error) {
+      showToast("Could not send invite.");
+      return;
+    }
+    if (data) setApplications((prev) => [data, ...prev]);
+    await supabase.from("notifications").insert({
+      user_id: inviteTargetUser.id,
+      type: "invite",
+      text: `You've been invited to join ${activeProject.title}`,
+      entity_id: activeProject.id,
+      project_id: activeProject.id,
+      read: false,
+    });
+    setShowInviteUserModal(false);
+    setInviteTargetUser(null);
+    setInviteSearch("");
+    showToast("Invite sent.");
+  };
+
+  const handleInviteResponse = async (notif, status) => {
+    const projectId = notif.project_id || notif.projectId || notif.entity_id;
+    if (!projectId || !authUser?.id) return;
+    const { data: app } = await supabase
+      .from("applications")
+      .select("*")
+      .eq("project_id", projectId)
+      .eq("applicant_id", authUser.id)
+      .eq("status", "invited")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (!app?.id) return;
+    await supabase.from("applications").update({ status }).eq("id", app.id);
+    setApplications((prev) => prev.map((a) => (a.id === app.id ? { ...a, status } : a)));
+    await supabase.from("notifications").update({ read: true }).eq("id", notif.id);
+    setNotifications((prev) => prev.filter((n) => n.id !== notif.id));
+    showToast(status === "accepted" ? "Invite accepted." : "Invite declined.");
+  };
+
+  const handleUploadProjectCover = async (project, file) => {
+    if (!project?.id || !file) return;
+    setCoverUploading(true);
+    const path = `project-covers/${project.id}/${Date.now()}-${file.name}`;
+    const { error: uploadError } = await supabase.storage.from("user-uploads").upload(path, file, { upsert: true });
+    if (uploadError) {
+      setCoverUploading(false);
+      showToast("Cover upload failed.");
+      return;
+    }
+    const { data: { publicUrl } } = supabase.storage.from("user-uploads").getPublicUrl(path);
+    await supabase.from("projects").update({ cover_image_url: publicUrl }).eq("id", project.id);
+    setProjects((prev) => prev.map((p) => (p.id === project.id ? { ...p, cover_image_url: publicUrl } : p)));
+    if (activeProject?.id === project.id) setActiveProject((prev) => ({ ...prev, cover_image_url: publicUrl }));
+    setCoverUploading(false);
+    showToast("Cover image updated.");
+  };
+
   const {
     loadProjectData,
     handlePostProject,
@@ -2605,6 +2795,8 @@ const setViewingProfile = (user) => {
     setTaskAssignee,
     taskDueDate,
     setTaskDueDate,
+    newTaskPriority,
+    setNewTaskPriority,
     newUpdate,
     setNewUpdate,
     detectAndNotifyMentions,
@@ -3449,6 +3641,7 @@ const setViewingProfile = (user) => {
                   <button onClick={() => setShowLegalModal(true)} style={{ background: "none", border: "none", color: text, cursor: "pointer", fontFamily: "inherit", fontSize: 11, textDecoration: "underline", padding: 0 }}>
                     Legal Notice & Terms
                   </button>
+                  {" "}(<a href="/terms" target="_blank" rel="noreferrer" style={{ color: text }}>Terms</a> · <a href="/privacy" target="_blank" rel="noreferrer" style={{ color: text }}>Privacy</a>)
                 </label>
               </div>
             )}
@@ -3863,6 +4056,15 @@ const setViewingProfile = (user) => {
                     {!n.projectId && !n.userId && !n.postId && <span style={{ fontSize: 11, color: textMuted }}>{n.sub}</span>}
                     <span style={{ fontSize: 11, color: textMuted }}> · {n.time}</span>
                   </div>
+                  {n.type === "invite" && (
+                    <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
+                      <button className="hb" onClick={() => handleInviteResponse(n, "accepted")} style={{ flex: 1, background: text, color: bg, border: "none", borderRadius: 6, padding: "6px", fontSize: 11, cursor: "pointer", fontFamily: "inherit" }}>accept</button>
+                      <button className="hb" onClick={() => handleInviteResponse(n, "declined")} style={{ flex: 1, background: "none", color: textMuted, border: `1px solid ${border}`, borderRadius: 6, padding: "6px", fontSize: 11, cursor: "pointer", fontFamily: "inherit" }}>decline</button>
+                    </div>
+                  )}
+                  {n.type === "task_assigned" && (
+                    <div style={{ fontSize: 10, color: textMuted, marginBottom: 8 }}>Task assignment</div>
+                  )}
                   {n.type === "application" && n.applicant && (
                     <div>
                       <div style={{ background: bg2, border: `1px solid ${border}`, borderRadius: 8, padding: "10px 12px", marginBottom: 8 }}>
@@ -4277,7 +4479,9 @@ const setViewingProfile = (user) => {
               myInitials, setPostComments, profile, supabase,
               pendingLikeIds, commentPulseIds, pendingCommentByPost,
               recentActivityByPost, justInsertedPostIds, markCommentPending, markRecentActivity,
-              navigateToProject,
+              navigateToProject, postMenuOpenId, setPostMenuOpenId, openReportModal,
+              editingFeedPostId, setEditingFeedPostId, editingFeedPostContent, setEditingFeedPostContent,
+              handleSaveFeedPostEdit,
             };
             const quickActions = [
               { label: "share a project update", text: "Working on " },
@@ -5109,6 +5313,7 @@ const setViewingProfile = (user) => {
                       <div style={{ fontSize: 20, fontWeight: 400, letterSpacing: "-0.5px", color: text, marginBottom: 10, lineHeight: 1.3 }}>{activeThread.title}</div>
                       <div style={{ fontSize: 11, color: textMuted, marginBottom: 16, display: "flex", alignItems: "center", gap: 10 }}>
                         <span>{activeThread.user_name} · {relativeTime(activeThread.created_at)}</span>
+                        <button className="hb" onClick={() => openReportModal({ contentType: "community_post", contentId: activeThread.id, label: "thread" })} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontSize: 10, fontFamily: "inherit", padding: 0, textDecoration: "underline" }}>report</button>
                         {activeThread.user_id === authUser?.id && (
                           <span style={{ display: "flex", gap: 8 }}>
                             <button className="hb" onClick={() => { setEditingPostId(activeThread.id); setEditingPostContent(activeThread.content || ""); }}
@@ -5172,6 +5377,8 @@ const setViewingProfile = (user) => {
                               <button className="hb" onClick={() => handleDeleteComment(c.id, activeThread.id)}
                                 style={{ background: "none", border: "none", color: "#ef4444", cursor: "pointer", fontSize: 10, fontFamily: "inherit", padding: 0, textDecoration: "underline", marginLeft: 4 }}>delete</button>
                             )}
+                            <button className="hb" onClick={() => openReportModal({ contentType: "comment", contentId: c.id, label: "comment" })}
+                              style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontSize: 10, fontFamily: "inherit", padding: 0, textDecoration: "underline", marginLeft: 2 }}>report</button>
                           </div>
                           <div style={{ fontSize: 13, color: text, lineHeight: 1.65 }}>{c.content}</div>
                         </div>
@@ -5242,11 +5449,17 @@ const setViewingProfile = (user) => {
                           <span style={{ fontSize: 10, color: textMuted }}>{post.user_name}</span>
                           <span style={{ fontSize: 10, color: textMuted }}>{relativeTime(post.created_at)}</span>
                           <span style={{ fontSize: 10, color: textMuted }}>... {post.comment_count}</span>
-                          {post.user_id === authUser?.id && (
-                            <button className="hb" onClick={e => { e.stopPropagation(); handleDeletePost(post.id); }}
-                              style={{ background: "none", border: "none", color: "#ef4444", cursor: "pointer", fontSize: 10, fontFamily: "inherit", padding: 0, textDecoration: "underline" }}>delete</button>
-                          )}
                         </div>
+                      </div>
+                      <div style={{ position: "relative", flexShrink: 0 }}>
+                        <button className="hb" onClick={(e) => { e.stopPropagation(); setCommunityMenuOpenId((prev) => (prev === post.id ? null : post.id)); }} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontSize: 14, fontFamily: "inherit" }}>⋯</button>
+                        {communityMenuOpenId === post.id && (
+                          <div onClick={(e) => e.stopPropagation()} style={{ position: "absolute", right: 0, top: 20, minWidth: 120, background: dark ? "#111" : "#fff", border: `1px solid ${border}`, borderRadius: 8, zIndex: 12 }}>
+                            <button className="hb" onClick={() => openReportModal({ contentType: "community_post", contentId: post.id, label: "thread" })} style={{ width: "100%", textAlign: "left", background: "none", border: "none", color: text, padding: "8px 10px", fontSize: 11, fontFamily: "inherit" }}>report</button>
+                            {post.user_id === authUser?.id && <button className="hb" onClick={() => { setEditingPostId(post.id); setEditingPostContent(post.content || ""); setCommunityMenuOpenId(null); openThread(post); }} style={{ width: "100%", textAlign: "left", background: "none", border: "none", color: text, padding: "8px 10px", fontSize: 11, fontFamily: "inherit" }}>edit</button>}
+                            {post.user_id === authUser?.id && <button className="hb" onClick={() => { handleDeletePost(post.id); setCommunityMenuOpenId(null); }} style={{ width: "100%", textAlign: "left", background: "none", border: "none", color: "#ef4444", padding: "8px 10px", fontSize: 11, fontFamily: "inherit" }}>delete</button>}
+                          </div>
+                        )}
                       </div>
                     </div>
                   ))}
@@ -5363,7 +5576,7 @@ const setViewingProfile = (user) => {
                                   {isMe && <button className="hb" onClick={() => { setEditingMessage({ id: msg.id }); setEditMessageText(msg.text); }} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontSize: 10, fontFamily: "inherit" }}>edit</button>}
                                   {isMe && <button className="hb" onClick={() => handleDeleteDm(msg.id)} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontSize: 10, fontFamily: "inherit" }}>delete</button>}
                                 </div>
-                                {seenByOther && <div style={{ fontSize: 10, color: textMuted, textAlign: "right", marginTop: 1, fontStyle: "italic" }}>Seen</div>}
+                                {seenByOther && <div style={{ fontSize: 9, color: textMuted, textAlign: "right", marginTop: 1 }}>seen</div>}
                               </div>
                             </div>
                           );
@@ -5587,6 +5800,11 @@ const setViewingProfile = (user) => {
       {/* PROJECT SPACE */}
       {!viewFullProfile && appScreen === "workspace" && activeProject && (
         <div style={{ width: "100%", display: "flex", flexDirection: "column", height: "calc(100vh - 50px)" }}>
+          {activeProject.cover_image_url && (
+            <div style={{ padding: "12px 28px 0" }}>
+              <img src={activeProject.cover_image_url} alt={`${activeProject.title} cover`} style={{ width: "100%", height: 160, objectFit: "cover", borderRadius: "10px 10px 0 0", border: `1px solid ${border}` }} />
+            </div>
+          )}
           {/* Project header */}
           <div className="pad" style={{ padding: "16px 28px", borderBottom: `1px solid ${border}`, display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap", flexShrink: 0 }}>
             <button className="hb" onClick={() => setActiveProject(null)} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontFamily: "inherit", fontSize: 12 }}>← workspace</button>
@@ -5624,6 +5842,12 @@ const setViewingProfile = (user) => {
                   style={{ background: "none", border: `1px solid ${border}`, borderRadius: 6, padding: "4px 10px", fontSize: 10, cursor: "pointer", color: textMuted, fontFamily: "inherit" }}>
                   deploy
                 </button>
+              )}
+              {activeProject.owner_id === authUser?.id && (
+                <label className="hb" style={{ ...btnG, padding: "4px 10px", fontSize: 10, cursor: "pointer" }}>
+                  {coverUploading ? "uploading..." : "update cover"}
+                  <input type="file" accept="image/*" style={{ display: "none" }} onChange={(e) => handleUploadProjectCover(activeProject, e.target.files?.[0])} />
+                </label>
               )}
             </div>
           </div>
@@ -5814,6 +6038,11 @@ const setViewingProfile = (user) => {
                     <option value="">assign...</option>
                     {projectMembers.map((u) => <option key={u.id} value={u.name}>{u.name}</option>)}
                   </select>
+                  <select value={newTaskPriority} onChange={e => setNewTaskPriority(e.target.value)} style={{ ...inputStyle, fontSize: 12, maxWidth: 120 }}>
+                    <option value="low">low</option>
+                    <option value="medium">medium</option>
+                    <option value="high">high</option>
+                  </select>
                   <button className="hb" onClick={() => handleAddTask(activeProject.id)} style={{ ...btnP, padding: "10px 16px", flexShrink: 0, fontSize: 12 }}>add</button>
                 </div>
                 <div style={{ display: "flex", gap: 8, marginBottom: 14, flexWrap: "wrap" }}>
@@ -5875,7 +6104,8 @@ const setViewingProfile = (user) => {
                                 autoFocus
                               />
                             ) : (
-                              <div onClick={(e) => { e.stopPropagation(); setEditingTaskId(task.id); setEditingTaskTitle(task.text || ""); }} style={{ fontSize: 12, color: text, marginBottom: 6, lineHeight: 1.4 }}>
+                              <div onClick={(e) => { e.stopPropagation(); setEditingTaskId(task.id); setEditingTaskTitle(task.text || ""); }} style={{ fontSize: 12, color: text, marginBottom: 6, lineHeight: 1.4, display: "flex", gap: 6, alignItems: "center" }}>
+                                <span style={{ width: 7, height: 7, borderRadius: "50%", background: task.priority === "high" ? "#ef4444" : task.priority === "low" ? "#22c55e" : "#f59e0b", flexShrink: 0 }} />
                                 {task.text}
                               </div>
                             )}
@@ -5930,6 +6160,14 @@ const setViewingProfile = (user) => {
                         <label style={labelStyle}>DUE DATE</label>
                         <input type="date" value={taskEditorDraft.dueDate} onChange={(e) => setTaskEditorDraft((prev) => ({ ...prev, dueDate: e.target.value }))} style={{ ...inputStyle, fontSize: 12 }} />
                       </div>
+                      <div>
+                        <label style={labelStyle}>PRIORITY</label>
+                        <select value={taskEditorDraft.priority || "medium"} onChange={(e) => setTaskEditorDraft((prev) => ({ ...prev, priority: e.target.value }))} style={{ ...inputStyle, fontSize: 12 }}>
+                          <option value="low">low</option>
+                          <option value="medium">medium</option>
+                          <option value="high">high</option>
+                        </select>
+                      </div>
                       {(hasTaskDescriptionField || Object.prototype.hasOwnProperty.call(task, "description")) && (
                         <div>
                           <label style={labelStyle}>DESCRIPTION</label>
@@ -5946,6 +6184,7 @@ const setViewingProfile = (user) => {
                           const payload = {
                             assigned_to: selectedAssignee?.id || null,
                             due_date: taskEditorDraft.dueDate || null,
+                            priority: taskEditorDraft.priority || "medium",
                           };
                           if (hasTaskDescriptionField || Object.prototype.hasOwnProperty.call(task, "description")) {
                             payload.description = taskEditorDraft.description || null;
@@ -6196,7 +6435,15 @@ const setViewingProfile = (user) => {
             {/* TEAM */}
             {projectTab === "team" && (
               <div>
-                <div style={{ fontSize: 10, color: textMuted, letterSpacing: "1px", marginBottom: 14 }}>TEAM</div>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14, gap: 8, flexWrap: "wrap" }}>
+                  <div style={{ fontSize: 10, color: textMuted, letterSpacing: "1px" }}>TEAM</div>
+                  {activeProject.owner_id === authUser?.id && (
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <button className="hb" onClick={() => setShowInviteUserModal(true)} style={{ ...btnG, padding: "6px 10px", fontSize: 11 }}>Invite someone</button>
+                      <button className="hb" onClick={() => openReviewApplicants(activeProject)} style={{ ...btnP, padding: "6px 10px", fontSize: 11 }}>Review applications</button>
+                    </div>
+                  )}
+                </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 0", borderBottom: `1px solid ${border}` }}>
                   <Avatar initials={activeProject.owner_initials} src={users.find(u => u.id === activeProject.owner_id)?.avatar_url} size={36} dark={dark} />
                   <div style={{ flex: 1 }}>
@@ -6221,10 +6468,10 @@ const setViewingProfile = (user) => {
                     ) : (
                       <span style={{ fontSize: 10, padding: "2px 8px", border: `1px solid ${border}`, borderRadius: 3, color: textMuted }}>{a.role || "contributor"}</span>
                     )}
-                    {a.applicant_id === authUser?.id && (
-                      <button className="hb" onClick={() => handleLeaveProject(a.id)}
+                    {a.applicant_id === authUser?.id && activeProject.owner_id !== authUser?.id && (
+                      <button className="hb" onClick={() => handleLeaveProject(activeProject.id)}
                         style={{ background: "none", border: `1px solid ${border}`, borderRadius: 6, padding: "4px 8px", fontSize: 10, cursor: "pointer", color: textMuted, fontFamily: "inherit", marginLeft: 4 }}>
-                        leave
+                        Leave project
                       </button>
                     )}
                   </div>
@@ -6797,6 +7044,10 @@ const setViewingProfile = (user) => {
             <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px", marginBottom: 12 }}>NEW PROJECT</div>
             <h2 style={{ fontSize: 20, fontWeight: 400, letterSpacing: "-1px", marginBottom: 20, color: text }}>What are you building?</h2>
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              <div>
+                <label style={labelStyle}>COVER IMAGE (optional)</label>
+                <input type="file" accept="image/*" onChange={(e) => setNewProject({ ...newProject, coverImageFile: e.target.files?.[0] || null })} style={{ ...inputStyle, padding: "8px 10px" }} />
+              </div>
               <div><label style={labelStyle}>TITLE</label><input style={inputStyle} placeholder="Project name" value={newProject.title} onChange={e => { setCreateProjectError(""); setNewProject({ ...newProject, title: e.target.value }); }} /></div>
               <div><label style={labelStyle}>DESCRIPTION</label><textarea style={{ ...inputStyle, resize: "none" }} rows={4} placeholder="What are you building? What do you need?" value={newProject.description} onChange={e => { setCreateProjectError(""); setNewProject({ ...newProject, description: e.target.value }); }} /></div>
               <div><label style={labelStyle}>CATEGORY</label><select style={inputStyle} value={newProject.category} onChange={e => setNewProject({ ...newProject, category: e.target.value })}>{CATEGORIES.map(c => <option key={c}>{c}</option>)}</select></div>
@@ -6827,8 +7078,52 @@ const setViewingProfile = (user) => {
               )}
             </div>
             <div style={{ display: "flex", gap: 10, marginTop: 18 }}>
-              <button className="hb" onClick={() => { if (isCreatingProject) return; setShowCreate(false); setCreateProjectError(""); setNewProject({ title: "", description: "", category: CATEGORIES[0], skills: [], maxCollaborators: 2, location: "", goals: "", timeline: "", is_private: false }); }} style={btnG}>cancel</button>
+              <button className="hb" onClick={() => { if (isCreatingProject) return; setShowCreate(false); setCreateProjectError(""); setNewProject({ title: "", description: "", category: CATEGORIES[0], skills: [], maxCollaborators: 2, location: "", goals: "", timeline: "", is_private: false, coverImageFile: null }); }} style={btnG}>cancel</button>
               <button className="hb" onClick={handlePostProject} disabled={isCreatingProject} style={{ ...btnP, flex: 1, opacity: isCreatingProject ? 0.7 : 1, cursor: isCreatingProject ? "wait" : "pointer" }}>{isCreatingProject ? "posting..." : "post →"}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showInviteUserModal && activeProject && (
+        <div onClick={() => { setShowInviteUserModal(false); setInviteTargetUser(null); }} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.75)", zIndex: 240, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+          <div onClick={(e) => e.stopPropagation()} style={{ background: bg, border: `1px solid ${border}`, borderRadius: 12, width: "100%", maxWidth: 520, padding: 18 }}>
+            <div style={{ fontSize: 11, color: text, marginBottom: 10 }}>Invite someone</div>
+            {!inviteTargetUser ? (
+              <>
+                <input value={inviteSearch} onChange={(e) => setInviteSearch(e.target.value)} placeholder="Search by name or username" style={{ ...inputStyle, marginBottom: 10 }} />
+                <div style={{ maxHeight: 260, overflowY: "auto", border: `1px solid ${border}`, borderRadius: 8 }}>
+                  {filteredInviteUsers.map((u) => (
+                    <button key={u.id} className="hb" onClick={() => setInviteTargetUser(u)} style={{ width: "100%", textAlign: "left", background: "none", border: "none", borderBottom: `1px solid ${border}`, padding: "9px 10px", color: text, fontFamily: "inherit", display: "flex", justifyContent: "space-between" }}>
+                      <span>{u.name}</span><span style={{ color: textMuted, fontSize: 11 }}>@{u.username || "user"}</span>
+                    </button>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <div>
+                <div style={{ fontSize: 12, color: text, marginBottom: 12 }}>Invite {inviteTargetUser.name} to {activeProject.title}?</div>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button className="hb" onClick={() => setInviteTargetUser(null)} style={{ ...btnG, flex: 1, padding: "8px 12px" }}>cancel</button>
+                  <button className="hb" onClick={confirmDirectInvite} style={{ ...btnP, flex: 1, padding: "8px 12px" }}>send invite</button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {reportModal && (
+        <div onClick={() => setReportModal(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", zIndex: 245, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+          <div onClick={(e) => e.stopPropagation()} style={{ background: bg, border: `1px solid ${border}`, borderRadius: 12, width: "100%", maxWidth: 420, padding: 18 }}>
+            <div style={{ fontSize: 12, color: text, marginBottom: 12 }}>Report {reportModal.label}</div>
+            <select value={reportReason} onChange={(e) => setReportReason(e.target.value)} style={{ ...inputStyle, marginBottom: 10 }}>
+              {["Spam", "Harassment", "Misinformation", "Inappropriate content", "Other"].map((reason) => <option key={reason}>{reason}</option>)}
+            </select>
+            <textarea value={reportDetails} onChange={(e) => setReportDetails(e.target.value)} rows={3} placeholder="Details (optional)" style={{ ...inputStyle, resize: "vertical" }} />
+            <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+              <button className="hb" onClick={() => setReportModal(null)} style={{ ...btnG, flex: 1, padding: "8px 12px" }}>cancel</button>
+              <button className="hb" onClick={submitReport} style={{ ...btnP, flex: 1, padding: "8px 12px" }}>submit report</button>
             </div>
           </div>
         </div>

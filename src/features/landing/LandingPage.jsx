@@ -52,25 +52,39 @@ export default function LandingPage({ dark, setDark, onLogin, onSignup, supabase
     }
   `;
 
-  const [liveStats, setLiveStats] = useState({ builders: "...", projects: "..." });
-  const [skillCategoryCount, setSkillCategoryCount] = useState("...");
+  const [liveStats, setLiveStats] = useState({ builders: 0, projects: 0, shipped: 0 });
+  const [animatedStats, setAnimatedStats] = useState({ builders: 0, projects: 0, shipped: 0 });
 
   useEffect(() => {
     (async () => {
       const [
         { count: builderCount },
         { count: projectCount },
-        { data: projSkills },
+        { count: shippedCount },
       ] = await Promise.all([
         supabase.from("profiles").select("*", { count: "exact", head: true }),
         supabase.from("projects").select("*", { count: "exact", head: true }),
-        supabase.from("projects").select("skills"),
+        supabase.from("projects").select("*", { count: "exact", head: true }).eq("shipped", true),
       ]);
-      setLiveStats({ builders: builderCount ?? "...", projects: projectCount ?? "..." });
-      const uniqueSkills = new Set((projSkills || []).flatMap((p) => p.skills || []));
-      setSkillCategoryCount(uniqueSkills.size || 48);
+      setLiveStats({ builders: builderCount || 0, projects: projectCount || 0, shipped: shippedCount || 0 });
     })();
-  }, []);
+  }, [supabase]);
+
+  useEffect(() => {
+    const frames = 30;
+    let frame = 0;
+    const timer = setInterval(() => {
+      frame += 1;
+      const t = Math.min(1, frame / frames);
+      setAnimatedStats({
+        builders: Math.round(liveStats.builders * t),
+        projects: Math.round(liveStats.projects * t),
+        shipped: Math.round(liveStats.shipped * t),
+      });
+      if (t >= 1) clearInterval(timer);
+    }, 34);
+    return () => clearInterval(timer);
+  }, [liveStats]);
 
   return (
     <div
@@ -222,14 +236,17 @@ export default function LandingPage({ dark, setDark, onLogin, onSignup, supabase
       </div>
 
       {/* Stats bar */}
+      <div style={{ textAlign: "center", padding: "12px 16px", borderBottom: `1px solid ${border}`, fontFamily: "'DM Mono', monospace", fontSize: 13, color: textMuted }}>
+        {animatedStats.builders} builders · {animatedStats.projects} projects · {animatedStats.shipped} shipped
+      </div>
       <div
         className="stat-grid"
         style={{ display: "flex", width: "100%", borderBottom: `1px solid ${border}` }}
       >
         {[
-          [liveStats.builders, "builders"],
-          [liveStats.projects, "active projects"],
-          [skillCategoryCount, "skill categories"],
+          [animatedStats.builders, "builders"],
+          [animatedStats.projects, "active projects"],
+          [animatedStats.shipped, "shipped"],
           ["100%", "free to start"],
         ].map(([v, l], i) => (
           <div
@@ -246,6 +263,10 @@ export default function LandingPage({ dark, setDark, onLogin, onSignup, supabase
             <div style={{ fontSize: 10, color: textMuted, marginTop: 4 }}>{l}</div>
           </div>
         ))}
+      </div>
+
+      <div style={{ textAlign: "center", padding: "18px 12px", fontSize: 12, color: textMuted }}>
+        <a href="/terms" style={{ color: textMuted }}>Terms</a> · <a href="/privacy" style={{ color: textMuted }}>Privacy</a>
       </div>
 
       {/* How it works */}

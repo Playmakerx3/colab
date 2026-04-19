@@ -3,6 +3,8 @@ import JoinPage from "./pages/JoinPage";
 import PublicProfilePage from "./pages/PublicProfilePage";
 import PublicProjectPage from "./pages/PublicProjectPage";
 import ShippedPage from "./pages/ShippedPage";
+import TermsPage from "./pages/TermsPage";
+import PrivacyPage from "./pages/PrivacyPage";
 
 const KNOWN_ROOTS = ["/", "/app", "/explore", "/network", "/workspace", "/communities", "/messages", "/profile"];
 
@@ -13,12 +15,16 @@ export default function App() {
   const profileMatch = pathname.match(/^\/(?:u|profile)\/([^/]+)$/);
   const profileByIdMatch = pathname.match(/^\/profile\/id\/([^/]+)$/);
   const joinMatch = pathname.match(/^\/join\/([^/]+)$/);
+  const termsMatch = pathname === "/terms";
+  const privacyMatch = pathname === "/privacy";
 
   if (shippedMatch) return <ShippedPage projectId={shippedMatch[1]} />;
   if (publicMatch) return <PublicProjectPage projectId={publicMatch[1]} />;
   if (profileByIdMatch) return <PublicProfilePage userId={profileByIdMatch[1]} />;
   if (profileMatch) return <PublicProfilePage username={profileMatch[1]} />;
   if (joinMatch) return <JoinPage token={joinMatch[1]} />;
+  if (termsMatch) return <TermsPage />;
+  if (privacyMatch) return <PrivacyPage />;
 
   // Unknown route — show 404
   const isKnown = KNOWN_ROOTS.some(r => pathname === r) || pathname === "/";
