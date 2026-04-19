@@ -19,6 +19,39 @@ import { useApplications } from "../../applications/hooks/useApplications";
 import { useProjectWorkspace } from "../../projects/hooks/useProjectWorkspace";
 import { computeProjectHealth, PROJECT_HEALTH, resolveTaskOwnership } from "../../projects/utils/projectHealth";
 
+/*
+SQL migrations to run before enabling project workspace files/docs features:
+
+create table if not exists project_files (
+  id uuid default gen_random_uuid() primary key,
+  project_id uuid not null,
+  uploader_id uuid not null,
+  uploader_name text,
+  file_name text not null,
+  file_url text not null,
+  file_size bigint,
+  file_type text,
+  created_at timestamptz default now()
+);
+alter table project_files enable row level security;
+create policy "Project files readable by all" on project_files for select using (true);
+create policy "Authenticated users can upload" on project_files for insert with check (auth.uid() = uploader_id);
+create policy "Uploader can delete" on project_files for delete using (auth.uid() = uploader_id);
+
+create table if not exists project_docs (
+  id uuid default gen_random_uuid() primary key,
+  project_id uuid unique not null,
+  content text default '',
+  updated_at timestamptz default now(),
+  updated_by uuid,
+  updated_by_name text
+);
+alter table project_docs enable row level security;
+create policy "Docs readable by all" on project_docs for select using (true);
+create policy "Authenticated users can write docs" on project_docs for insert with check (auth.uid() = updated_by);
+create policy "Authenticated users can update docs" on project_docs for update using (true);
+*/
+
 const COMMUNITY_SYMBOLS = {
   'music':        '♪',
   'design':       '◈',
@@ -1073,6 +1106,14 @@ function CoLab() {
   const [projectFiles, setProjectFiles] = useState([]);
   const [projectDocs, setProjectDocs] = useState([]);
   const [activeDoc, setActiveDoc] = useState(null);
+  const [workspaceDoc, setWorkspaceDoc] = useState(null);
+  const [workspaceDocDraft, setWorkspaceDocDraft] = useState("");
+  const [workspaceDocEditing, setWorkspaceDocEditing] = useState(false);
+  const [workspaceDocLoading, setWorkspaceDocLoading] = useState(false);
+  const [fileUploadLoading, setFileUploadLoading] = useState(false);
+  const [fileUploadProgress, setFileUploadProgress] = useState(0);
+  const [filesDragActive, setFilesDragActive] = useState(false);
+  const [kanbanDropZone, setKanbanDropZone] = useState(null);
   const [editingMessage, setEditingMessage] = useState(null); // { id, text, type }
   const [editMessageText, setEditMessageText] = useState("");
   const [mentionNotifications, setMentionNotifications] = useState([]);
@@ -1280,6 +1321,22 @@ const setViewingProfile = (user) => {
     }
   }, [projectTab, shouldShowPluginsTab]);
 
+  useEffect(() => {
+    if (!activeProject?.id || projectTab !== "docs") return;
+    let cancelled = false;
+    const loadWorkspaceDoc = async () => {
+      setWorkspaceDocLoading(true);
+      const { data } = await supabase.from("project_docs").select("*").eq("project_id", activeProject.id).maybeSingle();
+      if (cancelled) return;
+      setWorkspaceDoc(data || null);
+      setWorkspaceDocDraft(data?.content || "");
+      setWorkspaceDocEditing(false);
+      setWorkspaceDocLoading(false);
+    };
+    loadWorkspaceDoc();
+    return () => { cancelled = true; };
+  }, [activeProject?.id, projectTab]);
+
   const hasTaskDescriptionField = useMemo(() => {
     if (!activeProject) return false;
     return tasks.some((task) => task.project_id === activeProject.id && Object.prototype.hasOwnProperty.call(task, "description"));
@@ -1352,6 +1409,35 @@ const setViewingProfile = (user) => {
       delete next[taskId];
       return next;
     });
+  };
+
+  const moveTaskToColumn = async (taskId, columnId) => {
+    const updateByColumn = {
+      todo: { in_progress: false, done: false },
+      inprogress: { in_progress: true, done: false },
+      done: { in_progress: false, done: true },
+    };
+    const updates = updateByColumn[columnId];
+    if (!updates) return;
+    await updateTaskOptimistic(taskId, updates);
+  };
+
+  const formatFileSize = (size = 0) => {
+    if (!size || Number.isNaN(Number(size))) return "—";
+    const kb = Number(size) / 1024;
+    if (kb < 1024) return `${kb.toFixed(1)} KB`;
+    return `${(kb / 1024).toFixed(2)} MB`;
+  };
+
+  const fileTypeBadge = (fileType = "", fileName = "") => {
+    const lowerType = String(fileType || "").toLowerCase();
+    const lowerName = String(fileName || "").toLowerCase();
+    if (lowerType.includes("pdf") || lowerName.endsWith(".pdf")) return "[PDF]";
+    if (lowerType.startsWith("image/")) return "[IMG]";
+    if (lowerType.includes("word") || /\.(doc|docx|txt|rtf)$/i.test(lowerName)) return "[DOC]";
+    if (lowerType.startsWith("video/")) return "[VID]";
+    if (lowerType.includes("zip") || /\.(zip|rar|7z|tar|gz)$/i.test(lowerName)) return "[ZIP]";
+    return "[FILE]";
   };
 
   const openTaskEditor = (task) => {
@@ -2538,14 +2624,24 @@ const setViewingProfile = (user) => {
   const detectAndNotifyMentions = async (text, projectId) => {
     const mentioned = text.match(/@(\w[\w\s]*)/g);
     if (!mentioned) return;
+    const alreadyNotified = new Set();
     for (const mention of mentioned) {
       const name = mention.slice(1).trim();
       const mentionedUser = users.find(u => u.name.toLowerCase() === name.toLowerCase());
-      if (mentionedUser && mentionedUser.id !== authUser?.id) {
+      if (mentionedUser && mentionedUser.id !== authUser?.id && !alreadyNotified.has(mentionedUser.id)) {
+        alreadyNotified.add(mentionedUser.id);
         await supabase.from("mention_notifications").insert({
           user_id: mentionedUser.id, from_name: profile.name,
           from_initials: myInitials, context: text.slice(0, 80),
           project_id: projectId, read: false,
+        });
+        await supabase.from("notifications").insert({
+          user_id: mentionedUser.id,
+          type: "mention",
+          text: `${authUser?.user_metadata?.display_name || profile?.name || "Someone"} mentioned you in project chat`,
+          entity_id: projectId,
+          project_id: projectId,
+          read: false,
         });
       }
     }
@@ -3233,6 +3329,10 @@ const setViewingProfile = (user) => {
               onNodeClick={(user) => {
                 setViewingProfile(user);
               }}
+              onProjectNodeClick={(project) => {
+                setActiveProject(project);
+                setAppScreen("workspace");
+              }}
             />
           </div>
         )}
@@ -3790,7 +3890,7 @@ const setViewingProfile = (user) => {
           </button>
         </div>
       </nav>
-      <div className="mobile-tabbar" style={{ display: "none", position: "fixed", left: 0, right: 0, bottom: 0, zIndex: 220, background: bg, borderTop: `1px solid ${border}`, height: 56, alignItems: "center", justifyContent: "space-around", padding: "0 8px" }}>
+      <div className="mobile-tabbar" style={{ display: "none", position: "fixed", left: 0, right: 0, bottom: 0, zIndex: 220, background: bg, borderTop: `1px solid ${border}`, height: 56, alignItems: "center", justifyContent: "space-around", padding: "0 8px", paddingBottom: "env(safe-area-inset-bottom)" }}>
         {navItems.map(({ id, label, badge }) => (
           <button key={`mobile-${id}`} onClick={() => { setAppScreen(id); setActiveProject(null); setViewingProfile(null); setViewFullProfile(null); setShowNotifications(false); if (id === "explore") setExploreTab("feed"); }}
             style={{ position: "relative", background: "none", color: appScreen === id ? text : textMuted, border: "none", padding: "4px 6px", fontSize: 11, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap" }}>
@@ -4971,10 +5071,21 @@ const setViewingProfile = (user) => {
           const payload = { post_id: postId, user_id: authUser.id, user_name: profile.name, user_initials: myInitials, content: content.trim() };
           const { data } = await supabase.from("community_comments").insert(payload).select().single();
           if (data) {
+            const post = communityPosts.find((p) => p.id === postId) || activeThread;
             setThreadComments(prev => ({ ...prev, [postId]: [...(prev[postId] || []), data] }));
             await supabase.from("community_posts").update({ comment_count: (activeThread?.comment_count || 0) + 1 }).eq("id", postId);
             setActiveThread(prev => prev ? { ...prev, comment_count: (prev.comment_count || 0) + 1 } : prev);
             setCommunityPosts(prev => prev.map(p => p.id === postId ? { ...p, comment_count: (p.comment_count || 0) + 1 } : p));
+            if (post?.user_id && post.user_id !== authUser.id) {
+              await supabase.from("notifications").insert({
+                user_id: post.user_id,
+                type: "reply",
+                text: `${authUser?.user_metadata?.display_name || profile?.name || "Someone"} replied to your thread`,
+                entity_id: post.id,
+                project_id: null,
+                read: false,
+              });
+            }
           }
         };
 
@@ -5831,7 +5942,22 @@ const setViewingProfile = (user) => {
                     { id: "inprogress", label: "IN PROGRESS", tasks: tasks.filter(t => t.project_id === activeProject.id && t.in_progress && !t.done) },
                     { id: "done", label: "DONE", tasks: tasks.filter(t => t.project_id === activeProject.id && t.done) },
                   ].map(col => (
-                    <div key={col.id} style={{ background: bg2, borderRadius: 10, border: `1px solid ${border}`, padding: "14px", minHeight: 200 }}>
+                    <div
+                      key={col.id}
+                      onDragOver={(e) => e.preventDefault()}
+                      onDragEnter={() => setKanbanDropZone(col.id)}
+                      onDragLeave={(e) => {
+                        if (!e.currentTarget.contains(e.relatedTarget)) setKanbanDropZone(null);
+                      }}
+                      onDrop={async (e) => {
+                        e.preventDefault();
+                        setKanbanDropZone(null);
+                        const taskId = e.dataTransfer.getData("taskId");
+                        if (!taskId) return;
+                        await moveTaskToColumn(taskId, col.id);
+                      }}
+                      style={{ background: kanbanDropZone === col.id ? (dark ? "#1d2735" : "#eef6ff") : bg2, borderRadius: 10, border: `1px solid ${kanbanDropZone === col.id ? "#60a5fa" : border}`, padding: "14px", minHeight: 200, transition: "background 0.16s ease, border-color 0.16s ease" }}
+                    >
                       <div style={{ fontSize: 10, color: textMuted, letterSpacing: "1.5px", marginBottom: 12, display: "flex", justifyContent: "space-between" }}>
                         {col.label} <span style={{ background: bg3, borderRadius: 10, padding: "1px 7px" }}>{col.tasks.length}</span>
                       </div>
@@ -5846,6 +5972,11 @@ const setViewingProfile = (user) => {
                           return (
                           <div
                             key={task.id}
+                            draggable
+                            onDragStart={(e) => {
+                              e.dataTransfer.setData("taskId", task.id);
+                              e.dataTransfer.effectAllowed = "move";
+                            }}
                             onClick={() => { if (editingTaskId !== task.id) openTaskEditor(task); }}
                             style={{ background: isUnassigned ? (dark ? "#15120b" : "#fffaf2") : isAssignedToMe ? (dark ? "#101621" : "#f3f8ff") : isOverdue ? (dark ? "#1a0000" : "#fff5f5") : bg, border: `1px solid ${isUnassigned ? "#f59e0b" : isOverdue ? "#ef4444" : isDueSoon ? "#f97316" : isAssignedToMe ? "#60a5fa" : border}`, borderLeft: isUnassigned ? "3px solid #f59e0b" : isOverdue ? "3px solid #ef4444" : isDueSoon ? "3px solid #f97316" : isAssignedToMe ? "3px solid #60a5fa" : `1px solid ${border}`, borderRadius: 8, padding: "10px 12px", cursor: "pointer", opacity: taskUpdatePendingById[task.id] ? 0.6 : 1 }}>
                             {isEditingTitle ? (
@@ -5892,8 +6023,8 @@ const setViewingProfile = (user) => {
                             </div>
                             {due && <div style={{ fontSize: 10, color: isOverdue ? "#ef4444" : isDueSoon ? "#f97316" : textMuted, marginBottom: 8, fontWeight: isOverdue ? 500 : 400 }}>{isOverdue ? "overdue · " : isDueSoon ? "due soon · " : "due "}{due.toLocaleDateString()}</div>}
                             <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                              {col.id !== "todo" && <button className="hb" onClick={async (e) => { e.stopPropagation(); await supabase.from("tasks").update({ in_progress: false, done: false }).eq("id", task.id); setTasks(tasks.map(t => t.id === task.id ? { ...t, in_progress: false, done: false } : t)); }} style={{ fontSize: 9, padding: "2px 7px", border: `1px solid ${border}`, borderRadius: 3, background: "none", color: textMuted, cursor: "pointer", fontFamily: "inherit" }}>← to do</button>}
-                              {col.id === "todo" && <button className="hb" onClick={async (e) => { e.stopPropagation(); await supabase.from("tasks").update({ in_progress: true, done: false }).eq("id", task.id); setTasks(tasks.map(t => t.id === task.id ? { ...t, in_progress: true, done: false } : t)); }} style={{ fontSize: 9, padding: "2px 7px", border: `1px solid ${border}`, borderRadius: 3, background: "none", color: textMuted, cursor: "pointer", fontFamily: "inherit" }}>in progress →</button>}
+                              {col.id !== "todo" && <button className="hb" onClick={async (e) => { e.stopPropagation(); await moveTaskToColumn(task.id, "todo"); }} style={{ fontSize: 9, padding: "2px 7px", border: `1px solid ${border}`, borderRadius: 3, background: "none", color: textMuted, cursor: "pointer", fontFamily: "inherit" }}>← to do</button>}
+                              {col.id === "todo" && <button className="hb" onClick={async (e) => { e.stopPropagation(); await moveTaskToColumn(task.id, "inprogress"); }} style={{ fontSize: 9, padding: "2px 7px", border: `1px solid ${border}`, borderRadius: 3, background: "none", color: textMuted, cursor: "pointer", fontFamily: "inherit" }}>in progress →</button>}
                               {col.id === "inprogress" && <button className="hb" onClick={(e) => { e.stopPropagation(); handleToggleTask(task); }} style={{ fontSize: 9, padding: "2px 7px", border: `1px solid ${border}`, borderRadius: 3, background: "none", color: textMuted, cursor: "pointer", fontFamily: "inherit" }}>done →</button>}
                               <button className="hb" onClick={(e) => { e.stopPropagation(); openTaskEditor(task); }} style={{ fontSize: 9, padding: "2px 7px", border: `1px solid ${border}`, borderRadius: 3, background: "none", color: textMuted, cursor: "pointer", fontFamily: "inherit" }}>edit</button>
                               <button className="hb" onClick={(e) => { e.stopPropagation(); handleDeleteTask(task.id); }} style={{ fontSize: 9, padding: "2px 7px", border: `1px solid ${border}`, borderRadius: 3, background: "none", color: textMuted, cursor: "pointer", fontFamily: "inherit" }}>✕</button>
@@ -6024,39 +6155,114 @@ const setViewingProfile = (user) => {
             {/* FILES */}
             {projectTab === "files" && (
               <div>
-                <div style={{ marginBottom: 20 }}>
+                <div
+                  onDragOver={(e) => e.preventDefault()}
+                  onDragEnter={() => setFilesDragActive(true)}
+                  onDragLeave={(e) => {
+                    if (!e.currentTarget.contains(e.relatedTarget)) setFilesDragActive(false);
+                  }}
+                  onDrop={async (e) => {
+                    e.preventDefault();
+                    setFilesDragActive(false);
+                    const file = e.dataTransfer.files?.[0];
+                    if (!file) return;
+                    setFileUploadLoading(true);
+                    setFileUploadProgress(25);
+                    const path = `project-files/${activeProject.id}/${file.name}`;
+                    const { error: uploadError } = await supabase.storage.from("user-uploads").upload(path, file, { upsert: true });
+                    if (uploadError) {
+                      setFileUploadLoading(false);
+                      setFileUploadProgress(0);
+                      showToast("Upload failed.");
+                      return;
+                    }
+                    setFileUploadProgress(80);
+                    const { data: { publicUrl } } = supabase.storage.from("user-uploads").getPublicUrl(path);
+                    const { data } = await supabase.from("project_files").insert({
+                      project_id: activeProject.id,
+                      uploader_id: authUser.id,
+                      uploader_name: profile?.name || "Unknown",
+                      file_name: file.name,
+                      file_url: publicUrl,
+                      file_size: file.size,
+                      file_type: file.type || "application/octet-stream",
+                    }).select().single();
+                    if (data) {
+                      setProjectFiles((prev) => [data, ...prev.filter((f) => f.id !== data.id)]);
+                      showToast("File uploaded.");
+                    }
+                    setFileUploadProgress(100);
+                    setTimeout(() => { setFileUploadLoading(false); setFileUploadProgress(0); }, 240);
+                  }}
+                  style={{ marginBottom: 20, border: `1px dashed ${filesDragActive ? "#60a5fa" : border}`, borderRadius: 10, background: filesDragActive ? (dark ? "#131b27" : "#f6faff") : bg2, padding: "16px 14px", transition: "all 0.15s ease" }}
+                >
+                  <div style={{ marginBottom: 10, fontSize: 12, color: textMuted }}>Drag and drop a file here, or choose one manually.</div>
                   <label style={{ display: "inline-block", cursor: "pointer" }}>
-                    <div style={{ ...btnP, display: "inline-flex", alignItems: "center", gap: 8, fontSize: 12 }}>
-                      ↑ upload file
-                    </div>
+                    <div style={{ ...btnP, display: "inline-flex", alignItems: "center", gap: 8, fontSize: 12 }}>↑ upload file</div>
                     <input type="file" style={{ display: "none" }} onChange={async (e) => {
-                      const file = e.target.files[0];
-                      await handleUploadProjectFile(activeProject.id, file);
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      setFileUploadLoading(true);
+                      setFileUploadProgress(25);
+                      const path = `project-files/${activeProject.id}/${file.name}`;
+                      const { error: uploadError } = await supabase.storage.from("user-uploads").upload(path, file, { upsert: true });
+                      if (uploadError) {
+                        setFileUploadLoading(false);
+                        setFileUploadProgress(0);
+                        showToast("Upload failed.");
+                        return;
+                      }
+                      setFileUploadProgress(80);
+                      const { data: { publicUrl } } = supabase.storage.from("user-uploads").getPublicUrl(path);
+                      const { data } = await supabase.from("project_files").insert({
+                        project_id: activeProject.id,
+                        uploader_id: authUser.id,
+                        uploader_name: profile?.name || "Unknown",
+                        file_name: file.name,
+                        file_url: publicUrl,
+                        file_size: file.size,
+                        file_type: file.type || "application/octet-stream",
+                      }).select().single();
+                      if (data) {
+                        setProjectFiles((prev) => [data, ...prev.filter((f) => f.id !== data.id)]);
+                        showToast("File uploaded.");
+                      }
+                      setFileUploadProgress(100);
+                      setTimeout(() => { setFileUploadLoading(false); setFileUploadProgress(0); }, 240);
                     }} />
                   </label>
+                  {fileUploadLoading && <div style={{ fontSize: 11, color: textMuted, marginTop: 10 }}>uploading... {fileUploadProgress}%</div>}
                 </div>
                 {projectFiles.length === 0
                   ? <div style={{ fontSize: 13, color: textMuted }}>no files yet. upload something to share with the team.</div>
                   : <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
                       {projectFiles.map((file, i) => (
                         <div key={file.id} style={{ background: bg2, borderRadius: i === 0 && projectFiles.length === 1 ? 8 : i === 0 ? "8px 8px 0 0" : i === projectFiles.length - 1 ? "0 0 8px 8px" : 0, border: `1px solid ${border}`, borderBottom: i < projectFiles.length - 1 ? "none" : `1px solid ${border}`, padding: "14px 18px" }}>
-                          <div style={{ display: "flex", gap: 14, alignItems: "center", marginBottom: file.type?.startsWith("image") ? 10 : 0 }}>
-                            <div style={{ fontSize: 20, flexShrink: 0 }}>
-                            {file.type?.startsWith("image") ? "img" : file.type?.includes("pdf") ? "pdf" : file.type?.includes("video") ? "vid" : "file"}
+                          <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
+                            <div style={{ fontSize: 10, flexShrink: 0, fontFamily: "monospace", border: `1px solid ${border}`, borderRadius: 6, padding: "3px 6px", color: textMuted }}>
+                              {fileTypeBadge(file.file_type, file.file_name)}
                             </div>
                             <div style={{ flex: 1, minWidth: 0 }}>
-                              <div style={{ fontSize: 13, color: text, marginBottom: 2 }}>{file.name}</div>
-                              <div style={{ fontSize: 10, color: textMuted }}>{file.user_name} · {new Date(file.created_at).toLocaleDateString()} · {file.size ? `${(file.size / 1024).toFixed(0)}kb` : ""}</div>
+                              <div style={{ fontSize: 13, color: text, marginBottom: 2 }}>{file.file_name}</div>
+                              <div style={{ fontSize: 10, color: textMuted }}>{file.uploader_name || "Unknown"} · {new Date(file.created_at).toLocaleDateString()} · {formatFileSize(file.file_size)}</div>
                             </div>
-                            <a href={file.url} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: text, textDecoration: "underline", flexShrink: 0 }}>open</a>
-                            <button className="hb" onClick={async () => handleDeleteProjectFile(file)} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontSize: 12, fontFamily: "inherit", flexShrink: 0 }}>delete</button>
+                            <a href={file.file_url} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: text, textDecoration: "underline", flexShrink: 0 }}>download</a>
+                            {(file.uploader_id === authUser?.id || activeProject.owner_id === authUser?.id) && (
+                              <button
+                                className="hb"
+                                onClick={async () => {
+                                  const path = `project-files/${activeProject.id}/${file.file_name}`;
+                                  await supabase.storage.from("user-uploads").remove([path]);
+                                  await supabase.from("project_files").delete().eq("id", file.id);
+                                  setProjectFiles((prev) => prev.filter((f) => f.id !== file.id));
+                                  showToast("File deleted.");
+                                }}
+                                style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontSize: 12, fontFamily: "inherit", flexShrink: 0 }}
+                              >
+                                delete
+                              </button>
+                            )}
                           </div>
-                          {file.type?.startsWith("image") && (
-                            <img src={file.url} alt={file.name} style={{ width: "100%", maxHeight: 260, objectFit: "cover", borderRadius: 6, border: `1px solid ${border}` }} />
-                          )}
-                          {file.type?.includes("pdf") && (
-                            <a href={file.url} target="_blank" rel="noreferrer" style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, color: text, border: `1px solid ${border}`, borderRadius: 6, padding: "6px 12px", textDecoration: "none" }}>↗ view PDF</a>
-                          )}
                         </div>
                       ))}
                     </div>
@@ -6068,75 +6274,43 @@ const setViewingProfile = (user) => {
             {projectTab === "docs" && (
               <div>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-                  <div style={{ fontSize: 10, color: textMuted, letterSpacing: "1.5px" }}>SHARED DOCUMENTS</div>
-                  {showNewDocInput ? (
-                    <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                      <input autoFocus value={newDocTitle} onChange={e => setNewDocTitle(e.target.value)}
-                        onKeyDown={async e => { if (e.key === "Enter" && newDocTitle.trim()) { await handleCreateProjectDoc(activeProject.id, newDocTitle.trim()); setNewDocTitle(""); setShowNewDocInput(false); } else if (e.key === "Escape") { setNewDocTitle(""); setShowNewDocInput(false); } }}
-                        placeholder="Document title..." style={{ ...inputStyle, padding: "4px 8px", fontSize: 11, width: 160 }} />
-                      <button className="hb" onClick={async () => { if (newDocTitle.trim()) { await handleCreateProjectDoc(activeProject.id, newDocTitle.trim()); setNewDocTitle(""); setShowNewDocInput(false); } }} style={{ background: "none", border: "none", color: text, cursor: "pointer", fontFamily: "inherit", fontSize: 11 }}>create</button>
-                      <button className="hb" onClick={() => { setNewDocTitle(""); setShowNewDocInput(false); }} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontFamily: "inherit", fontSize: 11 }}>cancel</button>
-                    </div>
-                  ) : (
-                    <button className="hb" onClick={() => setShowNewDocInput(true)} style={{ background: "none", border: "none", color: text, cursor: "pointer", fontFamily: "inherit", fontSize: 11, textDecoration: "underline" }}>+ new doc</button>
+                  <div style={{ fontSize: 10, color: textMuted, letterSpacing: "1.5px" }}>PROJECT DOC</div>
+                  {(activeProject.owner_id === authUser?.id || projectMembers.some((u) => u.id === authUser?.id)) && (
+                    <button className="hb" onClick={() => setWorkspaceDocEditing((prev) => !prev)} style={{ background: "none", border: `1px solid ${border}`, borderRadius: 6, padding: "5px 10px", fontSize: 11, cursor: "pointer", color: textMuted, fontFamily: "inherit" }}>
+                      {workspaceDocEditing ? "view" : "edit"}
+                    </button>
                   )}
                 </div>
-                {activeDoc ? (
-                  <div>
-                    <button onClick={() => setActiveDoc(null)} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontFamily: "inherit", fontSize: 12, marginBottom: 16 }}>← all docs</button>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
-                      <div>
-                        <div style={{ fontSize: 16, color: text, fontWeight: 400, marginBottom: 4 }}>{activeDoc.title}</div>
-                        <div style={{ fontSize: 10, color: textMuted }}>last edited by {activeDoc.last_edited_by}</div>
-                      </div>
-                      <div style={{ display: "flex", gap: 8 }}>
-                        <button className="hb" onClick={() => setDocPreviewMode(m => !m)}
-                          style={{ background: "none", border: `1px solid ${border}`, borderRadius: 6, padding: "5px 10px", fontSize: 11, cursor: "pointer", color: textMuted, fontFamily: "inherit" }}>
-                          {docPreviewMode ? "edit" : "preview"}
-                        </button>
-                        <button className="hb" onClick={async () => handleDeleteProjectDoc(activeDoc.id, true)} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontFamily: "inherit", fontSize: 11, textDecoration: "underline" }}>delete doc</button>
-                      </div>
-                    </div>
-                    {docPreviewMode ? (
-                      <div style={{ ...inputStyle, minHeight: 400, fontSize: 13, lineHeight: 1.8, whiteSpace: "pre-wrap", overflow: "auto", cursor: "text" }}
-                        onClick={() => setDocPreviewMode(false)}>
-                        {(activeDoc.content || "").split("\n").map((line, i) => {
-                          if (line.startsWith("# ")) return <h1 key={i} style={{ fontSize: 20, fontWeight: 400, letterSpacing: "-0.5px", marginBottom: 8 }}>{line.slice(2)}</h1>;
-                          if (line.startsWith("## ")) return <h2 key={i} style={{ fontSize: 16, fontWeight: 400, marginBottom: 6 }}>{line.slice(3)}</h2>;
-                          if (line.startsWith("### ")) return <h3 key={i} style={{ fontSize: 13, fontWeight: 500, marginBottom: 4 }}>{line.slice(4)}</h3>;
-                          if (line.startsWith("- ") || line.startsWith("* ")) return <div key={i} style={{ display: "flex", gap: 8, marginBottom: 4 }}><span>·</span><span>{line.slice(2)}</span></div>;
-                          if (line === "") return <div key={i} style={{ height: "1em" }} />;
-                          const bold = line.replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>").replace(/__(.*?)__/g, "<strong>$1</strong>");
-                          const italic = bold.replace(/\*(.*?)\*/g, "<em>$1</em>").replace(/_(.*?)_/g, "<em>$1</em>");
-                          return <div key={i} style={{ marginBottom: 4 }} dangerouslySetInnerHTML={{ __html: italic }} />;
-                        })}
-                        {!activeDoc.content && <span style={{ color: textMuted, fontStyle: "italic" }}>click to start writing...</span>}
-                      </div>
-                    ) : (
-                      <textarea
-                        value={activeDoc.content || ""}
-                        onChange={e => setActiveDoc({ ...activeDoc, content: e.target.value })}
-                        onBlur={async () => handleSaveProjectDoc(activeDoc)}
-                        placeholder="Start writing... Use # for headers, **bold**, *italic*, - for bullets"
-                        style={{ ...inputStyle, resize: "none", minHeight: 400, fontSize: 13, lineHeight: 1.8, fontFamily: "inherit" }}
-                      />
-                    )}
-                  </div>
+                {workspaceDocLoading ? (
+                  <div style={{ fontSize: 12, color: textMuted }}>loading doc...</div>
+                ) : workspaceDocEditing ? (
+                  <textarea
+                    value={workspaceDocDraft}
+                    onChange={(e) => setWorkspaceDocDraft(e.target.value)}
+                    onBlur={async () => {
+                      const payload = {
+                        project_id: activeProject.id,
+                        content: workspaceDocDraft,
+                        updated_at: new Date().toISOString(),
+                        updated_by: authUser.id,
+                        updated_by_name: profile?.name || "Unknown",
+                      };
+                      const { data } = await supabase.from("project_docs").upsert(payload, { onConflict: "project_id" }).select().single();
+                      if (data) setWorkspaceDoc(data);
+                      showToast("Doc saved.");
+                    }}
+                    placeholder="Write notes for this project..."
+                    style={{ ...inputStyle, resize: "vertical", minHeight: 300, fontSize: 13, lineHeight: 1.7, fontFamily: "inherit" }}
+                  />
                 ) : (
-                  projectDocs.length === 0
-                    ? <div style={{ fontSize: 13, color: textMuted }}>no documents yet. create one to start writing together.</div>
-                    : <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
-                        {projectDocs.map((doc, i) => (
-                          <div key={doc.id} style={{ background: bg2, borderRadius: i === 0 && projectDocs.length === 1 ? 8 : i === 0 ? "8px 8px 0 0" : i === projectDocs.length - 1 ? "0 0 8px 8px" : 0, border: `1px solid ${border}`, borderBottom: i < projectDocs.length - 1 ? "none" : `1px solid ${border}`, padding: "14px 18px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
-                            <div onClick={() => setActiveDoc(doc)} style={{ flex: 1, cursor: "pointer" }}
-                              onMouseEnter={e => e.currentTarget.style.opacity = "0.7"} onMouseLeave={e => e.currentTarget.style.opacity = "1"}>
-                              <div style={{ fontSize: 14, color: text, marginBottom: 4 }}>{doc.title}</div>
-                              <div style={{ fontSize: 10, color: textMuted }}>edited by {doc.last_edited_by} · {new Date(doc.updated_at).toLocaleDateString()}</div>
-                            </div>
-                            <button className="hb" onClick={async () => handleDeleteProjectDoc(doc.id)} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontFamily: "inherit", fontSize: 11, flexShrink: 0 }}>delete</button>
-                          </div>
-                        ))}
-                      </div>
+                  <div style={{ ...inputStyle, minHeight: 220, whiteSpace: "pre-wrap", fontSize: 13, lineHeight: 1.75 }}>
+                    {workspaceDoc?.content ? workspaceDoc.content : <span style={{ color: textMuted }}>No doc yet. Click edit to start writing.</span>}
+                  </div>
+                )}
+                {workspaceDoc?.updated_at && (
+                  <div style={{ marginTop: 10, fontSize: 11, color: textMuted }}>
+                    Last edited by {workspaceDoc.updated_by_name || "Unknown"} · {relativeTime(workspaceDoc.updated_at)}
+                  </div>
                 )}
               </div>
             )}
