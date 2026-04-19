@@ -4697,7 +4697,7 @@ const setViewingProfile = (user) => {
                 </div>
               ) : activeThread ? (
                 /* Thread detail */
-                <div style={{ maxWidth: 720, margin: "0 auto", padding: "32px 24px" }}>
+                <div style={{ maxWidth: 1100, margin: "0 auto", padding: "32px 40px" }}>
                   <button className="hb" onClick={() => setActiveThread(null)}
                     style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontFamily: "inherit", fontSize: 12, marginBottom: 24, padding: 0, display: "flex", alignItems: "center", gap: 6 }}>
                     ← back to {activeCommunity.name}
@@ -4764,7 +4764,7 @@ const setViewingProfile = (user) => {
                 </div>
               ) : (
                 /* Thread list */
-                <div style={{ maxWidth: 760, margin: "0 auto", padding: "32px 24px" }}>
+                <div style={{ maxWidth: 1100, margin: "0 auto", padding: "32px 40px" }}>
                   {/* Community header */}
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24, flexWrap: "wrap", gap: 12 }}>
                     <div>
