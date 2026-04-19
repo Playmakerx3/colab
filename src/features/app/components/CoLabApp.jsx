@@ -1000,6 +1000,7 @@ function CoLab() {
   const [communitySearch, setCommunitySearch] = useState("");
   const [editingPostId, setEditingPostId] = useState(null);
   const [editingPostContent, setEditingPostContent] = useState("");
+  const [communityPostPage, setCommunityPostPage] = useState(1);
   const [topCommunityPosts, setTopCommunityPosts] = useState([]);
   const [projectsSubTab, setProjectsSubTab] = useState("for-you");
   const [networkTab, setNetworkTab] = useState("graph");
@@ -1455,6 +1456,7 @@ const setViewingProfile = (user) => {
     setCommunities,
     setJoinedCommunityIds,
     setCommunityVotes,
+    setCommunityDownvotes,
   });
 
 
@@ -4658,6 +4660,7 @@ const setViewingProfile = (user) => {
         const loadCommunity = async (community) => {
           setActiveCommunity(community);
           setActiveThread(null);
+          setCommunityPostPage(1);
           setCommunityPostsLoading(true);
           const { posts } = await fetchCommunityPosts(community.id);
           setCommunityPosts(posts);
@@ -4678,12 +4681,16 @@ const setViewingProfile = (user) => {
         const handleVote = async (post) => {
           const hasVoted = communityVotes[post.id];
           if (hasVoted) {
-            // un-vote
             await supabase.from("community_post_votes").delete().eq("post_id", post.id).eq("user_id", authUser.id);
             await supabase.from("community_posts").update({ upvotes: Math.max(0, post.upvotes - 1) }).eq("id", post.id);
             setCommunityVotes(prev => { const n = { ...prev }; delete n[post.id]; return n; });
             setCommunityPosts(prev => prev.map(p => p.id === post.id ? { ...p, upvotes: Math.max(0, p.upvotes - 1) } : p));
           } else {
+            // clear any downvote first
+            if (communityDownvotes[post.id]) {
+              await supabase.from("community_post_downvotes").delete().eq("post_id", post.id).eq("user_id", authUser.id);
+              setCommunityDownvotes(prev => { const n = { ...prev }; delete n[post.id]; return n; });
+            }
             await supabase.from("community_post_votes").insert({ post_id: post.id, user_id: authUser.id });
             await supabase.from("community_posts").update({ upvotes: post.upvotes + 1 }).eq("id", post.id);
             setCommunityVotes(prev => ({ ...prev, [post.id]: true }));
@@ -4693,20 +4700,18 @@ const setViewingProfile = (user) => {
 
         const handleDownvote = async (post) => {
           const hasDownvoted = communityDownvotes[post.id];
-          // clear any upvote first
-          if (communityVotes[post.id]) {
-            await supabase.from("community_post_votes").delete().eq("post_id", post.id).eq("user_id", authUser.id);
-            await supabase.from("community_posts").update({ upvotes: post.upvotes - 1 }).eq("id", post.id);
-            setCommunityVotes(prev => { const n = { ...prev }; delete n[post.id]; return n; });
-            setCommunityPosts(prev => prev.map(p => p.id === post.id ? { ...p, upvotes: post.upvotes - 1 } : p));
-            return;
-          }
           if (hasDownvoted) {
-            // un-downvote
+            await supabase.from("community_post_downvotes").delete().eq("post_id", post.id).eq("user_id", authUser.id);
             await supabase.from("community_posts").update({ upvotes: post.upvotes + 1 }).eq("id", post.id);
             setCommunityDownvotes(prev => { const n = { ...prev }; delete n[post.id]; return n; });
             setCommunityPosts(prev => prev.map(p => p.id === post.id ? { ...p, upvotes: post.upvotes + 1 } : p));
           } else {
+            // clear any upvote first
+            if (communityVotes[post.id]) {
+              await supabase.from("community_post_votes").delete().eq("post_id", post.id).eq("user_id", authUser.id);
+              setCommunityVotes(prev => { const n = { ...prev }; delete n[post.id]; return n; });
+            }
+            await supabase.from("community_post_downvotes").insert({ post_id: post.id, user_id: authUser.id });
             await supabase.from("community_posts").update({ upvotes: post.upvotes - 1 }).eq("id", post.id);
             setCommunityDownvotes(prev => ({ ...prev, [post.id]: true }));
             setCommunityPosts(prev => prev.map(p => p.id === post.id ? { ...p, upvotes: post.upvotes - 1 } : p));
@@ -5009,17 +5014,22 @@ const setViewingProfile = (user) => {
                     <div style={{ textAlign: "center", padding: "48px 0", color: textMuted, fontSize: 13 }}>
                       No threads yet.{joinedCommunityIds.includes(activeCommunity.id) ? " Be the first to post." : " Join to start the conversation."}
                     </div>
-                  ) : sortedPosts.map(post => (
-                    <div key={post.id} onClick={() => openThread(post)}
+                  ) : (() => {
+                    const POSTS_PER_PAGE = 15;
+                    const pagedPosts = sortedPosts.slice(0, (communityPostPage || 1) * POSTS_PER_PAGE);
+                    const hasMorePosts = pagedPosts.length < sortedPosts.length;
+                    return (<>
+                    {pagedPosts.map(post => (
+                    <div key={post.id} role="article" onClick={() => openThread(post)}
                       style={{ display: "flex", gap: 14, padding: "16px 0", borderBottom: `1px solid ${border}`, cursor: "pointer", transition: "opacity 0.15s" }}
                       onMouseEnter={e => e.currentTarget.style.opacity = "0.8"}
                       onMouseLeave={e => e.currentTarget.style.opacity = "1"}>
                       {/* Vote */}
                       <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2, flexShrink: 0, width: 36 }}>
-                        <button className="hb" onClick={e => { e.stopPropagation(); handleVote(post); }}
+                        <button aria-label="upvote" className="hb" onClick={e => { e.stopPropagation(); handleVote(post); }}
                           style={{ background: "none", border: "none", cursor: "pointer", fontSize: 14, color: communityVotes[post.id] ? text : textMuted, padding: "2px", lineHeight: 1 }}>+</button>
                         <span style={{ fontSize: 12, fontWeight: 500, color: communityVotes[post.id] ? text : communityDownvotes[post.id] ? textMuted : textMuted }}>{post.upvotes}</span>
-                        <button className="hb" onClick={e => { e.stopPropagation(); handleDownvote(post); }}
+                        <button aria-label="downvote" className="hb" onClick={e => { e.stopPropagation(); handleDownvote(post); }}
                           style={{ background: "none", border: "none", cursor: "pointer", fontSize: 14, color: communityDownvotes[post.id] ? text : textMuted, padding: "2px", lineHeight: 1 }}>−</button>
                       </div>
                       {/* Content */}
@@ -5038,6 +5048,14 @@ const setViewingProfile = (user) => {
                       </div>
                     </div>
                   ))}
+                  {hasMorePosts && (
+                    <div style={{ padding: "20px 0", textAlign: "center" }}>
+                      <button className="hb" onClick={() => setCommunityPostPage(p => p + 1)}
+                        style={{ ...btnG, padding: "10px 28px", fontSize: 12 }}>load more</button>
+                    </div>
+                  )}
+                  </>);
+                })()}
                 </div>
               )}
             </div>
