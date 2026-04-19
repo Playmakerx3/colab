@@ -44,7 +44,7 @@ const MIN_ZOOM = 1;
 const MAX_ZOOM = 6;
 const FOV = 900; // perspective focal length — higher = less extreme depth distortion
 
-export default function NetworkGraph3D({ users, applications, projects, authUser, onNodeClick, onProjectNodeClick, dark, following = [], followers = [] }) {
+export default function NetworkGraph3D({ users, applications, authUser, onNodeClick, dark, following = [], followers = [] }) {
   const canvasRef = useRef();
   const nodesRef = useRef([]);
   const rafRef = useRef();
@@ -160,39 +160,7 @@ export default function NetworkGraph3D({ users, applications, projects, authUser
       };
     });
 
-    const projectNodes = projects
-      .filter((p) => p.title?.trim() && !p.archived)
-      .slice(0, 40)
-      .map((p) => {
-        const owner = users.find((u) => u.id === p.owner_id);
-        const ownerNode = userNodes.find((u) => u.id === p.owner_id);
-        const fallback = { x: cx + (Math.random() - 0.5) * 220, y: cy + (Math.random() - 0.5) * 220 };
-        const anchor = ownerNode ? { x: ownerNode.x, y: ownerNode.y } : fallback;
-        return {
-          id: `project:${p.id}`,
-          projectId: p.id,
-          projectRef: p,
-          name: p.title,
-          role: owner ? `by ${owner.name}` : "project",
-          skills: p.skills || [],
-          nodeType: "project",
-          primarySkill: (p.skills || []).find((s) => skillCenters[s]) || null,
-          macroCluster: getClusterName(p.skills),
-          color: dark ? "#f59e0b" : "#d97706",
-          isMe: false,
-          isCollab: false,
-          isMutual: false,
-          r: 5,
-          x: anchor.x + (Math.random() - 0.5) * 48,
-          y: anchor.y + (Math.random() - 0.5) * 48,
-          vx: 0,
-          vy: 0,
-          targetX: anchor.x,
-          targetY: anchor.y,
-        };
-      });
-
-    const nodes = [...userNodes, ...projectNodes];
+    const nodes = [...userNodes];
     const collabLinks = [];
     collaboratorIds.forEach(cid => { if (users.find(u => u.id === cid)) collabLinks.push({ source: authUser.id, target: cid }); });
     const mutualLinks = [];
@@ -498,14 +466,10 @@ export default function NetworkGraph3D({ users, applications, projects, authUser
     const rect = canvas.getBoundingClientRect();
     const hit = getHit(e.clientX - rect.left, e.clientY - rect.top);
     if (hit && !hit.isMe) {
-      if (hit.nodeType === "project" && hit.projectRef) {
-        onProjectNodeClick?.(hit.projectRef);
-        return;
-      }
       const user = users.find(u => u.id === hit.id);
       if (user) onNodeClick(user);
     }
-  }, [users, onNodeClick, onProjectNodeClick, getHit]);
+  }, [users, onNodeClick, getHit]);
 
   const handleContextMenu = useCallback((e) => e.preventDefault(), []);
 
