@@ -1019,6 +1019,8 @@ function CoLab() {
   const [authPassword, setAuthPassword] = useState("");
   const [authError, setAuthError] = useState("");
   const [resetSent, setResetSent] = useState(false);
+  const [agreedToTerms, setAgreedToTerms] = useState(false);
+  const [showLegalModal, setShowLegalModal] = useState(false);
   const [resetPasswordValue, setResetPasswordValue] = useState("");
   const [resetPasswordError, setResetPasswordError] = useState("");
   const [resetPasswordSuccess, setResetPasswordSuccess] = useState(false);
@@ -1506,6 +1508,7 @@ const setViewingProfile = (user) => {
   // ── AUTH ──
   const handleSignUp = async () => {
     setAuthError("");
+    if (!agreedToTerms) { setAuthError("Please agree to the Legal Notice before creating an account."); return; }
     const { data, error } = await signUp({ email: authEmail, password: authPassword });
     if (error) { setAuthError(error.message); return; }
     if (data.user) { setAuthUser(data.user); setScreen("onboard"); }
@@ -3280,8 +3283,21 @@ const setViewingProfile = (user) => {
               <div><label style={labelStyle}>EMAIL</label><input style={inputStyle} type="email" placeholder="you@example.com" value={authEmail} onChange={e => setAuthEmail(e.target.value)} onKeyDown={e => e.key === "Enter" && (authSubMode === "signup" ? handleSignUp() : handleLogin())} /></div>
               <div><label style={labelStyle}>PASSWORD</label><input style={inputStyle} type="password" placeholder="••••••••" value={authPassword} onChange={e => setAuthPassword(e.target.value)} onKeyDown={e => e.key === "Enter" && (authSubMode === "signup" ? handleSignUp() : handleLogin())} /></div>
             </div>
+            {authSubMode === "signup" && (
+              <div style={{ display: "flex", alignItems: "flex-start", gap: 10, marginBottom: 18 }}>
+                <input type="checkbox" id="terms-agree" checked={agreedToTerms} onChange={e => setAgreedToTerms(e.target.checked)}
+                  style={{ marginTop: 2, flexShrink: 0, cursor: "pointer", accentColor: text }} />
+                <label htmlFor="terms-agree" style={{ fontSize: 11, color: textMuted, lineHeight: 1.6, cursor: "pointer" }}>
+                  I have read and agree to CoLab's{" "}
+                  <button onClick={() => setShowLegalModal(true)} style={{ background: "none", border: "none", color: text, cursor: "pointer", fontFamily: "inherit", fontSize: 11, textDecoration: "underline", padding: 0 }}>
+                    Legal Notice & Terms
+                  </button>
+                </label>
+              </div>
+            )}
             {authError && <div style={{ fontSize: 12, color: "#ef4444", marginBottom: 14 }}>{authError}</div>}
-            <button className="hb" onClick={authSubMode === "signup" ? handleSignUp : handleLogin} style={{ ...btnP, width: "100%", padding: "13px", marginBottom: 16 }}>
+            <button className="hb" onClick={authSubMode === "signup" ? handleSignUp : handleLogin}
+              style={{ ...btnP, width: "100%", padding: "13px", marginBottom: 16, opacity: authSubMode === "signup" && !agreedToTerms ? 0.5 : 1 }}>
               {authSubMode === "signup" ? "Create account →" : "Log in →"}
             </button>
             {authSubMode === "login" && (
@@ -3292,7 +3308,7 @@ const setViewingProfile = (user) => {
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <div style={{ fontSize: 12, color: textMuted }}>
                 {authSubMode === "signup" ? "Already have an account?" : "Don't have an account?"}
-                <button onClick={() => { setAuthSubMode(authSubMode === "signup" ? "login" : "signup"); setAuthError(""); setResetSent(false); }} style={{ background: "none", border: "none", color: text, cursor: "pointer", fontFamily: "inherit", fontSize: 12, textDecoration: "underline", marginLeft: 6 }}>
+                <button onClick={() => { setAuthSubMode(authSubMode === "signup" ? "login" : "signup"); setAuthError(""); setResetSent(false); setAgreedToTerms(false); }} style={{ background: "none", border: "none", color: text, cursor: "pointer", fontFamily: "inherit", fontSize: 12, textDecoration: "underline", marginLeft: 6 }}>
                   {authSubMode === "signup" ? "Log in" : "Sign up"}
                 </button>
               </div>
@@ -3300,6 +3316,46 @@ const setViewingProfile = (user) => {
           </div>
         )}
       </div>
+
+      {/* Legal Notice Modal */}
+      {showLegalModal && (
+        <div onClick={() => setShowLegalModal(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 16, backdropFilter: "blur(8px)" }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: bg, border: `1px solid ${border}`, borderRadius: 12, width: "100%", maxWidth: 600, maxHeight: "80vh", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+            <div style={{ padding: "24px 28px 16px", borderBottom: `1px solid ${border}`, display: "flex", justifyContent: "space-between", alignItems: "center", flexShrink: 0 }}>
+              <div style={{ fontSize: 10, letterSpacing: "2px", color: textMuted }}>LEGAL NOTICE & USER ACKNOWLEDGMENT</div>
+              <button onClick={() => setShowLegalModal(false)} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontSize: 18, fontFamily: "inherit", lineHeight: 1 }}>✕</button>
+            </div>
+            <div style={{ overflowY: "auto", padding: "24px 28px", flex: 1, fontSize: 12, color: text, lineHeight: 1.8 }}>
+              <p style={{ color: textMuted, marginBottom: 20 }}>Welcome to CoLab. Before creating an account and using our platform, please carefully review the following legal notice. By proceeding with registration, you acknowledge that you have read, understood, and agreed to be bound by these terms.</p>
+
+              {[
+                ["1. Acceptance of Terms", "By signing up for CoLab, you agree to comply with and be legally bound by our Terms of Service, Privacy Policy, and any additional guidelines or policies that may be posted from time to time. If you do not agree, you must not use the platform."],
+                ["2. Eligibility", "You must be at least 18 years old, or the age of legal majority in your jurisdiction, to create an account. By registering, you represent and warrant that you meet this requirement."],
+                ["3. User Responsibilities", "You are responsible for maintaining the confidentiality of your account credentials and for all activities that occur under your account. You agree not to: provide false or misleading information; violate any applicable laws or regulations; infringe upon the rights of others; or upload or distribute harmful, abusive, or unauthorized content."],
+                ["4. Privacy & Data Use", "By signing up, you consent to the collection, use, and storage of your information as outlined in our Privacy Policy. CoLab may process personal data to provide and improve its services."],
+                ["5. Intellectual Property", "All content, trademarks, logos, and intellectual property associated with CoLab remain the property of CoLab or its licensors. Unauthorized use is strictly prohibited."],
+                ["6. Limitation of Liability", "To the fullest extent permitted by law, CoLab shall not be liable for any indirect, incidental, or consequential damages arising from your use of the platform."],
+                ["7. Termination", "CoLab reserves the right to suspend or terminate your account at its discretion, without prior notice, if you violate these terms or engage in prohibited conduct."],
+                ["8. Modifications", "CoLab may update this notice and related policies at any time. Continued use of the platform constitutes acceptance of any changes."],
+                ["9. Governing Law", "This agreement shall be governed by and construed in accordance with the laws of the applicable jurisdiction in which CoLab operates."],
+              ].map(([title, body]) => (
+                <div key={title} style={{ marginBottom: 18 }}>
+                  <div style={{ fontSize: 10, letterSpacing: "1.5px", color: textMuted, marginBottom: 6 }}>{title.toUpperCase()}</div>
+                  <div>{body}</div>
+                </div>
+              ))}
+
+              <div style={{ borderTop: `1px solid ${border}`, paddingTop: 16, marginTop: 8, fontSize: 11, color: textMuted, fontStyle: "italic" }}>
+                By clicking "Create account" or creating an account, you confirm that you have read and agree to this Legal Notice and all associated policies.
+              </div>
+            </div>
+            <div style={{ padding: "16px 28px", borderTop: `1px solid ${border}`, flexShrink: 0, display: "flex", gap: 10 }}>
+              <button className="hb" onClick={() => { setAgreedToTerms(true); setShowLegalModal(false); }} style={{ ...btnP, flex: 1, padding: "11px" }}>I agree →</button>
+              <button className="hb" onClick={() => setShowLegalModal(false)} style={{ background: "none", border: `1px solid ${border}`, borderRadius: 8, padding: "11px 20px", cursor: "pointer", fontFamily: "inherit", fontSize: 12, color: textMuted }}>close</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 
