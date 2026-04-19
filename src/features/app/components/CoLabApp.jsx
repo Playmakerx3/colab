@@ -3663,125 +3663,128 @@ const setViewingProfile = (user) => {
 
           {/* PROJECTS TAB */}
           {exploreTab === "projects" && (
-            <>
-              <div style={{ marginBottom: 32 }}>
-                <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px", marginBottom: 14 }}>FIND YOUR PEOPLE. BUILD SOMETHING REAL.</div>
-                <h1 style={{ fontSize: "clamp(30px, 5vw, 56px)", fontWeight: 400, lineHeight: 1.0, letterSpacing: "-2.5px", marginBottom: 14, color: text }}>Don't just connect.<br />Build together.</h1>
-                <p style={{ fontSize: 13, color: textMuted, maxWidth: 400, lineHeight: 1.8, marginBottom: 22 }}>Post your project. Find people with the skills you need. Get to work.</p>
-                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                  <button className="hb" onClick={openCreateProjectFlow} style={btnP}>Post a project</button>
-                  <button className="hb" onClick={() => setExploreTab("feed")} style={btnG}>Browse feed</button>
+            <div style={{ maxWidth: 1020, margin: "0 auto", display: "flex", gap: 48, alignItems: "flex-start" }}>
+
+              {/* Left: main project list */}
+              <div style={{ flex: 1, minWidth: 0 }}>
+
+                {/* Hero */}
+                <div style={{ marginBottom: 24 }}>
+                  <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px", marginBottom: 10 }}>OPEN PROJECTS</div>
+                  <h2 style={{ fontSize: "clamp(26px, 4vw, 44px)", fontWeight: 400, lineHeight: 1.05, letterSpacing: "-2px", marginBottom: 10, color: text }}>Build together.</h2>
+                  <p style={{ fontSize: 13, color: textMuted, lineHeight: 1.75 }}>Find projects that need your skills, or post one and find your team.</p>
                 </div>
-              </div>
-              <div style={{ borderTop: `1px solid ${border}`, marginBottom: 24, display: "flex", gap: 32, paddingTop: 20, flexWrap: "wrap" }}>
-                {[["open now", projects.filter(p => (p.collaborators||0) < (p.max_collaborators||2)).length],["projects", projects.length],["builders", users.length]].map(([l,v]) => (
-                  <div key={l}><div style={{ fontSize: 24, color: text, letterSpacing: "-1px" }}>{v}</div><div style={{ fontSize: 10, color: textMuted, marginTop: 2 }}>{l}</div></div>
-                ))}
-              </div>
-              {projects.filter(p => p.featured && !p.archived && !p.is_private).length > 0 && (
-                <div style={{ marginBottom: 28, padding: "16px 20px", background: bg2, border: `1px solid ${border}`, borderRadius: 10 }}>
-                  <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px", marginBottom: 12 }}>★ FEATURED THIS WEEK</div>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                    {projects.filter(p => p.featured && !p.archived && !p.is_private).slice(0, 3).map(p => (
-                      <div key={p.id} onClick={() => { setActiveProject(p); loadProjectData(p.id); }} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer", padding: "8px 0", borderBottom: `1px solid ${border}` }}
-                        onMouseEnter={e => e.currentTarget.style.opacity = "0.6"} onMouseLeave={e => e.currentTarget.style.opacity = "1"}>
-                        <div>
-                          <div style={{ fontSize: 13, color: text }}>{p.title}</div>
-                          <div style={{ fontSize: 10, color: textMuted }}>{p.owner_name} · {p.category}</div>
-                        </div>
-                        <div style={{ display: "flex", gap: 8, alignItems: "center", flexShrink: 0 }}>
-                          {p.shipped && <span style={{ fontSize: 10, color: "#22c55e" }}>shipped</span>}
-                          <span style={{ fontSize: 10, color: textMuted }}>{(p.skills || []).slice(0, 2).join(", ")}</span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+
+                {/* Sub-tabs */}
+                <div style={{ display: "flex", gap: 4, marginBottom: 24, background: bg2, borderRadius: 8, padding: 3, border: `1px solid ${border}`, width: "fit-content" }}>
+                  {["for-you","all"].map(id => (
+                    <button key={id} onClick={() => setProjectsSubTab(id)} style={{ padding: "5px 14px", borderRadius: 6, fontSize: 11, cursor: "pointer", fontFamily: "inherit", border: "none", background: projectsSubTab === id ? (dark ? "#fff" : "#111") : "transparent", color: projectsSubTab === id ? (dark ? "#111" : "#fff") : textMuted, transition: "all 0.15s", fontWeight: projectsSubTab === id ? 500 : 400, display: "inline-flex", gap: 6, alignItems: "center" }}>
+                      {id === "for-you" ? "for you" : "all"}
+                      {id === "for-you" && forYou.length > 0 && <span style={{ fontSize: 9, background: projectsSubTab === id ? (dark ? "rgba(0,0,0,0.15)" : "rgba(255,255,255,0.2)") : bg3, borderRadius: 10, padding: "1px 5px", color: projectsSubTab === id ? (dark ? "#111" : "#fff") : textMuted }}>{forYou.length}</span>}
+                    </button>
+                  ))}
                 </div>
-              )}
-              {trendingProjects.length > 0 && (
-                <div style={{ marginBottom: 28, padding: "16px 20px", background: bg2, border: `1px solid ${border}`, borderRadius: 10 }}>
-                  <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px", marginBottom: 12 }}>TRENDING</div>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                    {trendingProjects.map(p => (
-                      <div key={p.id} onClick={() => { setActiveProject(p); loadProjectData(p.id); }} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer", padding: "6px 0", borderBottom: `1px solid ${border}` }}
-                        onMouseEnter={e => e.currentTarget.style.opacity = "0.6"} onMouseLeave={e => e.currentTarget.style.opacity = "1"}>
-                        <div>
-                          <div style={{ fontSize: 13, color: text }}>{p.title}</div>
-                          <div style={{ fontSize: 10, color: textMuted }}>{p.category}</div>
-                        </div>
-                        <div style={{ fontSize: 10, color: textMuted, flexShrink: 0 }}>{applications.filter(a => a.project_id === p.id).length} applicants</div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-              {/* Project sub-tabs: for-you | all */}
-              <div style={{ borderBottom: `1px solid ${border}`, display: "flex", marginBottom: 0 }}>
-                {["for-you","all"].map(id => (
-                  <button key={id} onClick={() => setProjectsSubTab(id)} style={{ background: "none", border: "none", borderBottom: projectsSubTab === id ? `1px solid ${text}` : "1px solid transparent", color: projectsSubTab === id ? text : textMuted, padding: "8px 0", fontSize: 12, cursor: "pointer", fontFamily: "inherit", marginRight: 24, transition: "all 0.15s", display: "inline-flex", gap: 6, alignItems: "center" }}>
-                    {id === "for-you" ? "for you" : "all projects"}
-                    {id === "for-you" && forYou.length > 0 && <span style={{ fontSize: 10, background: bg3, borderRadius: 10, padding: "1px 6px", color: textMuted }}>{forYou.length}</span>}
-                  </button>
-                ))}
-              </div>
-              {loading ? <Spinner dark={dark} /> : (
-                <>
-                  {projectsSubTab === "for-you" && ((profile?.skills || []).length === 0
-                    ? <div style={{ padding: "36px 0", color: textMuted, fontSize: 13 }}>add skills to see matched projects. <button onClick={() => setAppScreen("profile")} style={{ background: "none", border: "none", color: text, cursor: "pointer", fontFamily: "inherit", fontSize: 13, textDecoration: "underline" }}>update profile →</button></div>
-                    : forYou.length === 0
-                      ? <div style={{ padding: "36px 0", color: textMuted, fontSize: 13 }}>no matches yet. <button className="hb" onClick={() => setProjectsSubTab("all")} style={{ background: "none", border: "none", color: text, cursor: "pointer", fontFamily: "inherit", fontSize: 13, textDecoration: "underline" }}>browse all →</button></div>
-                      : <div><div style={{ padding: "14px 0 2px", fontSize: 11, color: textMuted }}>{forYou.length} project{forYou.length !== 1 ? "s" : ""} matching your skills</div>{forYou.map(p => <PRow key={p.id} p={p} />)}</div>
-                  )}
-                  {projectsSubTab === "all" && (
-                <div>
-                  <div style={{ padding: "14px 0 12px", display: "flex", flexDirection: "column", gap: 10 }}>
+
+                {/* Filters — all sub-tab only */}
+                {projectsSubTab === "all" && (
+                  <div style={{ marginBottom: 20, display: "flex", flexDirection: "column", gap: 10 }}>
                     <input placeholder="search projects..." value={search} onChange={e => setSearch(e.target.value)} style={inputStyle} />
                     <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                      <select value={industryFilter || ""} onChange={(e) => setIndustryFilter(e.target.value || null)} style={{ ...inputStyle, maxWidth: 220, fontSize: 11, padding: "7px 10px" }}>
+                      <select value={industryFilter || ""} onChange={e => setIndustryFilter(e.target.value || null)} style={{ ...inputStyle, maxWidth: 220, fontSize: 11, padding: "7px 10px" }}>
                         <option value="">all industries</option>
-                        {CATEGORIES.map((category) => <option key={category} value={category}>{category}</option>)}
+                        {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
                       </select>
-                      <input placeholder="filter by location" value={locationFilter} onChange={(e) => setLocationFilter(e.target.value)} style={{ ...inputStyle, flex: 1, minWidth: 150, fontSize: 11, padding: "7px 10px" }} />
+                      <input placeholder="filter by location" value={locationFilter} onChange={e => setLocationFilter(e.target.value)} style={{ ...inputStyle, flex: 1, minWidth: 150, fontSize: 11, padding: "7px 10px" }} />
                     </div>
                     <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
                       {["Design","Engineering","Marketing","Music","Video","Finance","AI/ML","Writing","Product"].map(s => { const sel = filterSkill === s; return <button key={s} className="hb" onClick={() => setFilterSkill(sel ? null : s)} style={{ padding: "3px 10px", borderRadius: 3, fontSize: 10, cursor: "pointer", fontFamily: "inherit", background: sel ? text : "none", color: sel ? bg : textMuted, border: `1px solid ${sel ? text : border}`, transition: "all 0.15s" }}>{s}</button>; })}
                       {(filterSkill || industryFilter || locationFilter || search || regionFilter) && <button className="hb" onClick={clearExploreFilters} style={{ padding: "3px 10px", borderRadius: 3, fontSize: 10, cursor: "pointer", fontFamily: "inherit", background: "none", color: textMuted, border: `1px solid ${border}` }}>clear</button>}
                     </div>
-                    {/* Region filter */}
                     <div style={{ display: "flex", gap: 5, flexWrap: "wrap", alignItems: "center" }}>
                       <span style={{ fontSize: 10, color: textMuted, letterSpacing: "1px" }}>REGION</span>
                       {["local","city","national","international"].map(r => { const sel = regionFilter === r; return <button key={r} className="hb" onClick={() => setRegionFilter(sel ? null : r)} style={{ padding: "3px 10px", borderRadius: 3, fontSize: 10, cursor: "pointer", fontFamily: "inherit", background: sel ? text : "none", color: sel ? bg : textMuted, border: `1px solid ${sel ? text : border}`, transition: "all 0.15s" }}>{r}</button>; })}
                     </div>
+                    {exploreFiltersClearedNotice && <div style={{ fontSize: 11, color: textMuted }}>Showing trending — filters cleared</div>}
                   </div>
-                  {exploreFiltersClearedNotice && (
-                    <div style={{ margin: "4px 0 8px", fontSize: 11, color: textMuted }}>
-                      Showing trending projects — filters cleared
-                    </div>
-                  )}
-                  {allP.length === 0
-                    ? (
-                      <div style={{ padding: "24px 0" }}>
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8, gap: 8, flexWrap: "wrap" }}>
-                          <div style={{ fontSize: 11, color: textMuted, letterSpacing: "1px" }}>Trending right now</div>
-                          <button
-                            className="hb"
-                            onClick={clearExploreFilters}
-                            style={{ background: "none", border: "none", color: text, cursor: "pointer", fontFamily: "inherit", fontSize: 11, textDecoration: "underline", padding: 0 }}
-                          >
-                            Clear filters
-                          </button>
-                        </div>
-                        {trendingFallbackProjects.length > 0
-                          ? trendingFallbackProjects.map((project) => <PRow key={project.id} p={project} />)
-                          : <div style={{ fontSize: 12, color: textMuted }}>No projects available right now.</div>}
-                      </div>
-                    )
-                    : allP.map(p => <PRow key={p.id} p={p} />)}
+                )}
+
+                {/* Project list */}
+                {loading ? <Spinner dark={dark} /> : (
+                  <>
+                    {projectsSubTab === "for-you" && ((profile?.skills || []).length === 0
+                      ? <div style={{ padding: "36px 0", color: textMuted, fontSize: 13 }}>Add skills to your profile to see matched projects. <button onClick={() => setAppScreen("profile")} style={{ background: "none", border: "none", color: text, cursor: "pointer", fontFamily: "inherit", fontSize: 13, textDecoration: "underline" }}>update profile →</button></div>
+                      : forYou.length === 0
+                        ? <div style={{ padding: "36px 0", color: textMuted, fontSize: 13 }}>No matches yet. <button className="hb" onClick={() => setProjectsSubTab("all")} style={{ background: "none", border: "none", color: text, cursor: "pointer", fontFamily: "inherit", fontSize: 13, textDecoration: "underline" }}>browse all →</button></div>
+                        : <div><div style={{ padding: "14px 0 2px", fontSize: 11, color: textMuted }}>{forYou.length} project{forYou.length !== 1 ? "s" : ""} matching your skills</div>{forYou.map(p => <PRow key={p.id} p={p} />)}</div>
+                    )}
+                    {projectsSubTab === "all" && (
+                      allP.length === 0
+                        ? <div style={{ padding: "24px 0" }}>
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8, gap: 8 }}>
+                              <div style={{ fontSize: 11, color: textMuted, letterSpacing: "1px" }}>Trending right now</div>
+                              <button className="hb" onClick={clearExploreFilters} style={{ background: "none", border: "none", color: text, cursor: "pointer", fontFamily: "inherit", fontSize: 11, textDecoration: "underline", padding: 0 }}>clear filters</button>
+                            </div>
+                            {trendingFallbackProjects.length > 0 ? trendingFallbackProjects.map(p => <PRow key={p.id} p={p} />) : <div style={{ fontSize: 12, color: textMuted }}>No projects available right now.</div>}
+                          </div>
+                        : allP.map(p => <PRow key={p.id} p={p} />)
+                    )}
+                  </>
+                )}
+              </div>{/* end left column */}
+
+              {/* Right: sidebar */}
+              <div style={{ width: 260, flexShrink: 0, position: "sticky", top: 24, display: "flex", flexDirection: "column", gap: 28 }}>
+
+                {/* CTA */}
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  <button className="hb" onClick={openCreateProjectFlow} style={{ ...btnP, width: "100%", textAlign: "center" }}>+ post a project</button>
                 </div>
-              )}
-            </>
-          )}
-            </>
+
+                {/* Stats */}
+                <div style={{ border: `1px solid ${border}`, borderRadius: 10, overflow: "hidden" }}>
+                  {[["open now", projects.filter(p => (p.collaborators||0) < (p.max_collaborators||2)).length], ["total projects", projects.length], ["builders", users.length]].map(([l, v], i, arr) => (
+                    <div key={l} style={{ padding: "12px 16px", background: bg2, borderBottom: i < arr.length - 1 ? `1px solid ${border}` : "none", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <div style={{ fontSize: 11, color: textMuted }}>{l}</div>
+                      <div style={{ fontSize: 18, color: text, letterSpacing: "-0.5px" }}>{v}</div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Featured */}
+                {projects.filter(p => p.featured && !p.archived && !p.is_private).length > 0 && (
+                  <div>
+                    <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px", marginBottom: 12 }}>★ FEATURED</div>
+                    <div style={{ border: `1px solid ${border}`, borderRadius: 10, overflow: "hidden" }}>
+                      {projects.filter(p => p.featured && !p.archived && !p.is_private).slice(0, 3).map((p, i, arr) => (
+                        <div key={p.id} onClick={() => { setActiveProject(p); loadProjectData(p.id); }} style={{ padding: "10px 14px", background: bg2, borderBottom: i < arr.length - 1 ? `1px solid ${border}` : "none", cursor: "pointer", transition: "opacity 0.15s" }}
+                          onMouseEnter={e => e.currentTarget.style.opacity = "0.7"} onMouseLeave={e => e.currentTarget.style.opacity = "1"}>
+                          <div style={{ fontSize: 12, fontWeight: 500, color: text, marginBottom: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.title}</div>
+                          <div style={{ fontSize: 10, color: textMuted }}>{p.owner_name} · {p.category}</div>
+                          {p.shipped && <div style={{ fontSize: 10, color: "#22c55e", marginTop: 2 }}>shipped ✓</div>}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Trending */}
+                {trendingProjects.length > 0 && (
+                  <div>
+                    <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px", marginBottom: 12 }}>TRENDING</div>
+                    <div style={{ border: `1px solid ${border}`, borderRadius: 10, overflow: "hidden" }}>
+                      {trendingProjects.map((p, i, arr) => (
+                        <div key={p.id} onClick={() => { setActiveProject(p); loadProjectData(p.id); }} style={{ padding: "10px 14px", background: bg2, borderBottom: i < arr.length - 1 ? `1px solid ${border}` : "none", cursor: "pointer", transition: "opacity 0.15s" }}
+                          onMouseEnter={e => e.currentTarget.style.opacity = "0.7"} onMouseLeave={e => e.currentTarget.style.opacity = "1"}>
+                          <div style={{ fontSize: 12, fontWeight: 500, color: text, marginBottom: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.title}</div>
+                          <div style={{ fontSize: 10, color: textMuted }}>{p.category} · {applications.filter(a => a.project_id === p.id).length} applicants</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+              </div>{/* end sidebar */}
+            </div>
           )}
 
           {/* FEED TAB */}
