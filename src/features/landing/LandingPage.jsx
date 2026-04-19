@@ -52,25 +52,53 @@ export default function LandingPage({ dark, setDark, onLogin, onSignup, supabase
     }
   `;
 
-  const [liveStats, setLiveStats] = useState({ builders: "...", projects: "..." });
-  const [skillCategoryCount, setSkillCategoryCount] = useState("...");
+  const [liveStats, setLiveStats] = useState({ builders: 0, projects: 0, shipped: 0 });
+  const [displayStats, setDisplayStats] = useState({ builders: 0, projects: 0, shipped: 0 });
+  const [statsLoaded, setStatsLoaded] = useState(false);
 
   useEffect(() => {
     (async () => {
       const [
         { count: builderCount },
         { count: projectCount },
-        { data: projSkills },
+        { count: shippedCount },
       ] = await Promise.all([
         supabase.from("profiles").select("*", { count: "exact", head: true }),
         supabase.from("projects").select("*", { count: "exact", head: true }),
-        supabase.from("projects").select("skills"),
+        supabase.from("projects").select("*", { count: "exact", head: true }).eq("shipped", true),
       ]);
-      setLiveStats({ builders: builderCount ?? "...", projects: projectCount ?? "..." });
-      const uniqueSkills = new Set((projSkills || []).flatMap((p) => p.skills || []));
-      setSkillCategoryCount(uniqueSkills.size || 48);
+      setLiveStats({
+        builders: builderCount ?? 0,
+        projects: projectCount ?? 0,
+        shipped: shippedCount ?? 0,
+      });
+      setStatsLoaded(true);
     })();
   }, []);
+
+  // Count-up animation when stats load
+  useEffect(() => {
+    if (!statsLoaded) return;
+    const duration = 1000;
+    const frames = 40;
+    const interval = duration / frames;
+    let frame = 0;
+    const timer = setInterval(() => {
+      frame++;
+      const progress = frame / frames;
+      const ease = 1 - Math.pow(1 - progress, 3);
+      setDisplayStats({
+        builders: Math.round(liveStats.builders * ease),
+        projects: Math.round(liveStats.projects * ease),
+        shipped: Math.round(liveStats.shipped * ease),
+      });
+      if (frame >= frames) {
+        clearInterval(timer);
+        setDisplayStats(liveStats);
+      }
+    }, interval);
+    return () => clearInterval(timer);
+  }, [statsLoaded, liveStats]);
 
   return (
     <div
@@ -227,9 +255,9 @@ export default function LandingPage({ dark, setDark, onLogin, onSignup, supabase
         style={{ display: "flex", width: "100%", borderBottom: `1px solid ${border}` }}
       >
         {[
-          [liveStats.builders, "builders"],
-          [liveStats.projects, "active projects"],
-          [skillCategoryCount, "skill categories"],
+          [displayStats.builders || "—", "builders"],
+          [displayStats.projects || "—", "active projects"],
+          [displayStats.shipped || "—", "shipped"],
           ["100%", "free to start"],
         ].map(([v, l], i) => (
           <div
@@ -311,9 +339,8 @@ export default function LandingPage({ dark, setDark, onLogin, onSignup, supabase
           Ready to build?
         </h2>
         <p style={{ fontSize: 13, color: textMuted, marginBottom: 28 }}>
-          Join{" "}
-          {liveStats.builders !== "..." ? liveStats.builders : "hundreds of"} builders already
-          collaborating on CoLab.
+          Join {liveStats.builders > 0 ? liveStats.builders : "builders"} already collaborating
+          {liveStats.shipped > 0 ? ` — ${liveStats.shipped} projects shipped.` : " on CoLab."}
         </p>
         <button
           className="hb"
@@ -348,7 +375,11 @@ export default function LandingPage({ dark, setDark, onLogin, onSignup, supabase
         }}
       >
         <div style={{ fontSize: 12, color: textMuted }}>[CoLab] — build together.</div>
-        <div style={{ fontSize: 11, color: textMuted }}>© 2026</div>
+        <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
+          <a href="/terms" style={{ fontSize: 11, color: textMuted, textDecoration: "none" }} className="hb">Terms</a>
+          <a href="/privacy" style={{ fontSize: 11, color: textMuted, textDecoration: "none" }} className="hb">Privacy</a>
+          <span style={{ fontSize: 11, color: textMuted }}>© 2026</span>
+        </div>
       </div>
     </div>
   );
