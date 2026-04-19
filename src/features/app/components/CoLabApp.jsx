@@ -1021,6 +1021,7 @@ function CoLab() {
   const [authLoading, setAuthLoading] = useState(true);
   const [authSubMode, setAuthSubMode] = useState("login");
   const [authEmail, setAuthEmail] = useState("");
+  const [verifyEmail, setVerifyEmail] = useState("");
   const [authPassword, setAuthPassword] = useState("");
   const [authError, setAuthError] = useState("");
   const [resetSent, setResetSent] = useState(false);
@@ -1031,6 +1032,9 @@ function CoLab() {
   const [resetPasswordSuccess, setResetPasswordSuccess] = useState(false);
   const [onboardStep, setOnboardStep] = useState(0);
   const [onboardData, setOnboardData] = useState({ name: "", username: "", role: "", bio: "", skills: [] });
+  const [usernameCheckLoading, setUsernameCheckLoading] = useState(false);
+  const [usernameCheckError, setUsernameCheckError] = useState("");
+  const [isUsernameTaken, setIsUsernameTaken] = useState(false);
 
   // Data
   const [projects, setProjects] = useState([]);
@@ -1215,6 +1219,31 @@ const setViewingProfile = (user) => {
     setTimeout(() => setJustInsertedPostIds((prev) => prev.filter((id) => id !== postId)), 350);
   };
   const myInitials = initials(profile?.name, "ME");
+  const normalizedGlobalSearch = globalSearch.trim().toLowerCase();
+  const peopleSearchResults = useMemo(() => {
+    if (!normalizedGlobalSearch) return [];
+    return users
+      .filter((u) => u.id !== authUser?.id && (
+        u.name?.toLowerCase().includes(normalizedGlobalSearch)
+        || u.username?.toLowerCase().includes(normalizedGlobalSearch)
+      ))
+      .slice(0, 3);
+  }, [users, authUser?.id, normalizedGlobalSearch]);
+  const projectSearchResults = useMemo(() => {
+    if (!normalizedGlobalSearch) return [];
+    return projects
+      .filter((p) => (
+        p.title?.toLowerCase().includes(normalizedGlobalSearch)
+        || p.description?.toLowerCase().includes(normalizedGlobalSearch)
+      ))
+      .slice(0, 3);
+  }, [projects, normalizedGlobalSearch]);
+  const communitySearchResults = useMemo(() => {
+    if (!normalizedGlobalSearch) return [];
+    return communities
+      .filter((c) => c.name?.toLowerCase().includes(normalizedGlobalSearch))
+      .slice(0, 3);
+  }, [communities, normalizedGlobalSearch]);
   const getMatchScore = (p) => (profile?.skills || []).filter(s => (p.skills || []).includes(s)).length;
   const unreadDms = dmThreads.filter(t => t.unread && t.id !== activeDmThread?.id).length;
   const unreadNotifs = notifications.filter((n) => !n.read).length + mentionNotifications.length;
@@ -1505,6 +1534,7 @@ const setViewingProfile = (user) => {
     setAuthUser,
     setProfile,
     setBannerPixels,
+    setVerifyEmail,
     setScreen,
     setAuthLoading,
     loadAllData,
@@ -1558,8 +1588,12 @@ const setViewingProfile = (user) => {
     if (!agreedToTerms) { setAuthError("Please agree to the Legal Notice before creating an account."); return; }
     const { data, error } = await signUp({ email: authEmail, password: authPassword });
     if (error) { setAuthError(error.message); return; }
-    // If email confirmation is required, session will be null
-    if (data.user && !data.session) { setScreen("verify"); return; }
+    const needsVerification = data.user && (
+      (Array.isArray(data.user.identities) && data.user.identities.length === 0)
+      || !data.user.email_confirmed_at
+      || !data.session
+    );
+    if (needsVerification) { setVerifyEmail(data.user.email || authEmail); setScreen("verify"); return; }
     if (data.user) { setAuthUser(data.user); setScreen("onboard"); }
   };
 
@@ -1601,8 +1635,45 @@ const setViewingProfile = (user) => {
     setAuthSubMode("login");
   };
 
+  useEffect(() => {
+    if (screen !== "onboard" || onboardStep !== 1) return;
+    const usernameValue = (onboardData.username || "").trim();
+    if (!usernameValue || usernameValue.length < 3) {
+      setUsernameCheckLoading(false);
+      setUsernameCheckError("");
+      setIsUsernameTaken(false);
+      return;
+    }
+    setUsernameCheckLoading(true);
+    setUsernameCheckError("");
+    const timer = setTimeout(async () => {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("id")
+        .eq("username", usernameValue)
+        .maybeSingle();
+      if (error) {
+        setUsernameCheckError("Could not validate username right now.");
+        setIsUsernameTaken(false);
+      } else {
+        setIsUsernameTaken(Boolean(data));
+        setUsernameCheckError(Boolean(data) ? "Username taken." : "");
+      }
+      setUsernameCheckLoading(false);
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [onboardData.username, onboardStep, screen]);
+
+  const resolveCommunitySlug = async (name) => {
+    const baseSlug = name.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+    const { data } = await supabase.from("communities").select("id").eq("slug", baseSlug).maybeSingle();
+    if (!data) return baseSlug;
+    return `${baseSlug}-${Math.floor(Math.random() * 9) + 2}`;
+  };
+
   const handleFinishOnboard = async () => {
     if (!onboardData.name) return;
+    if (isUsernameTaken || usernameCheckError) return;
     try {
       const { data: sessionData } = await supabase.auth.getSession();
       const userId = sessionData?.session?.user?.id || authUser?.id;
@@ -2628,7 +2699,9 @@ const setViewingProfile = (user) => {
   const handleCreatePost = async () => {
     if (!newPostContent.trim()) return;
     const proj = myProjects.find(p => p.id === newPostProject);
-    const insertPayload = {
+    const tempId = `temp-${Date.now()}`;
+    const optimisticPost = {
+      id: tempId,
       user_id: authUser.id,
       user_name: profile.name,
       user_initials: myInitials,
@@ -2638,6 +2711,23 @@ const setViewingProfile = (user) => {
       project_title: proj?.title || null,
       media_url: newPostMediaUrl || null,
       media_type: newPostMediaType || null,
+      created_at: new Date().toISOString(),
+    };
+    setPosts((prev) => [optimisticPost, ...prev]);
+    setNewPostContent("");
+    setNewPostProject("");
+    setNewPostMediaUrl("");
+    setNewPostMediaType("");
+    const insertPayload = {
+      user_id: authUser.id,
+      user_name: profile.name,
+      user_initials: myInitials,
+      user_role: profile.role || "",
+      content: optimisticPost.content,
+      project_id: proj?.id || null,
+      project_title: proj?.title || null,
+      media_url: optimisticPost.media_url,
+      media_type: optimisticPost.media_type,
     };
     let { data, error } = await supabase.from("posts").insert(insertPayload).select().single();
     // If media_type column doesn't exist yet, retry without it
@@ -2645,16 +2735,16 @@ const setViewingProfile = (user) => {
       delete insertPayload.media_type;
       ({ data, error } = await supabase.from("posts").insert(insertPayload).select().single());
     }
-    if (error) { showToast(`Post failed: ${error.message}`); return; }
+    if (error) {
+      setPosts((prev) => prev.filter((post) => post.id !== tempId));
+      showToast(`Post failed: ${error.message}`);
+      return;
+    }
     if (data) {
       // Attach media_type locally even if not in DB yet
-      setPosts((prev) => [{ ...data, media_type: newPostMediaType || null }, ...prev]);
+      setPosts((prev) => prev.map((post) => (post.id === tempId ? { ...data, media_type: optimisticPost.media_type || null } : post)));
       registerInsertedPost(data.id);
       markRecentActivity(data.id);
-      setNewPostContent("");
-      setNewPostProject("");
-      setNewPostMediaUrl("");
-      setNewPostMediaType("");
       showToast("Posted.");
     }
   };
@@ -2817,7 +2907,7 @@ const setViewingProfile = (user) => {
         </div>
 
         {/* Feed tabs — moved to Explore */}
-        {false && (
+        {(
           <div>
             <div style={{ background: bg2, border: `1px solid ${border}`, borderRadius: 14, padding: "18px", marginBottom: 32 }}>
               <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
@@ -3435,9 +3525,22 @@ const setViewingProfile = (user) => {
         <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px", marginBottom: 14 }}>CHECK YOUR EMAIL</div>
         <h2 style={{ fontSize: 24, fontWeight: 400, letterSpacing: "-1px", marginBottom: 16, color: text }}>Confirm your account.</h2>
         <p style={{ fontSize: 13, color: textMuted, lineHeight: 1.7, marginBottom: 28 }}>
-          We sent a confirmation link to <strong style={{ color: text }}>{authEmail}</strong>.<br />
+          We sent a confirmation link to <strong style={{ color: text }}>{verifyEmail || authEmail}</strong>.<br />
           Click it to activate your account, then come back and log in.
         </p>
+        <button
+          className="hb"
+          onClick={async () => {
+            const email = verifyEmail || authEmail;
+            if (!email) return;
+            const { error } = await supabase.auth.resend({ type: "signup", email });
+            if (error) showToast(error.message);
+            else showToast("Confirmation email resent.");
+          }}
+          style={{ ...btnG, width: "100%", padding: "12px", marginBottom: 12 }}
+        >
+          resend email
+        </button>
         <button className="hb" onClick={() => { setScreen("auth"); setAuthSubMode("login"); setAuthError(""); }}
           style={{ ...btnP, width: "100%", padding: "13px", marginBottom: 14 }}>
           go to login →
@@ -3457,7 +3560,11 @@ const setViewingProfile = (user) => {
     ];
     const step = steps[onboardStep];
     const isLast = onboardStep === steps.length - 1;
-    const canNext = step.field === "skills" ? onboardData.skills.length > 0 : step.type === "username" ? (onboardData.username || "").length >= 3 : (onboardData[step.field] || "").trim().length > 0;
+    const canNext = step.field === "skills"
+      ? onboardData.skills.length > 0
+      : step.type === "username"
+        ? (onboardData.username || "").length >= 3 && !isUsernameTaken && !usernameCheckLoading
+        : (onboardData[step.field] || "").trim().length > 0;
     return (
       <div style={{ minHeight: "100vh", width: "100%", background: bg, color: text, fontFamily: "'DM Mono', monospace", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "24px 16px" }}>
         <style>{CSS}</style>
@@ -3475,7 +3582,9 @@ const setViewingProfile = (user) => {
                   <span style={{ fontSize: "clamp(16px, 4vw, 18px)", color: textMuted, paddingBottom: 10, paddingTop: 10 }}>@</span>
                   <input autoFocus style={{ background: "none", border: "none", padding: "10px 0 10px 4px", color: text, fontSize: "clamp(16px, 4vw, 18px)", flex: 1, fontFamily: "inherit", outline: "none" }} placeholder="yourhandle" value={onboardData.username || ""} onChange={e => setOnboardData({ ...onboardData, username: e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, "") })} onKeyDown={e => e.key === "Enter" && canNext && (isLast ? handleFinishOnboard() : setOnboardStep(s => s + 1))} />
                 </div>
-                <div style={{ fontSize: 11, color: textMuted }}>lowercase letters, numbers, underscores only</div>
+                <div style={{ fontSize: 11, color: usernameCheckError ? "#ef4444" : textMuted }}>
+                  {usernameCheckLoading ? "checking availability..." : usernameCheckError || "lowercase letters, numbers, underscores only"}
+                </div>
               </div>
             )}
             {step.type === "textarea" && <textarea autoFocus style={{ background: "none", border: `1px solid ${border}`, borderRadius: 8, padding: "12px", color: text, fontSize: 13, width: "100%", fontFamily: "inherit", outline: "none", resize: "none", lineHeight: 1.7 }} rows={4} placeholder={step.placeholder} value={onboardData[step.field] || ""} onChange={e => setOnboardData({ ...onboardData, [step.field]: e.target.value })} />}
@@ -3543,7 +3652,7 @@ const setViewingProfile = (user) => {
           {/* Desktop: full input */}
           <div className="search-desktop" style={{ width: 180 }}>
             <input
-              placeholder="search people..."
+              placeholder="search people, projects, communities..."
               value={globalSearch}
               onChange={e => { setGlobalSearch(e.target.value); setShowGlobalSearch(e.target.value.length > 0); }}
               onBlur={() => setTimeout(() => setShowGlobalSearch(false), 150)}
@@ -3559,49 +3668,53 @@ const setViewingProfile = (user) => {
               <div style={{ position: "fixed", top: 58, left: 12, right: 12, background: bg, border: `1px solid ${border}`, borderRadius: 10, zIndex: 300, padding: "10px", boxShadow: dark ? "0 8px 24px rgba(0,0,0,0.8)" : "0 8px 24px rgba(0,0,0,0.15)" }}>
                 <input
                   id="mobile-search"
-                  placeholder="search people..."
+                  placeholder="search people, projects, communities..."
                   value={globalSearch}
                   onChange={e => setGlobalSearch(e.target.value)}
                   autoFocus
                   style={{ ...inputStyle, fontSize: 13, marginBottom: globalSearch.length > 0 ? 8 : 0 }}
                 />
-                {globalSearch.length > 0 && users.filter(u => u.id !== authUser?.id && u.name?.toLowerCase().includes(globalSearch.toLowerCase())).slice(0, 3).map(u => (
-                  <button key={u.id} onClick={() => { setViewFullProfile(u); setGlobalSearch(""); setShowGlobalSearch(false); }} style={{ width: "100%", padding: "10px 12px", background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", display: "flex", gap: 10, alignItems: "center", textAlign: "left", borderTop: `1px solid ${border}` }}
-                    onMouseEnter={e => e.currentTarget.style.background = bg2} onMouseLeave={e => e.currentTarget.style.background = "none"}>
-                    <Avatar initials={initials(u.name)} src={u.avatar_url} size={28} dark={dark} />
-                    <div>
-                      <div style={{ fontSize: 13, color: text }}>{u.name}</div>
-                      <div style={{ fontSize: 11, color: textMuted }}>{u.role}</div>
-                    </div>
-                  </button>
-                ))}
-                {globalSearch.length > 0 && projects.filter(p => p.title?.toLowerCase().includes(globalSearch.toLowerCase())).slice(0, 2).map(p => (
-                  <button key={p.id} onClick={() => { setActiveProject(p); loadProjectData(p.id); setAppScreen("workspace"); setProjectTab("tasks"); setGlobalSearch(""); setShowGlobalSearch(false); }} style={{ width: "100%", padding: "10px 12px", background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", display: "flex", gap: 10, alignItems: "center", textAlign: "left", borderTop: `1px solid ${border}` }}
-                    onMouseEnter={e => e.currentTarget.style.background = bg2} onMouseLeave={e => e.currentTarget.style.background = "none"}>
-                    <span style={{ fontSize: 16 }}>◈</span>
-                    <div>
-                      <div style={{ fontSize: 13, color: text }}>{p.title}</div>
-                      <div style={{ fontSize: 11, color: textMuted }}>project · {p.category}</div>
-                    </div>
-                  </button>
-                ))}
-                {globalSearch.length > 0 && posts.filter(p => p.content?.toLowerCase().includes(globalSearch.toLowerCase())).slice(0, 2).map(p => {
-                  const postUser = users.find(u => u.id === p.user_id);
-                  return (
-                    <button key={p.id} onClick={() => { setAppScreen("network"); setNetworkTab("feed"); setGlobalSearch(""); setShowGlobalSearch(false); }} style={{ width: "100%", padding: "10px 12px", background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", display: "flex", gap: 10, alignItems: "flex-start", textAlign: "left", borderTop: `1px solid ${border}` }}
-                      onMouseEnter={e => e.currentTarget.style.background = bg2} onMouseLeave={e => e.currentTarget.style.background = "none"}>
-                      <span style={{ fontSize: 16 }}>◎</span>
-                      <div style={{ minWidth: 0 }}>
-                        <div style={{ fontSize: 11, color: textMuted, marginBottom: 2 }}>{postUser?.name}</div>
-                        <div style={{ fontSize: 13, color: text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.content.slice(0, 60)}</div>
-                      </div>
-                    </button>
-                  );
-                })}
+                {globalSearch.length > 0 && (
+                  <>
+                    {peopleSearchResults.length > 0 && <div style={{ fontSize: 10, color: textMuted, letterSpacing: "1px", padding: "2px 4px 6px" }}>PEOPLE</div>}
+                    {peopleSearchResults.map(u => (
+                      <button key={u.id} onClick={() => { setViewFullProfile(u); setGlobalSearch(""); setShowGlobalSearch(false); }} style={{ width: "100%", padding: "10px 12px", background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", display: "flex", gap: 10, alignItems: "center", textAlign: "left", borderTop: `1px solid ${border}` }}
+                        onMouseEnter={e => e.currentTarget.style.background = bg2} onMouseLeave={e => e.currentTarget.style.background = "none"}>
+                        <Avatar initials={initials(u.name)} src={u.avatar_url} size={28} dark={dark} />
+                        <div>
+                          <div style={{ fontSize: 13, color: text }}>{u.name}</div>
+                          <div style={{ fontSize: 11, color: textMuted }}>{u.role}</div>
+                        </div>
+                      </button>
+                    ))}
+                    {projectSearchResults.length > 0 && <div style={{ fontSize: 10, color: textMuted, letterSpacing: "1px", padding: "10px 4px 6px" }}>PROJECTS</div>}
+                    {projectSearchResults.map(p => (
+                      <button key={p.id} onClick={() => { setActiveProject(p); loadProjectData(p.id); setAppScreen("workspace"); setProjectTab("tasks"); setGlobalSearch(""); setShowGlobalSearch(false); }} style={{ width: "100%", padding: "10px 12px", background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", display: "flex", gap: 10, alignItems: "center", textAlign: "left", borderTop: `1px solid ${border}` }}
+                        onMouseEnter={e => e.currentTarget.style.background = bg2} onMouseLeave={e => e.currentTarget.style.background = "none"}>
+                        <span style={{ fontSize: 16 }}>◈</span>
+                        <div>
+                          <div style={{ fontSize: 13, color: text }}>{p.title}</div>
+                          <div style={{ fontSize: 11, color: textMuted }}>project · {p.category}</div>
+                        </div>
+                      </button>
+                    ))}
+                    {communitySearchResults.length > 0 && <div style={{ fontSize: 10, color: textMuted, letterSpacing: "1px", padding: "10px 4px 6px" }}>COMMUNITIES</div>}
+                    {communitySearchResults.map(c => (
+                      <button key={c.id} onClick={() => { setActiveCommunity(c); setAppScreen("communities"); setGlobalSearch(""); setShowGlobalSearch(false); }} style={{ width: "100%", padding: "10px 12px", background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", display: "flex", gap: 10, alignItems: "center", textAlign: "left", borderTop: `1px solid ${border}` }}
+                        onMouseEnter={e => e.currentTarget.style.background = bg2} onMouseLeave={e => e.currentTarget.style.background = "none"}>
+                        <span style={{ fontSize: 16 }}>{c.emoji || "◈"}</span>
+                        <div>
+                          <div style={{ fontSize: 13, color: text }}>{c.name}</div>
+                          <div style={{ fontSize: 11, color: textMuted }}>community</div>
+                        </div>
+                      </button>
+                    ))}
+                  </>
+                )}
                 {globalSearch.length > 0 &&
-                  users.filter(u => u.id !== authUser?.id && u.name?.toLowerCase().includes(globalSearch.toLowerCase())).length === 0 &&
-                  projects.filter(p => p.title?.toLowerCase().includes(globalSearch.toLowerCase())).length === 0 &&
-                  posts.filter(p => p.content?.toLowerCase().includes(globalSearch.toLowerCase())).length === 0 && (
+                  peopleSearchResults.length === 0 &&
+                  projectSearchResults.length === 0 &&
+                  communitySearchResults.length === 0 && (
                   <div style={{ fontSize: 12, color: textMuted, padding: "8px 4px" }}>no results.</div>
                 )}
               </div>
@@ -3610,8 +3723,8 @@ const setViewingProfile = (user) => {
           {/* Desktop dropdown results */}
           {showGlobalSearch && globalSearch.length > 0 && (
             <div className="search-desktop" style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, width: 260, background: bg, border: `1px solid ${border}`, borderRadius: 8, zIndex: 300, overflow: "hidden", boxShadow: dark ? "0 8px 24px rgba(0,0,0,0.6)" : "0 8px 24px rgba(0,0,0,0.1)" }}>
-              {/* People */}
-              {users.filter(u => u.id !== authUser?.id && u.name?.toLowerCase().includes(globalSearch.toLowerCase())).slice(0, 3).map(u => (
+              {peopleSearchResults.length > 0 && <div style={{ padding: "8px 14px 4px", fontSize: 10, color: textMuted, letterSpacing: "1px" }}>PEOPLE</div>}
+              {peopleSearchResults.map(u => (
                 <button key={u.id} onClick={() => { setViewFullProfile(u); setGlobalSearch(""); setShowGlobalSearch(false); }}
                   style={{ width: "100%", padding: "8px 14px", background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", display: "flex", gap: 8, alignItems: "center", textAlign: "left" }}
                   onMouseEnter={e => e.currentTarget.style.background = bg2} onMouseLeave={e => e.currentTarget.style.background = "none"}>
@@ -3622,10 +3735,10 @@ const setViewingProfile = (user) => {
                   </div>
                 </button>
               ))}
-              {/* Projects */}
-              {projects.filter(p => p.title?.toLowerCase().includes(globalSearch.toLowerCase())).slice(0, 2).map(p => (
+              {projectSearchResults.length > 0 && <div style={{ padding: "8px 14px 4px", fontSize: 10, color: textMuted, letterSpacing: "1px", borderTop: `1px solid ${border}` }}>PROJECTS</div>}
+              {projectSearchResults.map(p => (
                 <button key={p.id} onClick={() => { setActiveProject(p); loadProjectData(p.id); setAppScreen("workspace"); setProjectTab("tasks"); setGlobalSearch(""); setShowGlobalSearch(false); }}
-                  style={{ width: "100%", padding: "8px 14px", background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", display: "flex", gap: 8, alignItems: "center", textAlign: "left", borderTop: `1px solid ${border}` }}
+                  style={{ width: "100%", padding: "8px 14px", background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", display: "flex", gap: 8, alignItems: "center", textAlign: "left" }}
                   onMouseEnter={e => e.currentTarget.style.background = bg2} onMouseLeave={e => e.currentTarget.style.background = "none"}>
                   <span style={{ fontSize: 14 }}>◈</span>
                   <div>
@@ -3634,24 +3747,21 @@ const setViewingProfile = (user) => {
                   </div>
                 </button>
               ))}
-              {/* Posts */}
-              {posts.filter(p => p.content?.toLowerCase().includes(globalSearch.toLowerCase())).slice(0, 2).map(p => {
-                const postUser = users.find(u => u.id === p.user_id);
-                return (
-                  <button key={p.id} onClick={() => { setAppScreen("network"); setNetworkTab("feed"); setGlobalSearch(""); setShowGlobalSearch(false); }}
-                    style={{ width: "100%", padding: "8px 14px", background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", display: "flex", gap: 8, alignItems: "flex-start", textAlign: "left", borderTop: `1px solid ${border}` }}
-                    onMouseEnter={e => e.currentTarget.style.background = bg2} onMouseLeave={e => e.currentTarget.style.background = "none"}>
-                    <span style={{ fontSize: 14 }}>◎</span>
-                    <div style={{ minWidth: 0 }}>
-                      <div style={{ fontSize: 10, color: textMuted, marginBottom: 2 }}>{postUser?.name}</div>
-                      <div style={{ fontSize: 11, color: text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.content.slice(0, 60)}</div>
-                    </div>
-                  </button>
-                );
-              })}
-              {users.filter(u => u.id !== authUser?.id && u.name?.toLowerCase().includes(globalSearch.toLowerCase())).length === 0 &&
-               projects.filter(p => p.title?.toLowerCase().includes(globalSearch.toLowerCase())).length === 0 &&
-               posts.filter(p => p.content?.toLowerCase().includes(globalSearch.toLowerCase())).length === 0 && (
+              {communitySearchResults.length > 0 && <div style={{ padding: "8px 14px 4px", fontSize: 10, color: textMuted, letterSpacing: "1px", borderTop: `1px solid ${border}` }}>COMMUNITIES</div>}
+              {communitySearchResults.map(c => (
+                <button key={c.id} onClick={() => { setActiveCommunity(c); setAppScreen("communities"); setGlobalSearch(""); setShowGlobalSearch(false); }}
+                  style={{ width: "100%", padding: "8px 14px", background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", display: "flex", gap: 8, alignItems: "center", textAlign: "left" }}
+                  onMouseEnter={e => e.currentTarget.style.background = bg2} onMouseLeave={e => e.currentTarget.style.background = "none"}>
+                  <span style={{ fontSize: 14 }}>{c.emoji || "◈"}</span>
+                  <div>
+                    <div style={{ fontSize: 11, color: text }}>{c.name}</div>
+                    <div style={{ fontSize: 10, color: textMuted }}>community</div>
+                  </div>
+                </button>
+              ))}
+              {peopleSearchResults.length === 0 &&
+               projectSearchResults.length === 0 &&
+               communitySearchResults.length === 0 && (
                 <div style={{ padding: "12px 14px", fontSize: 12, color: textMuted }}>no results.</div>
               )}
             </div>
@@ -4830,7 +4940,7 @@ const setViewingProfile = (user) => {
 
         const handleCreateCommunity = async () => {
           if (!newCommunityName.trim()) return;
-          const slug = newCommunityName.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+          const slug = await resolveCommunitySlug(newCommunityName);
           const payload = { name: newCommunityName.trim(), slug, description: newCommunityDesc.trim() || null, emoji: newCommunityEmoji, created_by: authUser.id };
           const { data, error } = await supabase.from("communities").insert(payload).select().single();
           if (error) { showToast("Community name taken or invalid."); return; }
@@ -6806,7 +6916,7 @@ const setViewingProfile = (user) => {
               <button className="hb" onClick={() => setShowCreateCommunity(false)} style={{ ...btnG, flex: 1 }}>cancel</button>
               <button className="hb" onClick={async () => {
                 if (!newCommunityName.trim()) return;
-                const slug = newCommunityName.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+                const slug = await resolveCommunitySlug(newCommunityName);
                 const payload = { name: newCommunityName.trim(), slug, description: newCommunityDesc.trim() || null, emoji: newCommunityEmoji || "◈", created_by: authUser.id };
                 const { data, error } = await supabase.from("communities").insert(payload).select().single();
                 if (error) { showToast("Name taken or invalid. Try another."); return; }
