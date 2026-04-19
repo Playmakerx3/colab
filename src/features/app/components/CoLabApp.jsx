@@ -456,7 +456,7 @@ function TeamReviewModal({ project, authUser, applications, users, teamReviews, 
         {[1,2,3,4,5].map(n => (
           <button key={n} onClick={() => setRatings(prev => ({ ...prev, [userId]: n === val ? 0 : n }))}
             style={{ background: "none", border: "none", cursor: "pointer", fontSize: 18, color: n <= val ? text : textMuted, padding: "2px 1px", lineHeight: 1, transition: "color 0.1s" }}>
-            ⚙
+            +
           </button>
         ))}
       </div>
@@ -468,7 +468,7 @@ function TeamReviewModal({ project, authUser, applications, users, teamReviews, 
       <div onClick={e => e.stopPropagation()} style={{ background: bg, border: `1px solid ${border}`, borderRadius: 16, padding: "32px 28px", width: "100%", maxWidth: 480, maxHeight: "90vh", overflowY: "auto" }}>
         {done || alreadyReviewed ? (
           <div style={{ textAlign: "center", padding: "12px 0" }}>
-            <div style={{ fontSize: 32, marginBottom: 16 }}>⚙</div>
+            <div style={{ fontSize: 32, marginBottom: 16 }}>+</div>
             <div style={{ fontSize: 18, color: text, fontWeight: 400, letterSpacing: "-0.5px", marginBottom: 8 }}>Reviews submitted.</div>
             <div style={{ fontSize: 13, color: textMuted, marginBottom: 24, lineHeight: 1.7 }}>Your ratings help surface great collaborators to the community.</div>
             <button onClick={onClose} style={{ ...btnP, padding: "10px 28px" }}>done</button>
@@ -3455,7 +3455,7 @@ const setViewingProfile = (user) => {
           </button>
           <button onClick={() => setShowSettings(true)}
             style={{ background: "none", border: "none", borderRadius: 6, padding: "5px 4px", cursor: "pointer", color: textMuted, fontSize: 12, fontFamily: "inherit" }}>
-            ⚙
+            +
           </button>
         </div>
       </nav>
@@ -3593,7 +3593,7 @@ const setViewingProfile = (user) => {
       {discoverMatch && (
         <div onClick={() => setDiscoverMatch(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.8)", zIndex: 400, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
           <div onClick={e => e.stopPropagation()} style={{ background: bg, border: `1px solid ${border}`, borderRadius: 16, padding: 32, maxWidth: 320, width: "100%", textAlign: "center" }}>
-            <div style={{ fontSize: 28, marginBottom: 16 }}>⚙</div>
+            <div style={{ fontSize: 28, marginBottom: 16 }}>+</div>
             <div style={{ fontSize: 16, color: text, letterSpacing: "-0.5px", marginBottom: 8 }}>it's a match.</div>
             <div style={{ fontSize: 12, color: textMuted, marginBottom: 24 }}>you and {discoverMatch.name} both want to collaborate.</div>
             <div style={{ display: "flex", gap: 10 }}>
@@ -3914,7 +3914,7 @@ const setViewingProfile = (user) => {
                             </div>
                             <div style={{ flexShrink: 0, display: "flex", gap: 1, alignItems: "center" }}>
                               {[1,2,3,4,5].map(n => (
-                                <span key={n} style={{ fontSize: 11, color: n <= Math.round(u.avgRating) ? text : textMuted, opacity: n <= Math.round(u.avgRating) ? 1 : 0.3 }}>⚙</span>
+                                <span key={n} style={{ fontSize: 11, color: n <= Math.round(u.avgRating) ? text : textMuted, opacity: n <= Math.round(u.avgRating) ? 1 : 0.3 }}>+</span>
                               ))}
                             </div>
                           </div>
@@ -4740,7 +4740,7 @@ const setViewingProfile = (user) => {
                 <>
                   <span style={{ fontSize: 10, padding: "2px 8px", borderRadius: 3, border: "1px solid #22c55e", color: "#22c55e" }}>shipped</span>
                   {!teamReviews.some(r => r.project_id === activeProject.id && r.reviewer_id === authUser?.id) && (
-                    <button className="hb" onClick={() => setShowTeamReview(activeProject)} style={{ fontSize: 10, padding: "3px 10px", borderRadius: 6, border: `1px solid ${border}`, background: "none", color: textMuted, cursor: "pointer", fontFamily: "inherit" }}>⚙ rate team</button>
+                    <button className="hb" onClick={() => setShowTeamReview(activeProject)} style={{ fontSize: 10, padding: "3px 10px", borderRadius: 6, border: `1px solid ${border}`, background: "none", color: textMuted, cursor: "pointer", fontFamily: "inherit" }}>+ rate team</button>
                   )}
                 </>
               )}
