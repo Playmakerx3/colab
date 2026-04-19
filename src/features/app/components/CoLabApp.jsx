@@ -3881,12 +3881,27 @@ const setViewingProfile = (user) => {
               .sort((a, b) => (b.like_count || 0) - (a.like_count || 0))
               .slice(0, 3);
 
+            // ── Sidebar data ─────────────────────────────────────────────
+            const suggestedPeople = users
+              .filter(u => u.id !== authUser?.id && !following.includes(u.id))
+              .map(u => ({ ...u, overlap: (u.skills || []).filter(s => mySkillSet.has(s)).length }))
+              .sort((a, b) => b.overlap - a.overlap)
+              .slice(0, 5);
+
+            const sidebarProjects = browseBase
+              .map(p => ({ ...p, overlap: (p.skills || []).filter(s => mySkillSet.has(s)).length }))
+              .sort((a, b) => b.overlap - a.overlap || new Date(b.created_at) - new Date(a.created_at))
+              .slice(0, 4);
+
             return (
-              <div style={{ maxWidth: 620, margin: "0 auto" }}>
+              <div style={{ maxWidth: 1020, margin: "0 auto", display: "flex", gap: 48, alignItems: "flex-start" }}>
                 <style>{`
                   @keyframes feedPulse { 0% { transform: scale(1); } 45% { transform: scale(1.08); } 100% { transform: scale(1); } }
                   @keyframes feedPostAppear { 0% { opacity: 0; transform: translateY(-8px); } 100% { opacity: 1; transform: translateY(0); } }
                 `}</style>
+
+                {/* Left: main feed column */}
+                <div style={{ flex: 1, minWidth: 0 }}>
 
                 {/* Hero header */}
                 <div style={{ marginBottom: 24 }}>
@@ -4114,6 +4129,53 @@ const setViewingProfile = (user) => {
                       </div>
                     );
                   })}
+                </div>{/* end left column */}
+
+                {/* Right: sidebar */}
+                <div style={{ width: 260, flexShrink: 0, position: "sticky", top: 24, display: "flex", flexDirection: "column", gap: 28 }}>
+
+                  {/* Suggested people */}
+                  {suggestedPeople.length > 0 && (
+                    <div>
+                      <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px", marginBottom: 12 }}>PEOPLE TO MEET</div>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 0, border: `1px solid ${border}`, borderRadius: 10, overflow: "hidden" }}>
+                        {suggestedPeople.map((u, i) => (
+                          <div key={u.id} style={{ padding: "10px 14px", borderBottom: i < suggestedPeople.length - 1 ? `1px solid ${border}` : "none", display: "flex", gap: 10, alignItems: "center", background: bg2 }}>
+                            <button onClick={() => setViewingProfile(u)} style={{ background: "none", border: "none", cursor: "pointer", padding: 0, flexShrink: 0 }}>
+                              <Avatar initials={initials(u.name)} size={30} dark={dark} />
+                            </button>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <button onClick={() => setViewingProfile(u)} style={{ background: "none", border: "none", cursor: "pointer", padding: 0, textAlign: "left" }}>
+                                <div style={{ fontSize: 12, fontWeight: 500, color: text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{u.name}</div>
+                              </button>
+                              {u.overlap > 0 && <div style={{ fontSize: 10, color: textMuted }}>{u.overlap} skill{u.overlap !== 1 ? "s" : ""} in common</div>}
+                              {u.skills?.length > 0 && <div style={{ fontSize: 10, color: textMuted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{u.skills.slice(0, 2).join(" · ")}</div>}
+                            </div>
+                            <button className="hb" onClick={() => handleFollow(u.id)} style={{ fontSize: 10, padding: "3px 10px", borderRadius: 6, border: `1px solid ${border}`, background: "none", color: textMuted, cursor: "pointer", fontFamily: "inherit", flexShrink: 0, transition: "all 0.15s" }}>follow</button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Open projects */}
+                  {sidebarProjects.length > 0 && (
+                    <div>
+                      <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px", marginBottom: 12 }}>OPEN PROJECTS</div>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 0, border: `1px solid ${border}`, borderRadius: 10, overflow: "hidden" }}>
+                        {sidebarProjects.map((p, i) => (
+                          <div key={p.id} style={{ padding: "10px 14px", borderBottom: i < sidebarProjects.length - 1 ? `1px solid ${border}` : "none", background: bg2 }}>
+                            <button className="hb" onClick={() => { setActiveProject(p); loadProjectData(p.id); setExploreTab("projects"); }} style={{ background: "none", border: "none", cursor: "pointer", padding: 0, textAlign: "left", fontFamily: "inherit", width: "100%" }}>
+                              <div style={{ fontSize: 12, fontWeight: 500, color: text, marginBottom: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.title}</div>
+                              <div style={{ fontSize: 10, color: textMuted }}>{p.category}{p.overlap > 0 ? ` · ${p.overlap} skill match` : ""}</div>
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                </div>{/* end sidebar */}
               </div>
             );
           })()}
