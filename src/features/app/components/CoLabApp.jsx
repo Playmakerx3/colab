@@ -1962,6 +1962,8 @@ const setViewingProfile = (user) => {
   const UserCard = ({ u }) => {
     const sharedSkills = (profile?.skills || []).filter(s => (u.skills || []).includes(s));
     const userProjects = projects.filter(p => p.owner_id === u.id);
+    const userCollabCount = applications.filter(a => a.applicant_id === u.id && normalizeApplicationStatus(a.status) === "accepted").length;
+    const totalProjectCount = userProjects.length + userCollabCount;
     const capacityStatus = getCapacityStatus(u.id);
     const userCollaborators = getCollaborators(u.id);
     const mutualCollaborators = userCollaborators.filter((c) => myCollaborators.some((mine) => mine.user.id === c.user.id));
@@ -1985,7 +1987,7 @@ const setViewingProfile = (user) => {
             <div style={{ fontSize: 11, color: textMuted, marginTop: 2 }}>{u.role || "Builder"}</div>
             {u.location && <div style={{ fontSize: 10, color: textMuted, marginTop: 2 }}>{u.location}</div>}
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap", fontSize: 10, color: textMuted, marginTop: 5 }}>
-              <span>{userProjects.length} project{userProjects.length !== 1 ? "s" : ""}</span>
+              <span>{totalProjectCount} project{totalProjectCount !== 1 ? "s" : ""}</span>
               {mutualCollaborators.length > 0 && <span>· {mutualCollaborators.length} mutual collaborator{mutualCollaborators.length !== 1 ? "s" : ""}</span>}
             </div>
           </div>
@@ -4516,29 +4518,29 @@ const setViewingProfile = (user) => {
                   );
                 })}
               </div>
-              {appliedProjectIds.length === 0
-                ? <div style={{ fontSize: 12, color: textMuted, marginBottom: 24 }}>no applications yet.</div>
-                : <div style={{ display: "flex", flexDirection: "column", gap: 1, marginBottom: 24 }}>
-                    {projects.filter(p => appliedProjectIds.includes(p.id)).map((p,i,arr) => {
-                      const myApp = applications.find(a => a.project_id === p.id && a.applicant_id === authUser?.id);
-                      const isAccepted = normalizeApplicationStatus(myApp?.status) === "accepted";
-                      return (
-                        <div key={p.id}
-                          style={{ background: bg2, borderRadius: i === 0 && arr.length === 1 ? 8 : i === 0 ? "8px 8px 0 0" : i === arr.length - 1 ? "0 0 8px 8px" : 0, border: `1px solid ${border}`, borderBottom: i < arr.length - 1 ? "none" : `1px solid ${border}`, padding: "10px 16px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, cursor: isAccepted ? "pointer" : "default", transition: "opacity 0.15s" }}
-                          onMouseEnter={e => { if (isAccepted) e.currentTarget.style.opacity = "0.8"; }}
-                          onMouseLeave={e => { if (isAccepted) e.currentTarget.style.opacity = "1"; }}
-                          onClick={() => { if (isAccepted) { setActiveProject(p); loadProjectData(p.id); setProjectTab("tasks"); } }}>
-                          <div style={{ minWidth: 0 }}><div style={{ fontSize: 12, color: text, marginBottom: 1 }}>{p.title}</div><div style={{ fontSize: 10, color: textMuted }}>{p.owner_name}</div></div>
-                          <div style={{ display: "flex", gap: 6, alignItems: "center", flexShrink: 0 }}>
-                            <span style={{ fontSize: 10, color: isAccepted ? text : textMuted, border: `1px solid ${isAccepted ? text : border}`, borderRadius: 3, padding: "1px 6px" }}>{normalizeApplicationStatus(myApp?.status || "pending")}</span>
-                            {isAccepted && <span style={{ fontSize: 10, color: textMuted }}>open →</span>}
-                            {normalizeApplicationStatus(myApp?.status) === "rejected" && <button className="hb" onClick={() => handleRemoveDeniedApp(myApp.id)} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontSize: 10, fontFamily: "inherit" }}>✕</button>}
+              {(() => {
+                const pendingOrRejectedProjects = projects.filter(p => {
+                  if (!appliedProjectIds.includes(p.id)) return false;
+                  const myApp = applications.find(a => a.project_id === p.id && a.applicant_id === authUser?.id);
+                  return normalizeApplicationStatus(myApp?.status) !== "accepted";
+                });
+                return pendingOrRejectedProjects.length === 0
+                  ? <div style={{ fontSize: 12, color: textMuted, marginBottom: 24 }}>no pending applications.</div>
+                  : <div style={{ display: "flex", flexDirection: "column", gap: 1, marginBottom: 24 }}>
+                      {pendingOrRejectedProjects.map((p,i,arr) => {
+                        const myApp = applications.find(a => a.project_id === p.id && a.applicant_id === authUser?.id);
+                        return (
+                          <div key={p.id} style={{ background: bg2, borderRadius: i === 0 && arr.length === 1 ? 8 : i === 0 ? "8px 8px 0 0" : i === arr.length - 1 ? "0 0 8px 8px" : 0, border: `1px solid ${border}`, borderBottom: i < arr.length - 1 ? "none" : `1px solid ${border}`, padding: "10px 16px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+                            <div style={{ minWidth: 0 }}><div style={{ fontSize: 12, color: text, marginBottom: 1 }}>{p.title}</div><div style={{ fontSize: 10, color: textMuted }}>{p.owner_name}</div></div>
+                            <div style={{ display: "flex", gap: 6, alignItems: "center", flexShrink: 0 }}>
+                              <span style={{ fontSize: 10, color: textMuted, border: `1px solid ${border}`, borderRadius: 3, padding: "1px 6px" }}>{normalizeApplicationStatus(myApp?.status || "pending")}</span>
+                              {normalizeApplicationStatus(myApp?.status) === "rejected" && <button className="hb" onClick={() => handleRemoveDeniedApp(myApp.id)} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontSize: 10, fontFamily: "inherit" }}>✕</button>}
+                            </div>
                           </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-              }
+                        );
+                      })}
+                    </div>;
+              })()}
 
               {/* Pending notifications */}
               {notifications.length > 0 && (
@@ -5377,7 +5379,7 @@ const setViewingProfile = (user) => {
                   {viewFullProfile.location && <div style={{ fontSize: 11, color: textMuted, marginTop: 1 }}>{viewFullProfile.location}</div>}
                   <div style={{ fontSize: 10, color: text, marginTop: 4 }}>
                     <button className="hb" onClick={() => setShowProjectsFor(viewFullProfile.id)} style={{ background: "none", border: "none", color: text, cursor: "pointer", fontFamily: "inherit", fontSize: 10, padding: 0 }}>
-                      {projects.filter(p => p.owner_id === viewFullProfile.id).length} project{projects.filter(p => p.owner_id === viewFullProfile.id).length !== 1 ? "s" : ""}
+                      {projects.filter(p => p.owner_id === viewFullProfile.id).length + applications.filter(a => a.applicant_id === viewFullProfile.id && normalizeApplicationStatus(a.status) === "accepted").length} project{(projects.filter(p => p.owner_id === viewFullProfile.id).length + applications.filter(a => a.applicant_id === viewFullProfile.id && normalizeApplicationStatus(a.status) === "accepted").length) !== 1 ? "s" : ""}
                     </button>
                     {" · "}
                     <button className="hb" onClick={() => setShowCollaborators(viewFullProfile.id)} style={{ background: "none", border: "none", color: text, cursor: "pointer", fontFamily: "inherit", fontSize: 10, padding: 0 }}>
