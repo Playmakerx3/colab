@@ -19,6 +19,27 @@ import { useApplications } from "../../applications/hooks/useApplications";
 import { useProjectWorkspace } from "../../projects/hooks/useProjectWorkspace";
 import { computeProjectHealth, PROJECT_HEALTH, resolveTaskOwnership } from "../../projects/utils/projectHealth";
 
+const COMMUNITY_SYMBOLS = {
+  'music':        '♪',
+  'design':       '◈',
+  'tech':         '⌨',
+  'startups':     '↗',
+  'film-video':   '▶',
+  'writing':      '✎',
+  'marketing':    '↑',
+  'research':     '⊙',
+  'making':       '✦',
+  'photography':  '◉',
+  'gaming':       '⊕',
+  'education':    '≡',
+  'animation':    '◌',
+  'data-science': '▦',
+  'podcasting':   '◎',
+  'open-source':  '⊛',
+  'fashion':      '◇',
+  'architecture': '△',
+};
+
 const isFreshTimestamp = (timestamp, windowMs = 120000) => {
   if (!timestamp) return false;
   return Date.now() - new Date(timestamp).getTime() < windowMs;
@@ -4065,7 +4086,7 @@ const setViewingProfile = (user) => {
               _type: "community_post",
               id: `cp-${cp.id}`,
               _communityName: cp.communities?.name || "",
-              _communityEmoji: cp.communities?.emoji || "◈",
+              _communityEmoji: COMMUNITY_SYMBOLS[cp.communities?.slug] || cp.communities?.emoji || "◈",
               _communityId: cp.community_id,
               _originalId: cp.id,
             }));
@@ -4625,7 +4646,7 @@ const setViewingProfile = (user) => {
               style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 12px", borderRadius: 6, cursor: "pointer", background: isActive ? bg3 : "none", transition: "background 0.1s" }}
               onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = bg2; }}
               onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = "none"; }}>
-              <span style={{ fontSize: 13, flexShrink: 0, color: isActive ? text : textMuted, fontFamily: "inherit", lineHeight: 1 }}>{c.emoji}</span>
+              <span style={{ fontSize: 13, flexShrink: 0, color: isActive ? text : textMuted, fontFamily: "inherit", lineHeight: 1 }}>{COMMUNITY_SYMBOLS[c.slug] || c.emoji}</span>
               <span style={{ flex: 1, fontSize: 12, color: isActive ? text : textMuted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.name}</span>
               <button className="hb" onClick={e => { e.stopPropagation(); isJoined ? handleLeave(c.id) : handleJoin(c.id); }}
                 style={{ fontSize: 9, padding: "2px 7px", borderRadius: 20, border: `1px solid ${isJoined ? border : text}`, background: isJoined ? "none" : text, color: isJoined ? textMuted : bg, cursor: "pointer", fontFamily: "inherit", flexShrink: 0 }}>
@@ -4748,7 +4769,7 @@ const setViewingProfile = (user) => {
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24, flexWrap: "wrap", gap: 12 }}>
                     <div>
                       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
-                        <span style={{ fontSize: 18, color: text, fontFamily: "inherit", lineHeight: 1 }}>{activeCommunity.emoji}</span>
+                        <span style={{ fontSize: 18, color: text, fontFamily: "inherit", lineHeight: 1 }}>{COMMUNITY_SYMBOLS[activeCommunity.slug] || activeCommunity.emoji}</span>
                         <div style={{ fontSize: 22, fontWeight: 400, letterSpacing: "-0.5px", color: text }}>{activeCommunity.name}</div>
                       </div>
                       {activeCommunity.description && <div style={{ fontSize: 12, color: textMuted, maxWidth: 480, lineHeight: 1.6 }}>{activeCommunity.description}</div>}
@@ -6355,7 +6376,7 @@ const setViewingProfile = (user) => {
         <div onClick={() => setShowCreatePost(false)} style={{ position: "fixed", inset: 0, background: dark ? "rgba(0,0,0,0.92)" : "rgba(200,200,200,0.88)", zIndex: 300, display: "flex", alignItems: "center", justifyContent: "center", backdropFilter: "blur(12px)", padding: 16 }}>
           <div onClick={e => e.stopPropagation()} style={{ background: bg, border: `1px solid ${border}`, borderRadius: 16, padding: "28px", width: "100%", maxWidth: 520 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-              <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px" }}>NEW THREAD · {activeCommunity.emoji} {activeCommunity.name.toUpperCase()}</div>
+              <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px" }}>NEW THREAD · {COMMUNITY_SYMBOLS[activeCommunity.slug] || activeCommunity.emoji} {activeCommunity.name.toUpperCase()}</div>
               <button onClick={() => setShowCreatePost(false)} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontSize: 16, fontFamily: "inherit" }}>✕</button>
             </div>
             <input value={newThreadTitle} onChange={e => setNewThreadTitle(e.target.value)}
