@@ -44,7 +44,7 @@ const MIN_ZOOM = 1;
 const MAX_ZOOM = 6;
 const FOV = 900; // perspective focal length — higher = less extreme depth distortion
 
-export default function NetworkGraph3D({ users, applications, authUser, onNodeClick, dark, following = [], followers = [] }) {
+export default function NetworkGraph3D({ users, applications, projects = [], authUser, onNodeClick, dark, following = [], followers = [] }) {
   const canvasRef = useRef();
   const nodesRef = useRef([]);
   const rafRef = useRef();
