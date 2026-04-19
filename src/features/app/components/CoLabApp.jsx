@@ -996,6 +996,9 @@ function CoLab() {
   const [newCommunityDesc, setNewCommunityDesc] = useState("");
   const [newCommunityEmoji, setNewCommunityEmoji] = useState("◈");
   const [newCommentText, setNewCommentText] = useState("");
+  const [communitySearch, setCommunitySearch] = useState("");
+  const [editingPostId, setEditingPostId] = useState(null);
+  const [editingPostContent, setEditingPostContent] = useState("");
   const [topCommunityPosts, setTopCommunityPosts] = useState([]);
   const [projectsSubTab, setProjectsSubTab] = useState("for-you");
   const [networkTab, setNetworkTab] = useState("graph");
@@ -1511,6 +1514,8 @@ const setViewingProfile = (user) => {
     if (!agreedToTerms) { setAuthError("Please agree to the Legal Notice before creating an account."); return; }
     const { data, error } = await signUp({ email: authEmail, password: authPassword });
     if (error) { setAuthError(error.message); return; }
+    // If email confirmation is required, session will be null
+    if (data.user && !data.session) { setScreen("verify"); return; }
     if (data.user) { setAuthUser(data.user); setScreen("onboard"); }
   };
 
@@ -3360,6 +3365,26 @@ const setViewingProfile = (user) => {
   );
 
   // ── ONBOARDING ──
+  if (screen === "verify") return (
+    <div style={{ minHeight: "100vh", width: "100%", background: bg, color: text, fontFamily: "'DM Mono', monospace", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "24px 16px" }}>
+      <style>{CSS}</style>
+      <div style={{ width: "100%", maxWidth: 400, textAlign: "center" }}>
+        <div style={{ fontSize: 32, marginBottom: 20 }}>✉</div>
+        <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px", marginBottom: 14 }}>CHECK YOUR EMAIL</div>
+        <h2 style={{ fontSize: 24, fontWeight: 400, letterSpacing: "-1px", marginBottom: 16, color: text }}>Confirm your account.</h2>
+        <p style={{ fontSize: 13, color: textMuted, lineHeight: 1.7, marginBottom: 28 }}>
+          We sent a confirmation link to <strong style={{ color: text }}>{authEmail}</strong>.<br />
+          Click it to activate your account, then come back and log in.
+        </p>
+        <button className="hb" onClick={() => { setScreen("auth"); setAuthSubMode("login"); setAuthError(""); }}
+          style={{ ...btnP, width: "100%", padding: "13px", marginBottom: 14 }}>
+          go to login →
+        </button>
+        <div style={{ fontSize: 11, color: textMuted }}>Didn't get it? Check your spam folder.</div>
+      </div>
+    </div>
+  );
+
   if (screen === "onboard") {
     const steps = [
       { label: "what's your name?", field: "name", placeholder: "Your display name", type: "input" },
@@ -4737,6 +4762,35 @@ const setViewingProfile = (user) => {
           }
         };
 
+        const handleDeletePost = async (postId) => {
+          if (!window.confirm("Delete this thread?")) return;
+          await supabase.from("community_posts").delete().eq("id", postId).eq("user_id", authUser.id);
+          setCommunityPosts(prev => prev.filter(p => p.id !== postId));
+          if (activeThread?.id === postId) setActiveThread(null);
+          showToast("Thread deleted.");
+        };
+
+        const handleEditPost = async (postId, newContent) => {
+          await supabase.from("community_posts").update({ content: newContent }).eq("id", postId).eq("user_id", authUser.id);
+          setCommunityPosts(prev => prev.map(p => p.id === postId ? { ...p, content: newContent } : p));
+          if (activeThread?.id === postId) setActiveThread(prev => prev ? { ...prev, content: newContent } : prev);
+          setEditingPostId(null);
+          showToast("Thread updated.");
+        };
+
+        const handleDeleteComment = async (commentId, postId) => {
+          await supabase.from("community_comments").delete().eq("id", commentId).eq("user_id", authUser.id);
+          setThreadComments(prev => ({ ...prev, [postId]: (prev[postId] || []).filter(c => c.id !== commentId) }));
+          await supabase.from("community_posts").update({ comment_count: Math.max(0, (activeThread?.comment_count || 1) - 1) }).eq("id", postId);
+          setActiveThread(prev => prev ? { ...prev, comment_count: Math.max(0, (prev.comment_count || 1) - 1) } : prev);
+        };
+
+        const filteredCommunities = communitySearch.trim()
+          ? communities.filter(c => c.name.toLowerCase().includes(communitySearch.toLowerCase()))
+          : communities;
+        const joinedFiltered = filteredCommunities.filter(c => joinedCommunityIds.includes(c.id));
+        const otherFiltered = filteredCommunities.filter(c => !joinedCommunityIds.includes(c.id));
+
         const sortedPosts = [...communityPosts].sort((a, b) => {
           if (communitySort === "hot") {
             const ageA = (Date.now() - new Date(a.created_at).getTime()) / 3600000;
@@ -4773,20 +4827,30 @@ const setViewingProfile = (user) => {
             {/* Left sidebar */}
             <div style={{ width: 240, borderRight: `1px solid ${border}`, display: "flex", flexDirection: "column", flexShrink: 0, overflowY: "auto" }}>
               <div style={{ padding: "24px 16px 12px" }}>
-                <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px", marginBottom: 16 }}>COMMUNITIES</div>
+                <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px", marginBottom: 12 }}>COMMUNITIES</div>
+                <input
+                  value={communitySearch}
+                  onChange={e => setCommunitySearch(e.target.value)}
+                  placeholder="search..."
+                  style={{ ...inputStyle, fontSize: 11, padding: "6px 10px", marginBottom: 14, width: "100%", boxSizing: "border-box" }}
+                />
 
-                {joinedCommunities.length > 0 && (
+                {joinedFiltered.length > 0 && (
                   <div style={{ marginBottom: 20 }}>
                     <div style={{ fontSize: 9, color: textMuted, letterSpacing: "1.5px", marginBottom: 6, paddingLeft: 12 }}>JOINED</div>
-                    {joinedCommunities.map(c => <CommunityListItem key={c.id} c={c} />)}
+                    {joinedFiltered.map(c => <CommunityListItem key={c.id} c={c} />)}
                   </div>
                 )}
 
-                {otherCommunities.length > 0 && (
+                {otherFiltered.length > 0 && (
                   <div style={{ marginBottom: 20 }}>
                     <div style={{ fontSize: 9, color: textMuted, letterSpacing: "1.5px", marginBottom: 6, paddingLeft: 12 }}>ALL COMMUNITIES</div>
-                    {otherCommunities.map(c => <CommunityListItem key={c.id} c={c} />)}
+                    {otherFiltered.map(c => <CommunityListItem key={c.id} c={c} />)}
                   </div>
+                )}
+
+                {filteredCommunities.length === 0 && communitySearch && (
+                  <div style={{ fontSize: 12, color: textMuted, paddingLeft: 12 }}>no results</div>
                 )}
               </div>
 
@@ -4824,14 +4888,31 @@ const setViewingProfile = (user) => {
                     </div>
                     <div style={{ flex: 1 }}>
                       <div style={{ fontSize: 20, fontWeight: 400, letterSpacing: "-0.5px", color: text, marginBottom: 10, lineHeight: 1.3 }}>{activeThread.title}</div>
-                      <div style={{ fontSize: 11, color: textMuted, marginBottom: 16 }}>
-                        {activeThread.user_name} · {relativeTime(activeThread.created_at)}
+                      <div style={{ fontSize: 11, color: textMuted, marginBottom: 16, display: "flex", alignItems: "center", gap: 10 }}>
+                        <span>{activeThread.user_name} · {relativeTime(activeThread.created_at)}</span>
+                        {activeThread.user_id === authUser?.id && (
+                          <span style={{ display: "flex", gap: 8 }}>
+                            <button className="hb" onClick={() => { setEditingPostId(activeThread.id); setEditingPostContent(activeThread.content || ""); }}
+                              style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontSize: 10, fontFamily: "inherit", padding: 0, textDecoration: "underline" }}>edit</button>
+                            <button className="hb" onClick={() => handleDeletePost(activeThread.id)}
+                              style={{ background: "none", border: "none", color: "#ef4444", cursor: "pointer", fontSize: 10, fontFamily: "inherit", padding: 0, textDecoration: "underline" }}>delete</button>
+                          </span>
+                        )}
                       </div>
-                      {activeThread.content && (
+                      {editingPostId === activeThread.id ? (
+                        <div style={{ marginBottom: 24 }}>
+                          <textarea value={editingPostContent} onChange={e => setEditingPostContent(e.target.value)}
+                            style={{ ...inputStyle, resize: "none", fontSize: 13, padding: "12px", minHeight: 80, width: "100%", boxSizing: "border-box" }} rows={4} />
+                          <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                            <button className="hb" onClick={() => handleEditPost(activeThread.id, editingPostContent)} style={{ ...btnP, padding: "6px 16px", fontSize: 11 }}>save</button>
+                            <button className="hb" onClick={() => setEditingPostId(null)} style={{ background: "none", border: `1px solid ${border}`, borderRadius: 6, padding: "6px 14px", fontSize: 11, cursor: "pointer", fontFamily: "inherit", color: textMuted }}>cancel</button>
+                          </div>
+                        </div>
+                      ) : activeThread.content ? (
                         <div style={{ fontSize: 13, color: text, lineHeight: 1.75, whiteSpace: "pre-wrap", marginBottom: 24, padding: "16px", background: bg2, borderRadius: 8, border: `1px solid ${border}` }}>
                           {activeThread.content}
                         </div>
-                      )}
+                      ) : null}
                     </div>
                   </div>
 
@@ -4865,9 +4946,13 @@ const setViewingProfile = (user) => {
                       <div key={c.id} style={{ display: "flex", gap: 10, marginBottom: 16, paddingBottom: 16, borderBottom: `1px solid ${border}` }}>
                         <Avatar initials={c.user_initials} size={28} dark={dark} />
                         <div style={{ flex: 1 }}>
-                          <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 6 }}>
+                          <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 6, flexWrap: "wrap" }}>
                             <span style={{ fontSize: 12, fontWeight: 500, color: text }}>{c.user_name}</span>
                             <span style={{ fontSize: 10, color: textMuted }}>{relativeTime(c.created_at)}</span>
+                            {c.user_id === authUser?.id && (
+                              <button className="hb" onClick={() => handleDeleteComment(c.id, activeThread.id)}
+                                style={{ background: "none", border: "none", color: "#ef4444", cursor: "pointer", fontSize: 10, fontFamily: "inherit", padding: 0, textDecoration: "underline", marginLeft: 4 }}>delete</button>
+                            )}
                           </div>
                           <div style={{ fontSize: 13, color: text, lineHeight: 1.65 }}>{c.content}</div>
                         </div>
@@ -4928,10 +5013,14 @@ const setViewingProfile = (user) => {
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ fontSize: 14, color: text, fontWeight: 400, letterSpacing: "-0.2px", marginBottom: 6, lineHeight: 1.4 }}>{post.title}</div>
                         {post.content && <div style={{ fontSize: 12, color: textMuted, lineHeight: 1.5, marginBottom: 8, overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>{post.content}</div>}
-                        <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
+                        <div style={{ display: "flex", gap: 14, alignItems: "center", flexWrap: "wrap" }}>
                           <span style={{ fontSize: 10, color: textMuted }}>{post.user_name}</span>
                           <span style={{ fontSize: 10, color: textMuted }}>{relativeTime(post.created_at)}</span>
                           <span style={{ fontSize: 10, color: textMuted }}>... {post.comment_count}</span>
+                          {post.user_id === authUser?.id && (
+                            <button className="hb" onClick={e => { e.stopPropagation(); handleDeletePost(post.id); }}
+                              style={{ background: "none", border: "none", color: "#ef4444", cursor: "pointer", fontSize: 10, fontFamily: "inherit", padding: 0, textDecoration: "underline" }}>delete</button>
+                          )}
                         </div>
                       </div>
                     </div>
