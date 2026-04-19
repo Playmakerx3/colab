@@ -51,6 +51,7 @@ export function useAppDataBootstrap({
   setCommunities,
   setJoinedCommunityIds,
   setCommunityVotes,
+  setCommunityDownvotes,
 }) {
   const loadAllData = useCallback(async (userId) => {
     setLoading(true);
@@ -73,6 +74,7 @@ export function useAppDataBootstrap({
         communitiesData,
         myMembershipsData,
         myVotesData,
+        myDownvotesData,
       } = await fetchAppBootstrapData(userId);
 
       setProjects(projs || []);
@@ -95,6 +97,9 @@ export function useAppDataBootstrap({
       const votesMap = {};
       (myVotesData || []).forEach(v => { votesMap[v.post_id] = true; });
       setCommunityVotes(votesMap);
+      const downvotesMap = {};
+      (myDownvotesData || []).forEach(v => { downvotesMap[v.post_id] = true; });
+      setCommunityDownvotes(downvotesMap);
 
       const trending = [...(projs || [])].sort((a, b) => {
         const aCount = (apps || []).filter(ap => ap.project_id === a.id).length;
@@ -139,6 +144,7 @@ export function useAppDataBootstrap({
     setCommunities,
     setJoinedCommunityIds,
     setCommunityVotes,
+    setCommunityDownvotes,
   ]);
 
   return { loadAllData };

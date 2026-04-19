@@ -37,16 +37,18 @@ export async function fetchAppBootstrapData(userId) {
   ]);
 
   // Communities data — fetched separately so a missing table never breaks core load
-  let communitiesData = [], myMembershipsData = [], myVotesData = [];
+  let communitiesData = [], myMembershipsData = [], myVotesData = [], myDownvotesData = [];
   try {
-    const [{ data: c }, { data: m }, { data: v }] = await Promise.all([
+    const [{ data: c }, { data: m }, { data: v }, { data: dv }] = await Promise.all([
       supabase.from("communities").select("*").order("name"),
       supabase.from("community_members").select("*").eq("user_id", userId),
       supabase.from("community_post_votes").select("*").eq("user_id", userId),
+      supabase.from("community_post_downvotes").select("*").eq("user_id", userId),
     ]);
     communitiesData = c || [];
     myMembershipsData = m || [];
     myVotesData = v || [];
+    myDownvotesData = dv || [];
   } catch (e) {
     console.warn("Communities tables not yet available — run the SQL migration.", e);
   }
@@ -70,6 +72,7 @@ export async function fetchAppBootstrapData(userId) {
     communitiesData,
     myMembershipsData,
     myVotesData,
+    myDownvotesData,
   };
 }
 

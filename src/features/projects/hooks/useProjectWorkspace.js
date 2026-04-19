@@ -17,7 +17,6 @@ import {
   fetchProjectActivity,
   fetchProjectWorkspaceData,
   getProjectFilePublicUrl,
-  markApplicationLeft,
   removeProjectFileStorage,
   updateProject,
   updateProjectDoc,
@@ -56,6 +55,8 @@ export function useProjectWorkspace({
   setTaskAssignee,
   taskDueDate,
   setTaskDueDate,
+  newTaskPriority,
+  setNewTaskPriority,
   newUpdate,
   setNewUpdate,
   detectAndNotifyMentions,
@@ -138,6 +139,7 @@ export function useProjectWorkspace({
       plugins: [],
       collaborators: 0,
       is_private: Boolean(newProject.is_private),
+      cover_image_url: null,
     };
 
     console.info("[project:create] payload constructed", {
@@ -161,6 +163,16 @@ export function useProjectWorkspace({
         throw new Error("Project could not be created. Please retry.");
       }
 
+      if (newProject.coverImageFile) {
+        const coverPath = `project-covers/${data.id}/${Date.now()}-${newProject.coverImageFile.name}`;
+        const { error: coverError } = await supabase.storage.from("user-uploads").upload(coverPath, newProject.coverImageFile, { upsert: true });
+        if (!coverError) {
+          const { data: { publicUrl } } = supabase.storage.from("user-uploads").getPublicUrl(coverPath);
+          await supabase.from("projects").update({ cover_image_url: publicUrl }).eq("id", data.id);
+          data.cover_image_url = publicUrl;
+        }
+      }
+
       console.info("[project:create] API success", { projectId: data.id });
       setProjects([data, ...projects]);
 
@@ -178,7 +190,7 @@ export function useProjectWorkspace({
         });
       }
 
-      setNewProject({ title: "", description: "", category: CATEGORIES[0], skills: [], maxCollaborators: 2, location: "", goals: "", timeline: "", is_private: false });
+      setNewProject({ title: "", description: "", category: CATEGORIES[0], skills: [], maxCollaborators: 2, location: "", goals: "", timeline: "", is_private: false, coverImageFile: null });
       setShowCreate(false);
       setActiveProject(data);
       loadProjectData(data.id);
@@ -309,11 +321,15 @@ export function useProjectWorkspace({
     loadGithubCommits(slug);
   };
 
-  const handleLeaveProject = async (applicationId) => {
-    if (!window.confirm("Leave this project? You'll need to re-apply to rejoin.")) return;
-    await markApplicationLeft(applicationId);
-    setApplications((prev) => prev.map((a) => (a.id === applicationId ? { ...a, status: "left" } : a)));
+  const handleLeaveProject = async (projectId) => {
+    const project = projectsRef.current.find((p) => p.id === projectId);
+    if (!project) return;
+    if (!window.confirm(`Are you sure you want to leave ${project.title}? You'll lose access to the workspace.`)) return;
+    await supabase.from("tasks").update({ assigned_to: null }).eq("project_id", projectId).eq("assigned_to", authUser.id);
+    await supabase.from("applications").delete().eq("project_id", projectId).eq("applicant_id", authUser.id);
+    setApplications((prev) => prev.filter((a) => !(a.project_id === projectId && a.applicant_id === authUser.id)));
     setActiveProject(null);
+    setAppScreen("explore");
     showToast("You've left the project.");
   };
 
@@ -404,13 +420,26 @@ export function useProjectWorkspace({
       assigned_to: assignedUser?.id || null,
       assigned_name: taskAssignee || null,
       due_date: taskDueDate || null,
+      priority: newTaskPriority || "medium",
     });
     if (data) {
+      if (assignedUser?.id && assignedUser.id !== authUser?.id) {
+        const project = projectsRef.current.find((p) => p.id === projectId);
+        await supabase.from("notifications").insert({
+          user_id: assignedUser.id,
+          type: "task_assigned",
+          text: `You've been assigned a task in ${project?.title || "a project"}: ${newTaskText}`,
+          entity_id: data.id,
+          project_id: projectId,
+          read: false,
+        });
+      }
       const newTasks = [...tasks, data];
       setTasks(newTasks);
       setNewTaskText("");
       setTaskAssignee("");
       setTaskDueDate("");
+      setNewTaskPriority("medium");
       syncProgress(projectId, newTasks);
     }
   };
