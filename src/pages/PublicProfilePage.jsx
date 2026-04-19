@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { supabase } from "../supabase";
 import { normalizeBannerPixels } from "../constants/appConstants";
 import { initials } from "../utils/appHelpers";
+import Avatar from "../components/ui/Avatar";
 
 const getMediaType = (url = "") => {
   if (!url) return "none";
@@ -253,7 +254,7 @@ export default function PublicProfilePage({ username, userId }) {
 
       <div className="fu" style={{ maxWidth: 700, margin: "0 auto", padding: "48px 24px 80px" }}>
         <div style={{ display: "flex", gap: 16, alignItems: "flex-start", marginBottom: 28 }}>
-          <div style={{ width: 56, height: 56, borderRadius: "50%", background: text, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, fontWeight: 700, color: bg, flexShrink: 0 }}>{initials(user.name)}</div>
+          <Avatar initials={initials(user.name)} src={user.avatar_url} size={56} dark={dark} />
           <div style={{ flex: 1, minWidth: 0 }}>
             <h1 style={{ fontSize: "clamp(20px, 4vw, 28px)", fontWeight: 400, letterSpacing: "-1px", color: text, marginBottom: 4 }}>{user.name}</h1>
             {user.username && <div style={{ fontSize: 11, color: textMuted, marginBottom: 4 }}>@{user.username}</div>}

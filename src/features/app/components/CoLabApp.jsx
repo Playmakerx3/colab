@@ -610,7 +610,7 @@ function PostCard({ post, ctx }) {
       {/* Header */}
       <div style={{ display: "flex", gap: 12, alignItems: "flex-start", marginBottom: 14 }}>
         <button onClick={() => postUser && setViewingProfile(postUser)} style={{ background: "none", border: "none", cursor: "pointer", padding: 0, flexShrink: 0 }}>
-          <Avatar initials={post.user_initials} size={40} dark={dark} />
+          <Avatar initials={post.user_initials} src={postUser?.avatar_url} size={40} dark={dark} />
         </button>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
@@ -772,7 +772,7 @@ function PostCard({ post, ctx }) {
                 const isMyComment = c.user_id === authUser?.id;
                 return (
                   <div key={c.id} style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
-                    <Avatar initials={c.user_initials} size={26} dark={dark} />
+                    <Avatar initials={c.user_initials} src={cUser?.avatar_url} size={26} dark={dark} />
                     <div style={{ background: bg2, border: `1px solid ${border}`, borderRadius: 10, padding: "8px 13px", flex: 1, minWidth: 0 }}>
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 3 }}>
                         <button onClick={() => cUser && setViewingProfile(cUser)} style={{ background: "none", border: "none", cursor: "pointer", padding: 0, fontSize: 11, fontWeight: 500, color: text, fontFamily: "inherit" }}>{c.user_name}</button>
@@ -2125,7 +2125,7 @@ const setViewingProfile = (user) => {
         <div>
           <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 8, flexWrap: "wrap" }}>
             <button onClick={e => { e.stopPropagation(); if (owner) setViewingProfile(owner); }} style={{ background: "none", border: "none", cursor: "pointer", padding: 0, display: "flex", alignItems: "center", gap: 6 }}>
-              <Avatar initials={p.owner_initials} size={20} dark={dark} />
+              <Avatar initials={p.owner_initials} src={owner?.avatar_url} size={20} dark={dark} />
               <span style={{ fontSize: 11, color: textMuted, textDecoration: "underline" }}>{p.owner_name}</span>
             </button>
             <span style={{ color: textSub }}>·</span>
@@ -2213,7 +2213,7 @@ const setViewingProfile = (user) => {
             <button onClick={e => { e.stopPropagation(); onClose(); }} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontSize: 14, fontFamily: "inherit" }}>✕</button>
           </div>
           <div style={{ display: "flex", gap: 16, alignItems: "center", marginBottom: 16 }}>
-            <Avatar initials={uInitials} size={52} dark={dark} />
+            <Avatar initials={uInitials} src={u?.avatar_url} size={52} dark={dark} />
             <div>
               <div style={{ fontSize: 20, fontWeight: 400, color: text, letterSpacing: "-0.5px" }}>{u.name}</div>
               {u.username && <div style={{ fontSize: 11, color: textMuted, marginTop: 1 }}>@{u.username}</div>}
@@ -2365,7 +2365,7 @@ const setViewingProfile = (user) => {
                     <div key={a.id} onClick={() => setSelectedApplicant(a)} style={{ background: bg2, border: `1px solid ${border}`, borderRadius: 10, padding: "14px 16px", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center", transition: "border 0.15s" }}
                       onMouseEnter={e => e.currentTarget.style.borderColor = text} onMouseLeave={e => e.currentTarget.style.borderColor = border}>
                       <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-                        <Avatar initials={a.applicant_initials} size={36} dark={dark} />
+                        <Avatar initials={a.applicant_initials} src={users.find(u => u.id === a.applicant_id)?.avatar_url} size={36} dark={dark} />
                         <div>
                           <div style={{ fontSize: 13, color: text, fontWeight: 500 }}>{a.applicant_name}</div>
                           <div style={{ fontSize: 11, color: textMuted }}>{a.applicant_role} · {a.availability}</div>
@@ -2378,7 +2378,7 @@ const setViewingProfile = (user) => {
               : <div>
                   <button onClick={() => setSelectedApplicant(null)} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontFamily: "inherit", fontSize: 12, marginBottom: 20 }}>← all applicants</button>
                   <div style={{ display: "flex", gap: 14, alignItems: "center", marginBottom: 16 }}>
-                    <Avatar initials={selectedApplicant.applicant_initials} size={48} dark={dark} />
+                    <Avatar initials={selectedApplicant.applicant_initials} src={users.find(u => u.id === selectedApplicant.applicant_id)?.avatar_url} size={48} dark={dark} />
                     <div>
                       <div style={{ fontSize: 18, color: text }}>{selectedApplicant.applicant_name}</div>
                       <div style={{ fontSize: 12, color: textMuted }}>{selectedApplicant.applicant_role}</div>
@@ -3687,7 +3687,7 @@ const setViewingProfile = (user) => {
                     <div>
                       <div style={{ background: bg2, border: `1px solid ${border}`, borderRadius: 8, padding: "10px 12px", marginBottom: 8 }}>
                         <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 4 }}>
-                          <Avatar initials={n.applicant.initials} size={28} dark={dark} />
+                          <Avatar initials={n.applicant.initials} src={users.find(u => u.id === n.applicant.id)?.avatar_url} size={28} dark={dark} />
                           <div><div style={{ fontSize: 12, color: text }}>{n.applicant.name}</div><div style={{ fontSize: 10, color: textMuted }}>{n.applicant.role}{n.applicant.availability ? ` · ${n.applicant.availability}` : ""}</div></div>
                         </div>
                         {n.applicant.motivation && <div style={{ fontSize: 11, color: textMuted, lineHeight: 1.6, marginTop: 6 }}>{n.applicant.motivation.slice(0, 100)}...</div>}
@@ -4598,7 +4598,7 @@ const setViewingProfile = (user) => {
           </div>
           <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 18 }}>
             <button onClick={() => { const u = users.find(u => u.id === activeProject.owner_id); if (u) setViewingProfile(u); }} style={{ background: "none", border: "none", cursor: "pointer", padding: 0 }}>
-              <Avatar initials={activeProject.owner_initials} size={40} dark={dark} />
+              <Avatar initials={activeProject.owner_initials} src={users.find(u => u.id === activeProject.owner_id)?.avatar_url} size={40} dark={dark} />
             </button>
             <div>
               <button onClick={() => { const u = users.find(u => u.id === activeProject.owner_id); if (u) setViewingProfile(u); }} style={{ background: "none", border: "none", cursor: "pointer", padding: 0 }}>
@@ -4957,7 +4957,7 @@ const setViewingProfile = (user) => {
                     {/* Comments list */}
                     {(threadComments[activeThread.id] || []).map(c => (
                       <div key={c.id} style={{ display: "flex", gap: 10, marginBottom: 16, paddingBottom: 16, borderBottom: `1px solid ${border}` }}>
-                        <Avatar initials={c.user_initials} size={28} dark={dark} />
+                        <Avatar initials={c.user_initials} src={users.find(u => u.id === c.user_id)?.avatar_url} size={28} dark={dark} />
                         <div style={{ flex: 1 }}>
                           <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 6, flexWrap: "wrap" }}>
                             <span style={{ fontSize: 12, fontWeight: 500, color: text }}>{c.user_name}</span>
@@ -5123,7 +5123,7 @@ const setViewingProfile = (user) => {
                           const seenByOther = isLastSent && otherUserId && (msg.read_by || []).includes(otherUserId);
                           return (
                             <div key={msg.id || i} style={{ display: "flex", gap: 10, alignItems: "flex-end", flexDirection: isMe ? "row-reverse" : "row" }}>
-                              <Avatar initials={msg.sender_initials} size={26} dark={dark} />
+                              <Avatar initials={msg.sender_initials} src={users.find(u => u.id === msg.sender_id)?.avatar_url} size={26} dark={dark} />
                               <div style={{ maxWidth: "70%" }}>
                                 {isEditing ? (
                                   <div style={{ display: "flex", gap: 6 }}>
@@ -5659,7 +5659,7 @@ const setViewingProfile = (user) => {
                             <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
                               {assignee ? (
                                 <>
-                                  <Avatar initials={initials(assignee.name, "??")} size={16} dark={dark} />
+                                  <Avatar initials={initials(assignee.name, "??")} src={assignee?.avatar_url} size={16} dark={dark} />
                                   <div style={{ fontSize: 10, color: textMuted }}>{assignee.name}</div>
                                   {isAssignedToMe && <span style={{ fontSize: 9, color: "#60a5fa" }}>you</span>}
                                 </>
@@ -5750,7 +5750,7 @@ const setViewingProfile = (user) => {
                         const isEditing = editingMessage?.id === msg.id && editingMessage?.type === "project";
                         return (
                           <div key={i} style={{ display: "flex", gap: 10, alignItems: "flex-start", flexDirection: isMe ? "row-reverse" : "row" }}>
-                            <Avatar initials={msg.from_initials} size={28} dark={dark} />
+                            <Avatar initials={msg.from_initials} src={users.find(u => u.id === msg.from_user)?.avatar_url} size={28} dark={dark} />
                             <div style={{ maxWidth: "72%" }}>
                               <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 4, flexDirection: isMe ? "row-reverse" : "row" }}>
                                 <span style={{ fontSize: 11, fontWeight: 500, color: text }}>{isMe ? "you" : msg.from_name}</span>
@@ -5956,7 +5956,7 @@ const setViewingProfile = (user) => {
                 {projectUpdates.length === 0 ? <div style={{ fontSize: 12, color: textMuted }}>no updates yet.</div>
                   : projectUpdates.map((u, i) => (
                     <div key={i} style={{ display: "flex", gap: 10, marginBottom: 18 }}>
-                      <Avatar initials={u.initials} size={28} dark={dark} />
+                      <Avatar initials={u.initials} src={users.find(usr => usr.id === u.user_id)?.avatar_url} size={28} dark={dark} />
                       <div>
                         <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 4 }}>
                           <span style={{ fontSize: 12, fontWeight: 500, color: text }}>{u.author}</span>
@@ -5975,7 +5975,7 @@ const setViewingProfile = (user) => {
               <div>
                 <div style={{ fontSize: 10, color: textMuted, letterSpacing: "1px", marginBottom: 14 }}>TEAM</div>
                 <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 0", borderBottom: `1px solid ${border}` }}>
-                  <Avatar initials={activeProject.owner_initials} size={36} dark={dark} />
+                  <Avatar initials={activeProject.owner_initials} src={users.find(u => u.id === activeProject.owner_id)?.avatar_url} size={36} dark={dark} />
                   <div style={{ flex: 1 }}>
                     <div style={{ fontSize: 13, color: text }}>{activeProject.owner_name}</div>
                     <div style={{ fontSize: 11, color: textMuted }}>project owner</div>
