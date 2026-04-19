@@ -61,6 +61,8 @@ export default function NetworkGraph3D({ users, applications, projects = [], aut
   const [tooltip, setTooltip] = useState(null);
   const [dims, setDims] = useState({ w: 900, h: 600 });
   const [showMutualLines, setShowMutualLines] = useState(true);
+  const [hintsVisible, setHintsVisible] = useState(true);
+  useEffect(() => { const t = setTimeout(() => setHintsVisible(false), 4000); return () => clearTimeout(t); }, []);
 
   // Hit detection uses projectedRef (screen positions from last frame)
   const getHit = useCallback((sx, sy) => {
@@ -269,31 +271,33 @@ export default function NetworkGraph3D({ users, applications, projects = [], aut
       ctx.fillStyle = dark ? "#080808" : "#f0f0f0";
       ctx.fillRect(0, 0, w, h);
 
-      // ── Cluster zone labels (projected)
+      // ── Cluster zone labels (projected) — subtle background markers
       Object.entries(SKILL_CLUSTERS).forEach(([name, { color }]) => {
         const center = mc[name];
         if (!center) return;
         const { sx, sy, pd } = project(center.x - cx, center.y - cy);
-        const fontSize = Math.max(8, Math.round(Math.min(w, h) * 0.027 * pd * zoom));
-        ctx.font = `bold ${fontSize}px monospace`;
+        const fontSize = Math.max(7, Math.round(Math.min(w, h) * 0.016 * pd * zoom));
+        ctx.font = `${fontSize}px monospace`;
         ctx.textAlign = "center";
-        ctx.fillStyle = dark ? `rgba(${hexToRgb(color)},0.09)` : `rgba(${hexToRgb(color)},0.13)`;
+        ctx.fillStyle = dark ? `rgba(${hexToRgb(color)},0.07)` : `rgba(${hexToRgb(color)},0.09)`;
         ctx.fillText(name.toUpperCase(), sx, sy);
       });
 
-      // ── Skill sub-labels (projected)
-      Object.entries(skillCenters).forEach(([skill, pos]) => {
-        if (!skillPopulation[skill]) return;
-        const meta = SKILL_META[skill];
-        if (!meta) return;
-        const { sx, sy, pd } = project(pos.x - cx, pos.y - cy);
-        if (pd < 0.5) return; // skip labels that are too far back
-        const fontSize = Math.max(6, Math.round(9 * pd * zoom));
-        ctx.font = `${fontSize}px monospace`;
-        ctx.textAlign = "center";
-        ctx.fillStyle = dark ? `rgba(${hexToRgb(meta.color)},0.28)` : `rgba(${hexToRgb(meta.color)},0.38)`;
-        ctx.fillText(skill, sx, sy - Math.round(12 * pd * zoom));
-      });
+      // ── Skill sub-labels — only show when zoomed in (zoom > 1.6)
+      if (zoom > 1.6) {
+        Object.entries(skillCenters).forEach(([skill, pos]) => {
+          if (!skillPopulation[skill]) return;
+          const meta = SKILL_META[skill];
+          if (!meta) return;
+          const { sx, sy, pd } = project(pos.x - cx, pos.y - cy);
+          if (pd < 0.5) return;
+          const fontSize = Math.max(6, Math.round(8 * pd * zoom));
+          ctx.font = `${fontSize}px monospace`;
+          ctx.textAlign = "center";
+          ctx.fillStyle = dark ? `rgba(${hexToRgb(meta.color)},0.22)` : `rgba(${hexToRgb(meta.color)},0.28)`;
+          ctx.fillText(skill, sx, sy - Math.round(10 * pd * zoom));
+        });
+      }
 
       // ── Collab links
       collabLinks.forEach(link => {
@@ -567,47 +571,84 @@ export default function NetworkGraph3D({ users, applications, projects = [], aut
         style={{ display: "block", cursor: "grab", touchAction: "none" }}
       />
 
-      {/* Legend */}
-      <div style={{ position: "absolute", top: 12, left: 12, display: "flex", flexDirection: "column", gap: 5 }}>
+      {/* Legend + controls — unified panel */}
+      <div style={{
+        position: "absolute", top: 12, left: 12,
+        background: dark ? "rgba(10,10,10,0.72)" : "rgba(255,255,255,0.82)",
+        backdropFilter: "blur(10px)",
+        border: `1px solid ${dark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)"}`,
+        borderRadius: 8, padding: "10px 12px",
+        display: "flex", flexDirection: "column", gap: 5,
+        minWidth: 130,
+      }}>
+        {/* Skill clusters */}
         {Object.entries(SKILL_CLUSTERS).map(([name, { color }]) => (
-          <div key={name} style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <div style={{ width: 7, height: 7, borderRadius: "50%", background: color, flexShrink: 0 }} />
-            <span style={{ fontSize: 9, color: dark ? "rgba(255,255,255,0.38)" : "rgba(0,0,0,0.38)", fontFamily: "monospace" }}>{name}</span>
+          <div key={name} style={{ display: "flex", alignItems: "center", gap: 7 }}>
+            <div style={{ width: 6, height: 6, borderRadius: "50%", background: color, flexShrink: 0, opacity: 0.9 }} />
+            <span style={{ fontSize: 9, color: dark ? "rgba(255,255,255,0.45)" : "rgba(0,0,0,0.45)", fontFamily: "monospace" }}>{name}</span>
           </div>
         ))}
-        <div style={{ borderTop: `1px solid ${dark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)"}`, margin: "2px 0" }} />
-        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <div style={{ width: 16, height: 0, borderTop: `2px solid ${dark ? "rgba(255,255,255,0.75)" : "rgba(0,0,0,0.6)"}`, flexShrink: 0 }} />
-          <span style={{ fontSize: 9, color: dark ? "rgba(255,255,255,0.45)" : "rgba(0,0,0,0.45)", fontFamily: "monospace" }}>collaborator</span>
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <div style={{ width: 16, height: 0, borderTop: `1px solid ${dark ? "rgba(255,255,255,0.18)" : "rgba(0,0,0,0.14)"}`, flexShrink: 0 }} />
-          <span style={{ fontSize: 9, color: dark ? "rgba(255,255,255,0.45)" : "rgba(0,0,0,0.45)", fontFamily: "monospace" }}>mutual follow</span>
-        </div>
-        <button onClick={() => setShowMutualLines(v => !v)}
-          style={{ marginTop: 2, background: showMutualLines ? (dark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)") : "none", border: `1px solid ${dark ? "rgba(255,255,255,0.14)" : "rgba(0,0,0,0.14)"}`, borderRadius: 4, padding: "3px 8px", fontSize: 9, color: dark ? "rgba(255,255,255,0.45)" : "rgba(0,0,0,0.45)", cursor: "pointer", fontFamily: "monospace", textAlign: "left" }}>
-          {showMutualLines ? "hide" : "show"} mutual lines
-        </button>
-        <div style={{ marginTop: 6, fontSize: 8, color: dark ? "rgba(255,255,255,0.22)" : "rgba(0,0,0,0.25)", fontFamily: "monospace", lineHeight: 1.6 }}>
-          drag to rotate · scroll to zoom<br />right-drag to pan
-        </div>
-      </div>
 
-      {/* Controls */}
-      <div style={{ position: "absolute", bottom: 16, right: 16, display: "flex", flexDirection: "column", gap: 4 }}>
-        <button onClick={() => { const c = canvasRef.current; if (c) applyZoom(1.3, c.width/2, c.height/2); }} style={btnStyle}>+</button>
-        <button onClick={() => { const c = canvasRef.current; if (c) applyZoom(0.8, c.width/2, c.height/2); }} style={btnStyle}>−</button>
-        <button onClick={resetView} style={{ ...btnStyle, fontSize: 11 }} title="Reset view">⊙</button>
+        {/* Divider */}
+        <div style={{ borderTop: `1px solid ${dark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)"}`, margin: "2px 0" }} />
+
+        {/* Line types */}
+        <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+          <div style={{ width: 14, height: 0, borderTop: `2px solid ${dark ? "rgba(255,255,255,0.6)" : "rgba(0,0,0,0.5)"}`, flexShrink: 0 }} />
+          <span style={{ fontSize: 9, color: dark ? "rgba(255,255,255,0.4)" : "rgba(0,0,0,0.4)", fontFamily: "monospace" }}>collaborator</span>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+          <div style={{ width: 14, height: 0, borderTop: `1px solid ${dark ? "rgba(255,255,255,0.2)" : "rgba(0,0,0,0.18)"}`, flexShrink: 0 }} />
+          <span style={{ fontSize: 9, color: dark ? "rgba(255,255,255,0.4)" : "rgba(0,0,0,0.4)", fontFamily: "monospace" }}>mutual follow</span>
+        </div>
+
+        {/* Divider */}
+        <div style={{ borderTop: `1px solid ${dark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)"}`, margin: "2px 0" }} />
+
+        {/* Controls row */}
+        <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
+          <button onClick={() => setShowMutualLines(v => !v)}
+            style={{ flex: 1, background: "none", border: `1px solid ${dark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)"}`, borderRadius: 4, padding: "3px 6px", fontSize: 9, color: dark ? "rgba(255,255,255,0.4)" : "rgba(0,0,0,0.4)", cursor: "pointer", fontFamily: "monospace" }}>
+            {showMutualLines ? "hide lines" : "show lines"}
+          </button>
+          <button onClick={() => { const c = canvasRef.current; if (c) applyZoom(1.25, c.width/2, c.height/2); }}
+            style={{ ...btnStyle, width: 22, height: 22, fontSize: 13, borderRadius: 4 }}>+</button>
+          <button onClick={() => { const c = canvasRef.current; if (c) applyZoom(0.8, c.width/2, c.height/2); }}
+            style={{ ...btnStyle, width: 22, height: 22, fontSize: 13, borderRadius: 4 }}>−</button>
+          <button onClick={resetView}
+            style={{ ...btnStyle, width: 22, height: 22, fontSize: 10, borderRadius: 4 }} title="Reset">⊙</button>
+        </div>
+
+        {/* Hint text — fades after 4s */}
+        <div style={{ fontSize: 8, color: dark ? "rgba(255,255,255,0.2)" : "rgba(0,0,0,0.22)", fontFamily: "monospace", lineHeight: 1.6, opacity: hintsVisible ? 1 : 0, transition: "opacity 1s ease" }}>
+          drag to rotate · scroll to zoom
+        </div>
       </div>
 
       {/* Tooltip */}
       {tooltip && (
-        <div style={{ position: "absolute", left: tooltip.x + 14, top: tooltip.y - 12, background: dark ? "#1a1a1a" : "#fff", border: `1px solid ${tooltip.isCollab ? (dark ? "rgba(255,255,255,0.3)" : "rgba(0,0,0,0.25)") : "rgba(128,128,128,0.2)"}`, borderRadius: 6, padding: "7px 11px", pointerEvents: "none", fontSize: 11, color: dark ? "#fff" : "#000", fontFamily: "monospace", whiteSpace: "nowrap" }}>
-          <div style={{ fontWeight: 600 }}>{tooltip.name}</div>
-          {tooltip.role && <div style={{ opacity: 0.5, fontSize: 10, marginTop: 1 }}>{tooltip.role}</div>}
-          {tooltip.primarySkill && <div style={{ opacity: 0.45, fontSize: 9, marginTop: 2 }}>{tooltip.primarySkill}</div>}
-          {tooltip.isCollab && <div style={{ fontSize: 9, opacity: 0.55, marginTop: 3 }}>collaborator</div>}
-          {tooltip.isMutual && <div style={{ fontSize: 9, opacity: 0.55, marginTop: 3 }}>mutual follow</div>}
+        <div style={{
+          position: "absolute",
+          left: Math.min(tooltip.x + 14, dims.w - 160),
+          top: Math.max(8, tooltip.y - 20),
+          background: dark ? "rgba(18,18,18,0.95)" : "rgba(255,255,255,0.97)",
+          backdropFilter: "blur(8px)",
+          border: `1px solid ${dark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.1)"}`,
+          borderRadius: 8, padding: "9px 13px",
+          pointerEvents: "none", fontSize: 11,
+          color: dark ? "#fff" : "#000",
+          fontFamily: "monospace", whiteSpace: "nowrap",
+          boxShadow: dark ? "0 4px 20px rgba(0,0,0,0.5)" : "0 4px 20px rgba(0,0,0,0.1)",
+        }}>
+          <div style={{ fontWeight: 600, letterSpacing: "-0.3px" }}>{tooltip.name}</div>
+          {tooltip.role && <div style={{ opacity: 0.45, fontSize: 10, marginTop: 2 }}>{tooltip.role}</div>}
+          {(tooltip.isCollab || tooltip.isMutual) && (
+            <div style={{ fontSize: 9, marginTop: 4, opacity: 0.5, display: "flex", alignItems: "center", gap: 4 }}>
+              <span style={{ width: 5, height: 5, borderRadius: "50%", background: tooltip.isCollab ? "#22c55e" : "#60a5fa", display: "inline-block" }} />
+              {tooltip.isCollab ? "collaborator" : "mutual follow"}
+            </div>
+          )}
+          <div style={{ fontSize: 9, marginTop: 5, opacity: 0.35 }}>click to view profile →</div>
         </div>
       )}
     </div>
