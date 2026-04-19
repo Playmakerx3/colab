@@ -3195,7 +3195,7 @@ const setViewingProfile = (user) => {
         </div>
 
         {/* Feed tabs — moved to Explore */}
-        {(
+        {false && (
           <div>
             <div style={{ background: bg2, border: `1px solid ${border}`, borderRadius: 14, padding: "18px", marginBottom: 32 }}>
               <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
