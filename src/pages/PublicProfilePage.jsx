@@ -40,6 +40,9 @@ export default function PublicProfilePage({ username, userId }) {
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [authUserId, setAuthUserId] = useState(null);
+  const [isFollowing, setIsFollowing] = useState(false);
+  const [followBusy, setFollowBusy] = useState(false);
 
   const bg = dark ? "#0a0a0a" : "#ffffff";
   const bg2 = dark ? "#111111" : "#f5f5f5";
@@ -61,6 +64,10 @@ export default function PublicProfilePage({ username, userId }) {
   useEffect(() => {
     document.body.style.backgroundColor = dark ? "#0a0a0a" : "#ffffff";
   }, [dark]);
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => setAuthUserId(data?.user?.id || null));
+  }, []);
 
   useEffect(() => {
     if (!user) return;
@@ -131,6 +138,16 @@ export default function PublicProfilePage({ username, userId }) {
         .order("created_at", { ascending: false });
       if (!isActive) return;
       acceptedAsApplicant = applicantRows || [];
+      const collaboratorProjectIds = [...new Set(acceptedAsApplicant.map((a) => a.project_id).filter(Boolean))];
+      let collaboratorProjects = [];
+      if (collaboratorProjectIds.length > 0) {
+        const { data: collaboratorRows } = await supabase
+          .from("projects")
+          .select("*")
+          .in("id", collaboratorProjectIds);
+        if (!isActive) return;
+        collaboratorProjects = collaboratorRows || [];
+      }
 
       const projectIdsAsApplicant = [...new Set(acceptedAsApplicant.map((a) => a.project_id).filter(Boolean))];
       let ownerProjects = [];
@@ -179,7 +196,9 @@ export default function PublicProfilePage({ username, userId }) {
       });
       if (!isActive) return;
       setCollaborationHistory(history);
-      setProjects(projs || []);
+      const mergedProjectById = {};
+      [...(projs || []), ...collaboratorProjects].forEach((project) => { mergedProjectById[project.id] = project; });
+      setProjects(Object.values(mergedProjectById));
       setPortfolio(port || []);
       setApplications(apps);
       setLoading(false);
@@ -196,6 +215,25 @@ export default function PublicProfilePage({ username, userId }) {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     });
+  };
+
+  useEffect(() => {
+    if (!authUserId || !user?.id || authUserId === user.id) return;
+    supabase.from("follows").select("id").eq("follower_id", authUserId).eq("following_id", user.id).maybeSingle()
+      .then(({ data }) => setIsFollowing(Boolean(data)));
+  }, [authUserId, user?.id]);
+
+  const toggleFollow = async () => {
+    if (!authUserId || !user?.id || authUserId === user.id || followBusy) return;
+    setFollowBusy(true);
+    if (isFollowing) {
+      await supabase.from("follows").delete().eq("follower_id", authUserId).eq("following_id", user.id);
+      setIsFollowing(false);
+    } else {
+      await supabase.from("follows").insert({ follower_id: authUserId, following_id: user.id });
+      setIsFollowing(true);
+    }
+    setFollowBusy(false);
   };
 
   if (loading) return (
@@ -260,8 +298,23 @@ export default function PublicProfilePage({ username, userId }) {
             {user.username && <div style={{ fontSize: 11, color: textMuted, marginBottom: 4 }}>@{user.username}</div>}
             <div style={{ fontSize: 12, color: textMuted }}>{user.role}</div>
             {user.location && <div style={{ fontSize: 11, color: textMuted, marginTop: 3 }}>{user.location}</div>}
+            {(() => {
+              const capacityRaw = user.capacity_status || user.capacity || user.availability;
+              if (!capacityRaw) return null;
+              const normalized = String(capacityRaw).toLowerCase();
+              const label = normalized.includes("project") ? "On Project" : "Free to Collab";
+              const tone = label === "On Project" ? "#f97316" : "#22c55e";
+              return <div style={{ marginTop: 8, fontSize: 10, color: tone, border: `1px solid ${tone}55`, borderRadius: 999, display: "inline-block", padding: "2px 9px" }}>{label}</div>;
+            })()}
           </div>
-          <button className="hb" onClick={handleCopy} style={{ background: "none", border: `1px solid ${border}`, borderRadius: 6, padding: "5px 12px", fontSize: 11, cursor: "pointer", fontFamily: "inherit", color: textMuted, flexShrink: 0 }}>{copied ? "copied ✓" : "share"}</button>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6, flexShrink: 0 }}>
+            {authUserId && authUserId !== user.id && (
+              <button className="hb" onClick={toggleFollow} disabled={followBusy} style={{ background: isFollowing ? "none" : text, color: isFollowing ? textMuted : bg, border: `1px solid ${isFollowing ? border : text}`, borderRadius: 6, padding: "5px 12px", fontSize: 11, cursor: "pointer", fontFamily: "inherit" }}>
+                {isFollowing ? "following" : "follow"}
+              </button>
+            )}
+            <button className="hb" onClick={handleCopy} style={{ background: "none", border: `1px solid ${border}`, borderRadius: 6, padding: "5px 12px", fontSize: 11, cursor: "pointer", fontFamily: "inherit", color: textMuted }}>{copied ? "copied ✓" : "copy link"}</button>
+          </div>
         </div>
 
         {user.bio && <p style={{ fontSize: 13, color: textMuted, lineHeight: 1.85, marginBottom: 28 }}>{user.bio}</p>}
@@ -270,7 +323,7 @@ export default function PublicProfilePage({ username, userId }) {
           <div style={{ marginBottom: 28 }}>
             <div style={{ fontSize: 10, color: textMuted, letterSpacing: "1.5px", marginBottom: 10 }}>SKILLS</div>
             <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
-              {user.skills.map(s => <span key={s} style={{ fontSize: 11, padding: "3px 10px", border: `1px solid ${border}`, borderRadius: 3, color: textMuted }}>{s}</span>)}
+              {user.skills.map(s => <span key={s} style={{ fontSize: 11, padding: "2px 10px", border: `1px solid ${border}`, borderRadius: 20, color: textMuted }}>{s}</span>)}
             </div>
           </div>
         )}
@@ -296,7 +349,7 @@ export default function PublicProfilePage({ username, userId }) {
         </div>
 
         <div style={{ marginBottom: 28 }}>
-          <div style={{ fontSize: 10, color: textMuted, letterSpacing: "1.5px", marginBottom: 12 }}>PROJECTS</div>
+          <div style={{ fontSize: 10, color: textMuted, letterSpacing: "1.5px", marginBottom: 12 }}>PROJECTS (OWNER + COLLABORATOR)</div>
           {projects.length > 0 ? (
           <div style={{ marginBottom: 28 }}>
             <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
@@ -310,6 +363,7 @@ export default function PublicProfilePage({ username, userId }) {
                     <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
                       {p.featured && <span style={{ fontSize: 10, border: `1px solid ${border}`, borderRadius: 3, padding: "1px 6px", color: text }}>pinned</span>}
                       <span style={{ fontSize: 10, border: `1px solid ${p.shipped ? "#22c55e66" : border}`, borderRadius: 3, padding: "1px 6px", color: p.shipped ? "#22c55e" : textMuted }}>{p.shipped ? "shipped" : "active"}</span>
+                      <span style={{ fontSize: 10, border: `1px solid ${border}`, borderRadius: 3, padding: "1px 6px", color: textMuted }}>{p.owner_id === user.id ? "owner" : "collaborator"}</span>
                     </div>
                   </div>
                   {p.description && <div style={{ fontSize: 11, color: textMuted, marginBottom: 6, lineHeight: 1.6 }}>{p.description.slice(0, 120)}{p.description.length > 120 ? "..." : ""}</div>}
@@ -337,23 +391,12 @@ export default function PublicProfilePage({ username, userId }) {
         <div style={{ marginBottom: 28 }}>
           <div style={{ fontSize: 10, color: textMuted, letterSpacing: "1.5px", marginBottom: 12 }}>PORTFOLIO</div>
           {portfolio.length > 0 ? (
-            <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
-              {portfolio.map((item, i) => (
-                <div key={item.id} style={{ background: bg2, border: `1px solid ${border}`, borderRadius: i === 0 && portfolio.length === 1 ? 8 : i === 0 ? "8px 8px 0 0" : i === portfolio.length - 1 ? "0 0 8px 8px" : 0, borderBottom: i < portfolio.length - 1 ? "none" : `1px solid ${border}`, padding: "14px 18px" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 10 }}>
+              {portfolio.map((item) => (
+                <div key={item.id} style={{ background: bg2, border: `1px solid ${border}`, borderRadius: 8, padding: "14px 14px" }}>
                   <div style={{ fontSize: 13, color: text, marginBottom: 4 }}>{item.title}</div>
-                  {item.description && <div style={{ fontSize: 12, color: textMuted, lineHeight: 1.65, marginBottom: 6 }}>{item.description}</div>}
-                  {item.url && getMediaType(item.url) === "image" && <img src={item.url} alt={item.title} style={{ width: "100%", maxHeight: 240, objectFit: "cover", borderRadius: 6, border: `1px solid ${border}`, marginTop: 4 }} />}
-                  {item.url && getMediaType(item.url) === "youtube" && (
-                    <div style={{ borderRadius: 8, overflow: "hidden", border: `1px solid ${border}`, marginTop: 6 }}>
-                      <iframe title={item.title} src={`https://www.youtube.com/embed/${getYouTubeId(item.url) || ""}`} style={{ width: "100%", height: 240, border: "none" }} allowFullScreen />
-                    </div>
-                  )}
-                  {item.url && getMediaType(item.url) === "link" && (
-                    <a href={item.url} target="_blank" rel="noreferrer" style={{ display: "block", textDecoration: "none", border: `1px solid ${border}`, borderRadius: 8, padding: "10px 12px", marginTop: 6 }}>
-                      <div style={{ fontSize: 10, color: textMuted, marginBottom: 3 }}>{toHost(item.url)}</div>
-                      <div style={{ fontSize: 11, color: text, textDecoration: "underline", wordBreak: "break-all" }}>{item.url.includes("user-uploads") ? "view file" : item.url}</div>
-                    </a>
-                  )}
+                  {item.description && <div style={{ fontSize: 12, color: textMuted, lineHeight: 1.6, marginBottom: 8 }}>{item.description}</div>}
+                  {item.url && <a href={item.url} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: text, textDecoration: "underline", wordBreak: "break-all" }}>{toHost(item.url)} ↗</a>}
                 </div>
               ))}
             </div>

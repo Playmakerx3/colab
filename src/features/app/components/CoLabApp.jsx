@@ -1129,6 +1129,10 @@ function CoLab() {
   const [hideFirstTimeGuide, setHideFirstTimeGuide] = useState(false);
   const [projectLastReadAt, setProjectLastReadAt] = useState({});
   const [exploreFiltersClearedNotice, setExploreFiltersClearedNotice] = useState(false);
+  const [showCommunityDrawer, setShowCommunityDrawer] = useState(false);
+  const [dismissOnboardingChecklist, setDismissOnboardingChecklist] = useState(false);
+  const [hasBrowsedProjects, setHasBrowsedProjects] = useState(false);
+  const [profileLinkCopied, setProfileLinkCopied] = useState(false);
   const [showCollaboratorsList, setShowCollaboratorsList] = useState(false);
   const [discoverSwipes, setDiscoverSwipes] = useState(null); // null=unloaded, Set=loaded
   const [discoverMatch, setDiscoverMatch] = useState(null); // matched user object
@@ -1417,6 +1421,43 @@ const setViewingProfile = (user) => {
       .profile-banner-shell { width: 100% !important; }
       .profile-banner-card { min-height: 140px !important; }
       .profile-banner-canvas { height: 140px !important; }
+    }
+    @media (max-width: 768px) {
+      .desktop-nav-items { display: none !important; }
+      .app-shell { padding-bottom: 58px !important; }
+      .mobile-tabbar { display: flex !important; }
+      .feed-layout, .projects-layout { display: block !important; max-width: 100% !important; gap: 0 !important; }
+      .feed-right-sidebar, .projects-right-sidebar { display: none !important; }
+      .msgs-left { width: 100% !important; border-right: none !important; }
+      .msgs-right { width: 100% !important; }
+      .msgs-has-thread .msgs-left { display: none !important; }
+      .msgs-no-thread .msgs-right { display: none !important; }
+      .msgs-back { display: flex !important; }
+      .communities-wrap { position: relative; }
+      .communities-sidebar {
+        position: fixed !important;
+        top: 50px;
+        bottom: 0;
+        left: 0;
+        z-index: 230;
+        width: min(88vw, 280px) !important;
+        background: ${bg};
+        transform: translateX(-105%);
+        transition: transform 0.2s ease;
+      }
+      .communities-sidebar.open { transform: translateX(0); }
+      .communities-main { width: 100% !important; }
+      .community-main-inner { padding: 20px 16px !important; }
+      .profile-modal-overlay { padding: 0 !important; }
+      .profile-modal-card {
+        max-width: 100% !important;
+        max-height: 100vh !important;
+        height: 100vh !important;
+        border-radius: 0 !important;
+        border-left: none !important;
+        border-right: none !important;
+      }
+      .pad { padding-left: 16px !important; padding-right: 16px !important; }
     }
   `;
 
@@ -1718,6 +1759,16 @@ const setViewingProfile = (user) => {
   });
   const isFirstTimeUser = Boolean(authUser?.id) && myProjects.length === 0 && !hasCollaborations;
   const showFirstTimeGuide = isFirstTimeUser && !hideFirstTimeGuide;
+  const createdAtMs = profile?.created_at ? new Date(profile.created_at).getTime() : 0;
+  const isNewSignup = Boolean(createdAtMs) && (Date.now() - createdAtMs) < (24 * 60 * 60 * 1000);
+  const onboardingChecklist = [
+    { id: "profile", label: "Complete your profile", done: Boolean((profile?.name || "").trim() && (profile?.bio || "").trim() && (profile?.skills || []).length > 0), onClick: () => setAppScreen("profile") },
+    { id: "community", label: "Join a community", done: joinedCommunityIds.length > 0, onClick: () => setAppScreen("communities") },
+    { id: "projects", label: "Browse open projects", done: hasBrowsedProjects, onClick: () => { setAppScreen("explore"); setExploreTab("projects"); } },
+    { id: "follow", label: "Follow someone", done: following.length > 0, onClick: () => { setAppScreen("network"); setNetworkTab("discover"); } },
+  ];
+  const basicSetupDone = onboardingChecklist.every((item) => item.done);
+  const shouldShowOnboardingChecklist = isNewSignup && !basicSetupDone && !dismissOnboardingChecklist;
   const [showCollaborators, setShowCollaborators] = useState(null); // userId whose collaborators to show
   const [showProjectsFor, setShowProjectsFor] = useState(null); // userId whose projects to show
   const [showFollowList, setShowFollowList] = useState(null); // "followers" | "following"
@@ -2025,6 +2076,14 @@ const setViewingProfile = (user) => {
     setHideFirstTimeGuide(dismissed);
   }, [authUser?.id]);
 
+  useEffect(() => {
+    setDismissOnboardingChecklist(localStorage.getItem("colab_onboarding_dismissed") === "true");
+  }, []);
+
+  useEffect(() => {
+    if (appScreen === "explore" && exploreTab === "projects") setHasBrowsedProjects(true);
+  }, [appScreen, exploreTab]);
+
   // Load top community posts for feed when joined communities change
   useEffect(() => {
     if (joinedCommunityIds.length === 0) { setTopCommunityPosts([]); return; }
@@ -2208,8 +2267,8 @@ const setViewingProfile = (user) => {
       supabase.from("portfolio_items").select("*").eq("user_id", u.id).then(({ data }) => setUserPortfolio(data || []));
     }, [u.id]);
     return (
-      <div style={{ position: "fixed", inset: 0, background: dark ? "rgba(0,0,0,0.88)" : "rgba(220,220,220,0.88)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 150, backdropFilter: "blur(10px)", padding: 16 }} onClick={onClose}>
-        <div style={{ background: bg, border: `1px solid ${border}`, borderRadius: 16, padding: "32px 28px", width: "100%", maxWidth: 520, maxHeight: "92vh", overflowY: "auto", cursor: "pointer" }} onClick={() => { setViewFullProfile(u); onClose(); }}>
+      <div className="profile-modal-overlay" style={{ position: "fixed", inset: 0, background: dark ? "rgba(0,0,0,0.88)" : "rgba(220,220,220,0.88)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 150, backdropFilter: "blur(10px)", padding: 16 }} onClick={onClose}>
+        <div className="profile-modal-card" style={{ background: bg, border: `1px solid ${border}`, borderRadius: 16, padding: "32px 28px", width: "100%", maxWidth: 520, maxHeight: "92vh", overflowY: "auto", cursor: "pointer" }} onClick={() => { setViewFullProfile(u); onClose(); }}>
           <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 24 }}>
             <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px" }}>PROFILE</div>
             <button onClick={e => { e.stopPropagation(); onClose(); }} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontSize: 14, fontFamily: "inherit" }}>✕</button>
@@ -3472,11 +3531,11 @@ const setViewingProfile = (user) => {
   ];
 
   return (
-    <div style={{ minHeight: "100vh", width: "100%", background: bg, color: text, fontFamily: "'DM Mono', monospace", transition: "background-color 0.3s ease, color 0.3s ease", overflowX: "hidden" }}>
+    <div className="app-shell" style={{ minHeight: "100vh", width: "100%", background: bg, color: text, fontFamily: "'DM Mono', monospace", transition: "background-color 0.3s ease, color 0.3s ease", overflowX: "hidden" }}>
       <style>{CSS}</style>
 
       {/* NAV */}
-      <nav style={{ position: "sticky", top: 0, zIndex: 50, width: "100%", background: dark ? "rgba(10,10,10,0.97)" : "rgba(255,255,255,0.97)", backdropFilter: "blur(12px)", borderBottom: `1px solid ${border}`, padding: "0 12px", display: "flex", alignItems: "center", gap: 8, height: 50 }}>
+      <nav className="app-nav" style={{ position: "sticky", top: 0, zIndex: 50, width: "100%", background: dark ? "rgba(10,10,10,0.97)" : "rgba(255,255,255,0.97)", backdropFilter: "blur(12px)", borderBottom: `1px solid ${border}`, padding: "0 12px", display: "flex", alignItems: "center", gap: 8, height: 50 }}>
         <button onClick={() => { setAppScreen("explore"); setActiveProject(null); setViewingProfile(null); setViewFullProfile(null); }} style={{ background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: 14, fontWeight: 500, color: text, letterSpacing: "-0.5px", flexShrink: 0 }}>[CoLab]</button>
 
         {/* Global search — full bar on desktop, expandable on mobile */}
@@ -3603,7 +3662,7 @@ const setViewingProfile = (user) => {
         <div style={{ flex: 1 }} />
 
         {/* Nav items */}
-        <div style={{ display: "flex", gap: 0, alignItems: "center" }}>
+        <div className="desktop-nav-items" style={{ display: "flex", gap: 0, alignItems: "center" }}>
           {navItems.map(({ id, label, badge }) => (
             <button key={id} onClick={() => { setAppScreen(id); setActiveProject(null); setViewingProfile(null); setViewFullProfile(null); setShowNotifications(false); if (id === "explore") setExploreTab("feed"); }}
               style={{ position: "relative", background: appScreen === id && !activeProject && !showNotifications ? bg3 : "none", color: appScreen === id && !activeProject && !showNotifications ? text : textMuted, border: "none", borderRadius: 6, padding: "5px 5px", fontSize: 11, cursor: "pointer", fontFamily: "inherit", transition: "all 0.15s", whiteSpace: "nowrap", flexShrink: 0 }}>
@@ -3621,6 +3680,15 @@ const setViewingProfile = (user) => {
           </button>
         </div>
       </nav>
+      <div className="mobile-tabbar" style={{ display: "none", position: "fixed", left: 0, right: 0, bottom: 0, zIndex: 220, background: bg, borderTop: `1px solid ${border}`, height: 56, alignItems: "center", justifyContent: "space-around", padding: "0 8px" }}>
+        {navItems.map(({ id, label, badge }) => (
+          <button key={`mobile-${id}`} onClick={() => { setAppScreen(id); setActiveProject(null); setViewingProfile(null); setViewFullProfile(null); setShowNotifications(false); if (id === "explore") setExploreTab("feed"); }}
+            style={{ position: "relative", background: "none", color: appScreen === id ? text : textMuted, border: "none", padding: "4px 6px", fontSize: 11, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap" }}>
+            {label}
+            {badge > 0 && <span style={{ position: "absolute", top: 2, right: 0, width: 5, height: 5, borderRadius: "50%", background: text, border: `1px solid ${bg}` }} />}
+          </button>
+        ))}
+      </div>
 
       {/* NOTIFICATIONS */}
       {showNotifications && (
@@ -3635,7 +3703,7 @@ const setViewingProfile = (user) => {
                 await supabase.from("notifications").update({ read: true }).in("id", ids);
               }} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontFamily: "inherit", fontSize: 10 }}>clear all</button>}
             </div>
-            {notifications.length === 0 && mentionNotifications.length === 0 ? <div style={{ padding: "24px 16px", fontSize: 12, color: textMuted }}>no notifications.</div>
+            {notifications.length === 0 && mentionNotifications.length === 0 ? <div style={{ padding: "24px 16px", fontSize: 12, color: textMuted, textAlign: "center" }}>✓ You're all caught up.</div>
               : <>
                 {mentionNotifications.map(n => (
                   <div key={n.id} style={{ padding: "14px 16px", borderBottom: `1px solid ${border}`, display: "flex", justifyContent: "space-between", gap: 8, cursor: n.project_id ? "pointer" : "default" }}
@@ -3929,7 +3997,7 @@ const setViewingProfile = (user) => {
 
           {/* PROJECTS TAB */}
           {exploreTab === "projects" && (
-            <div style={{ maxWidth: 1020, margin: "0 auto", display: "flex", gap: 48, alignItems: "flex-start" }}>
+            <div className="projects-layout" style={{ maxWidth: 1020, margin: "0 auto", display: "flex", gap: 48, alignItems: "flex-start" }}>
 
               {/* Left: main project list */}
               <div style={{ flex: 1, minWidth: 0 }}>
@@ -3990,7 +4058,7 @@ const setViewingProfile = (user) => {
                               <div style={{ fontSize: 11, color: textMuted, letterSpacing: "1px" }}>Trending right now</div>
                               <button className="hb" onClick={clearExploreFilters} style={{ background: "none", border: "none", color: text, cursor: "pointer", fontFamily: "inherit", fontSize: 11, textDecoration: "underline", padding: 0 }}>clear filters</button>
                             </div>
-                            {trendingFallbackProjects.length > 0 ? trendingFallbackProjects.map(p => <PRow key={p.id} p={p} />) : <div style={{ fontSize: 12, color: textMuted }}>No projects available right now.</div>}
+                            {trendingFallbackProjects.length > 0 ? trendingFallbackProjects.map(p => <PRow key={p.id} p={p} />) : <div style={{ fontSize: 12, color: textMuted }}>No projects found. <button onClick={openCreateProjectFlow} style={{ background: "none", border: "none", color: text, cursor: "pointer", fontFamily: "inherit", fontSize: 12, textDecoration: "underline", padding: 0 }}>create one →</button></div>}
                           </div>
                         : allP.map(p => <PRow key={p.id} p={p} />)
                     )}
@@ -3999,7 +4067,7 @@ const setViewingProfile = (user) => {
               </div>{/* end left column */}
 
               {/* Right: sidebar */}
-              <div style={{ width: 260, flexShrink: 0, position: "sticky", top: 24, display: "flex", flexDirection: "column", gap: 28 }}>
+                <div className="projects-right-sidebar" style={{ width: 260, flexShrink: 0, position: "sticky", top: 24, display: "flex", flexDirection: "column", gap: 28 }}>
 
                 {/* CTA */}
                 <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -4221,7 +4289,7 @@ const setViewingProfile = (user) => {
               .slice(0, 4);
 
             return (
-              <div style={{ maxWidth: 1020, margin: "0 auto", display: "flex", gap: 48, alignItems: "flex-start" }}>
+              <div className="feed-layout" style={{ maxWidth: 1020, margin: "0 auto", display: "flex", gap: 48, alignItems: "flex-start" }}>
                 <style>{`
                   @keyframes feedPulse { 0% { transform: scale(1); } 45% { transform: scale(1.08); } 100% { transform: scale(1); } }
                   @keyframes feedPostAppear { 0% { opacity: 0; transform: translateY(-8px); } 100% { opacity: 1; transform: translateY(0); } }
@@ -4236,6 +4304,22 @@ const setViewingProfile = (user) => {
                   <h2 style={{ fontSize: "clamp(26px, 4vw, 44px)", fontWeight: 400, lineHeight: 1.05, letterSpacing: "-2px", marginBottom: 10, color: text }}>The builder feed.</h2>
                   <p style={{ fontSize: 13, color: textMuted, lineHeight: 1.75 }}>Updates from builders, new projects, and people looking to collaborate.</p>
                 </div>
+
+                {shouldShowOnboardingChecklist && (
+                  <div style={{ marginBottom: 20, border: `1px solid ${border}`, background: bg2, borderRadius: 10, padding: "14px 16px" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+                      <div style={{ fontSize: 12, color: text }}>Get started</div>
+                      <button className="hb" onClick={() => { localStorage.setItem("colab_onboarding_dismissed", "true"); setDismissOnboardingChecklist(true); }} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontSize: 14, fontFamily: "inherit" }}>×</button>
+                    </div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                      {onboardingChecklist.map((item) => (
+                        <button key={item.id} onClick={item.onClick} style={{ background: "none", border: "none", padding: 0, textAlign: "left", color: item.done ? textMuted : text, cursor: "pointer", fontFamily: "inherit", fontSize: 12, textDecoration: "underline" }}>
+                          [{item.done ? "x" : " "}] {item.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 {/* Sort + following filter */}
                 <div style={{ display: "flex", gap: 10, marginBottom: 24, alignItems: "center", flexWrap: "wrap" }}>
@@ -4378,8 +4462,11 @@ const setViewingProfile = (user) => {
                   ? (
                     <div style={{ padding: "40px 0", textAlign: "center" }}>
                       <div style={{ fontSize: 20, color: text, letterSpacing: "-0.5px", marginBottom: 8 }}>Nothing here yet.</div>
-                      <div style={{ fontSize: 13, color: textMuted, marginBottom: 20 }}>Be the first to share what you're building.</div>
-                      <button className="hb" onClick={() => feedComposerRef.current?.focus()} style={btnP}>Post something →</button>
+                      <div style={{ fontSize: 13, color: textMuted, marginBottom: 14 }}>Follow people or join communities to fill your feed.</div>
+                      <div style={{ display: "flex", gap: 8, justifyContent: "center", flexWrap: "wrap" }}>
+                        <button className="hb" onClick={() => { setAppScreen("network"); setNetworkTab("discover"); }} style={btnG}>go to discover</button>
+                        <button className="hb" onClick={() => setAppScreen("communities")} style={btnP}>open communities</button>
+                      </div>
                     </div>
                   )
                   : pagedFeed.map(item => {
@@ -4539,7 +4626,7 @@ const setViewingProfile = (user) => {
                 </div>{/* end left column */}
 
                 {/* Right: sidebar */}
-                <div style={{ width: 260, flexShrink: 0, position: "sticky", top: 24, display: "flex", flexDirection: "column", gap: 28 }}>
+                <div className="feed-right-sidebar" style={{ width: 260, flexShrink: 0, position: "sticky", top: 24, display: "flex", flexDirection: "column", gap: 28 }}>
 
                   {/* Suggested people */}
                   {suggestedPeople.length > 0 && (
@@ -4659,6 +4746,7 @@ const setViewingProfile = (user) => {
 
         const loadCommunity = async (community) => {
           setActiveCommunity(community);
+          setShowCommunityDrawer(false);
           setActiveThread(null);
           setCommunityPostPage(1);
           setCommunityPostsLoading(true);
@@ -4840,10 +4928,11 @@ const setViewingProfile = (user) => {
         };
 
         return (
-          <div style={{ display: "flex", height: "calc(100vh - 50px)", overflow: "hidden" }}>
+          <div className="communities-wrap" style={{ display: "flex", height: "calc(100vh - 50px)", overflow: "hidden" }}>
+            {showCommunityDrawer && <div onClick={() => setShowCommunityDrawer(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.35)", zIndex: 220 }} />}
 
             {/* Left sidebar */}
-            <div style={{ width: 240, borderRight: `1px solid ${border}`, display: "flex", flexDirection: "column", flexShrink: 0, overflowY: "auto" }}>
+            <div className={`communities-sidebar ${showCommunityDrawer ? "open" : ""}`} style={{ width: 240, borderRight: `1px solid ${border}`, display: "flex", flexDirection: "column", flexShrink: 0, overflowY: "auto" }}>
               <div style={{ padding: "24px 16px 12px" }}>
                 <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px", marginBottom: 12 }}>COMMUNITIES</div>
                 <input
@@ -4881,16 +4970,18 @@ const setViewingProfile = (user) => {
             </div>
 
             {/* Main area */}
-            <div style={{ flex: 1, overflowY: "auto", minWidth: 0 }}>
+            <div className="communities-main" style={{ flex: 1, overflowY: "auto", minWidth: 0 }}>
               {!activeCommunity ? (
                 <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100%", gap: 12 }}>
+                  <button className="hb" onClick={() => setShowCommunityDrawer(true)} style={{ background: "none", border: `1px solid ${border}`, borderRadius: 8, padding: "6px 10px", fontSize: 11, cursor: "pointer", color: textMuted, fontFamily: "inherit" }}>☰ communities</button>
                   <div style={{ fontSize: 32 }}>...</div>
                   <div style={{ fontSize: 14, color: textMuted }}>Select a community to browse threads</div>
                   {joinedCommunities.length === 0 && <div style={{ fontSize: 12, color: textMuted, opacity: 0.6 }}>Join a community on the left to get started</div>}
                 </div>
               ) : activeThread ? (
                 /* Thread detail */
-                <div style={{ maxWidth: 1100, margin: "0 auto", padding: "32px 40px" }}>
+                <div className="community-main-inner" style={{ maxWidth: 1100, margin: "0 auto", padding: "32px 40px" }}>
+                  <button className="hb" onClick={() => setShowCommunityDrawer(true)} style={{ background: "none", border: `1px solid ${border}`, borderRadius: 8, padding: "6px 10px", fontSize: 11, cursor: "pointer", color: textMuted, fontFamily: "inherit", marginBottom: 12 }}>☰ communities</button>
                   <button className="hb" onClick={() => setActiveThread(null)}
                     style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontFamily: "inherit", fontSize: 12, marginBottom: 24, padding: 0, display: "flex", alignItems: "center", gap: 6 }}>
                     ← back to {activeCommunity.name}
@@ -4980,7 +5071,8 @@ const setViewingProfile = (user) => {
                 </div>
               ) : (
                 /* Thread list */
-                <div style={{ maxWidth: 1100, margin: "0 auto", padding: "32px 40px" }}>
+                <div className="community-main-inner" style={{ maxWidth: 1100, margin: "0 auto", padding: "32px 40px" }}>
+                  <button className="hb" onClick={() => setShowCommunityDrawer(true)} style={{ background: "none", border: `1px solid ${border}`, borderRadius: 8, padding: "6px 10px", fontSize: 11, cursor: "pointer", color: textMuted, fontFamily: "inherit", marginBottom: 12 }}>☰ communities</button>
                   {/* Community header */}
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24, flexWrap: "wrap", gap: 12 }}>
                     <div>
@@ -5011,8 +5103,8 @@ const setViewingProfile = (user) => {
 
                   {/* Threads */}
                   {communityPostsLoading ? <Spinner dark={dark} /> : sortedPosts.length === 0 ? (
-                    <div style={{ textAlign: "center", padding: "48px 0", color: textMuted, fontSize: 13 }}>
-                      No threads yet.{joinedCommunityIds.includes(activeCommunity.id) ? " Be the first to post." : " Join to start the conversation."}
+                    <div style={{ textAlign: "center", padding: "48px 18px", color: textMuted, fontSize: 13, background: bg2, border: `1px solid ${border}`, borderRadius: 10 }}>
+                      {joinedCommunityIds.includes(activeCommunity.id) ? "No threads yet. Be the first to post." : "Join this community to start the conversation."}
                     </div>
                   ) : (() => {
                     const POSTS_PER_PAGE = 15;
@@ -5076,7 +5168,10 @@ const setViewingProfile = (user) => {
               <button className="hb" onClick={() => { setShowNewDm(true); setNewDmSearch(""); }} style={{ background: "none", border: `1px solid ${border}`, borderRadius: 5, width: 22, height: 22, cursor: "pointer", fontSize: 14, color: textMuted, fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center", lineHeight: 1 }}>+</button>
             </div>
             {dmThreads.length === 0
-              ? <div style={{ padding: "24px 20px", fontSize: 12, color: textMuted, lineHeight: 1.7 }}>no conversations yet.<br /><button className="hb" onClick={() => { setShowNewDm(true); setNewDmSearch(""); }} style={{ background: "none", border: "none", color: text, cursor: "pointer", fontFamily: "inherit", fontSize: 12, textDecoration: "underline", padding: 0 }}>start one →</button></div>
+              ? <div style={{ padding: "24px 20px", fontSize: 12, color: textMuted, lineHeight: 1.7 }}>
+                  No conversations yet.<br />
+                  <button className="hb" onClick={() => { setShowNewDm(true); setNewDmSearch(""); }} style={{ background: "none", border: "none", color: text, cursor: "pointer", fontFamily: "inherit", fontSize: 12, textDecoration: "underline", padding: 0 }}>+ new message</button>
+                </div>
               : dmThreads.map(thread => {
                   const otherId = thread.user_a === authUser?.id ? thread.user_b : thread.user_a;
                   const other = users.find(u => u.id === otherId);
@@ -6298,7 +6393,7 @@ const setViewingProfile = (user) => {
                     <div>
                       <div style={{ fontSize: 20, fontWeight: 400, color: text, letterSpacing: "-0.5px" }}>{profile?.name || "Anonymous"}</div>
                       {profile?.username
-                        ? <div style={{ fontSize: 11, color: textMuted, marginTop: 1, cursor: "pointer" }} onClick={() => { navigator.clipboard.writeText(`${window.location.origin}/u/${profile.username}`).catch(() => {}); showToast("Profile link copied!"); }} title="click to copy profile link">@{profile.username} ↗</div>
+                        ? <div style={{ fontSize: 11, color: textMuted, marginTop: 1 }}>@{profile.username}</div>
                         : <div style={{ fontSize: 11, color: textMuted, marginTop: 1, cursor: "pointer", textDecoration: "underline" }} onClick={() => setEditProfile(true)}>set a username →</div>
                       }
                       <div style={{ fontSize: 12, color: textMuted, marginTop: 2 }}>{profile?.role}</div>
@@ -6322,6 +6417,19 @@ const setViewingProfile = (user) => {
                         </button>
                       </div>
                       <div style={{ fontSize: 10, marginTop: 2, color: getCapacityStatus(authUser?.id) === "On Project" ? "#f97316" : "#22c55e" }}>{getCapacityStatus(authUser?.id)}</div>
+                      {profile?.username && (
+                        <div style={{ marginTop: 8 }}>
+                          <button className="hb" onClick={() => {
+                            navigator.clipboard.writeText(`https://collaborativelaboratories.com/u/${profile.username}`).then(() => {
+                              setProfileLinkCopied(true);
+                              setTimeout(() => setProfileLinkCopied(false), 2000);
+                            }).catch(() => {});
+                          }} style={{ background: "none", border: `1px solid ${border}`, borderRadius: 6, padding: "3px 8px", color: textMuted, cursor: "pointer", fontFamily: "inherit", fontSize: 10 }}>
+                            copy profile link
+                          </button>
+                          {profileLinkCopied && <span style={{ marginLeft: 8, fontSize: 10, color: textMuted }}>copied!</span>}
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
