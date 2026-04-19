@@ -3910,22 +3910,6 @@ const setViewingProfile = (user) => {
                   ))}
                 </div>
 
-                {/* Featured (algorithm-driven) */}
-                {autoFeaturedProjects.length > 0 && (
-                  <div>
-                    <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px", marginBottom: 12 }}>★ FEATURED</div>
-                    <div style={{ border: `1px solid ${border}`, borderRadius: 10, overflow: "hidden" }}>
-                      {autoFeaturedProjects.map((p, i, arr) => (
-                        <div key={p.id} onClick={() => { setActiveProject(p); loadProjectData(p.id); }} style={{ padding: "10px 14px", background: bg2, borderBottom: i < arr.length - 1 ? `1px solid ${border}` : "none", cursor: "pointer", transition: "opacity 0.15s" }}
-                          onMouseEnter={e => e.currentTarget.style.opacity = "0.7"} onMouseLeave={e => e.currentTarget.style.opacity = "1"}>
-                          <div style={{ fontSize: 12, fontWeight: 500, color: text, marginBottom: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.title}</div>
-                          <div style={{ fontSize: 10, color: textMuted }}>{p.owner_name} · {p.category}</div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
                 {/* Trending */}
                 {trendingProjects.length > 0 && (
                   <div>

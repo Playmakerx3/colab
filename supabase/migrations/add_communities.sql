@@ -94,5 +94,14 @@ insert into communities (name, slug, description, emoji, category, is_public) va
   ('Writing',      'writing',      'Content, copywriting, journalism, and long-form storytelling',             '✍️', 'Creative',  true),
   ('Marketing',    'marketing',    'Growth, community building, branding strategy, and distribution',          '📈', 'Business',  true),
   ('Research',     'research',     'Science, data, academic work, and discovery',                              '🔬', 'Research',  true),
-  ('Making',       'making',       'Hardware, fabrication, 3D printing, and hands-on creation',                '🛠️', 'Making',    true)
+  ('Making',       'making',       'Hardware, fabrication, 3D printing, and hands-on creation',                '🛠️', 'Making',    true),
+  ('Photography',  'photography',  'Cameras, editing, visual storytelling, and photo projects',                '📷', 'Creative',  true),
+  ('Gaming',       'gaming',       'Game dev, design, culture, and playing together',                          '🎮', 'Tech',      true),
+  ('Education',    'education',    'Teaching, learning, EdTech, and sharing knowledge',                        '📚', 'Research',  true),
+  ('Animation',    'animation',    '2D, 3D, motion design, and everything that moves',                         '🎭', 'Creative',  true),
+  ('Data Science', 'data-science', 'ML, AI, data engineering, visualization, and analytics',                   '📊', 'Tech',      true),
+  ('Podcasting',   'podcasting',   'Audio storytelling, interviews, production, and growing an audience',       '🎙️', 'Creative', true),
+  ('Open Source',  'open-source',  'Free software, contributing to projects, and building in public',           '🌐', 'Tech',      true),
+  ('Fashion',      'fashion',      'Style, design, sustainable fashion, and the business of clothing',          '👗', 'Creative',  true),
+  ('Architecture', 'architecture', 'Spatial design, urbanism, interiors, and the built environment',            '🏛️', 'Making',   true)
 on conflict (slug) do nothing;
