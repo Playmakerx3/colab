@@ -363,9 +363,11 @@ function AudioPostPlayer({ post, bg2, text, textMuted }) {
         <button
           className="hb"
           onClick={togglePlayback}
-          style={{ width: 40, height: 40, borderRadius: 999, background: text, color: bg2, border: "none", fontSize: 14, cursor: "pointer", fontFamily: "inherit", flexShrink: 0 }}
+          style={{ width: 40, height: 40, borderRadius: 999, background: text, color: bg2, border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}
         >
-          {isPlaying ? "❚❚" : "▶"}
+          {isPlaying
+            ? <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><rect x="5" y="4" width="4" height="16" rx="1"/><rect x="15" y="4" width="4" height="16" rx="1"/></svg>
+            : <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M6 4l15 8-15 8V4z"/></svg>}
         </button>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 11, color: textMuted, marginBottom: 4 }}>{creatorLabel}</div>
@@ -3328,7 +3330,7 @@ const setViewingProfile = (user) => {
                         <div style={{ position: "relative", display: "inline-block", maxWidth: "100%" }}>
                           {newPostMediaType === "audio" ? (
                             <div style={{ fontSize: 11, color: text, padding: "8px 12px", background: bg3, borderRadius: 8, display: "flex", gap: 6, alignItems: "center" }}>
-                              ♪ {newPostMediaUrl.split("/").pop().split("?")[0]}
+                              audio: {newPostMediaUrl.split("/").pop().split("?")[0]}
                             </div>
                           ) : newPostMediaUrl.match(/\.(jpg|jpeg|png|gif|webp)$/i) ? (
                             <img src={newPostMediaUrl} alt="" style={{ maxWidth: "100%", maxHeight: 200, borderRadius: 8, border: `1px solid ${border}` }} />
@@ -4931,7 +4933,7 @@ const setViewingProfile = (user) => {
                           {newPostMediaUrl && (
                             <div style={{ position: "relative", display: "inline-block", maxWidth: "100%" }}>
                               {newPostMediaType === "audio"
-                                ? <div style={{ fontSize: 11, color: text, padding: "8px 12px", background: bg3, borderRadius: 8, display: "flex", gap: 6, alignItems: "center" }}>♪ {newPostMediaUrl.split("/").pop().split("?")[0]}</div>
+                                ? <div style={{ fontSize: 11, color: text, padding: "8px 12px", background: bg3, borderRadius: 8, display: "flex", gap: 6, alignItems: "center" }}>audio: {newPostMediaUrl.split("/").pop().split("?")[0]}</div>
                                 : newPostMediaUrl.match(/\.(jpg|jpeg|png|gif|webp)$/i)
                                   ? <img src={newPostMediaUrl} alt="" style={{ maxWidth: "100%", maxHeight: 200, borderRadius: 8, border: `1px solid ${border}` }} />
                                   : <div style={{ fontSize: 11, color: textMuted, padding: "6px 10px", background: bg3, borderRadius: 6 }}>file: {newPostMediaUrl.split("/").pop()}</div>}
