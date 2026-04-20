@@ -4870,6 +4870,12 @@ const setViewingProfile = (user) => {
                   </div>
                 </div>
 
+                {/* Region filter */}
+                <div style={{ marginBottom: 16, display: "flex", gap: 5, flexWrap: "wrap", alignItems: "center" }}>
+                  <span style={{ fontSize: 10, color: textMuted, letterSpacing: "1px", marginRight: 4 }}>REGION</span>
+                  {["local","city","national","international"].map(r => { const sel = regionFilter === r; return <button key={r} className="hb" onClick={() => setRegionFilter(sel ? null : r)} style={{ padding: "3px 10px", borderRadius: 3, fontSize: 10, cursor: "pointer", fontFamily: "inherit", background: sel ? text : "none", color: sel ? bg : textMuted, border: `1px solid ${sel ? text : border}`, transition: "all 0.15s" }}>{r}</button>; })}
+                </div>
+
                 {/* New posts banner */}
                 {pendingFeedPosts.length > 0 && (
                   <button className="hb" onClick={revealPendingPosts} style={{ marginBottom: 20, background: bg2, border: `1px solid ${border}`, borderRadius: 999, padding: "8px 14px", color: text, fontSize: 11, cursor: "pointer", fontFamily: "inherit" }}>
@@ -5024,12 +5030,6 @@ const setViewingProfile = (user) => {
                     </div>
                   </div>
                 )}
-
-                {/* Region filter */}
-                <div style={{ marginBottom: 20, display: "flex", gap: 5, flexWrap: "wrap", alignItems: "center" }}>
-                  <span style={{ fontSize: 10, color: textMuted, letterSpacing: "1px", marginRight: 4 }}>REGION</span>
-                  {["local","city","national","international"].map(r => { const sel = regionFilter === r; return <button key={r} className="hb" onClick={() => setRegionFilter(sel ? null : r)} style={{ padding: "3px 10px", borderRadius: 3, fontSize: 10, cursor: "pointer", fontFamily: "inherit", background: sel ? text : "none", color: sel ? bg : textMuted, border: `1px solid ${sel ? text : border}`, transition: "all 0.15s" }}>{r}</button>; })}
-                </div>
 
                 {/* Feed */}
                 {visibleFeed.length === 0
