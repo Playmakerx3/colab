@@ -6,9 +6,9 @@ export default defineConfig({
   plugins: [react()],
   server: {
     historyApiFallback: true,
-  },
-  watch: {
-    usePolling: true,
-    interval: 300,
+    watch: {
+      usePolling: true,
+      interval: 300,
+    },
   },
 })
