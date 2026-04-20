@@ -4905,7 +4905,10 @@ const setViewingProfile = (user) => {
                 <div style={{ marginBottom: 28 }}>
                   <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
                     <Avatar initials={myInitials} src={profile?.avatar_url} size={32} dark={dark} style={{ marginTop: 4, flexShrink: 0 }} />
-                    <div style={{ flex: 1, borderBottom: `1px solid ${composerFocused || newPostContent ? text : border}`, paddingBottom: composerFocused || newPostContent ? 12 : 8, transition: "border-color 0.2s" }}>
+                    <div
+                      style={{ flex: 1, borderBottom: `1px solid ${composerFocused || newPostContent ? text : border}`, paddingBottom: composerFocused || newPostContent ? 12 : 8, transition: "border-color 0.2s" }}
+                      onBlur={e => { if (!e.currentTarget.contains(e.relatedTarget) && !newPostContent) setComposerFocused(false); }}
+                    >
                       <MentionInput
                         inputRef={feedComposerRef}
                         multiline
@@ -4917,7 +4920,7 @@ const setViewingProfile = (user) => {
                         value={newPostContent}
                         onChange={setNewPostContent}
                         onFocus={() => setComposerFocused(true)}
-                        onBlur={() => { if (!newPostContent) setComposerFocused(false); }}
+                        onBlur={undefined}
                         style={{ background: "none", border: "none", outline: "none", resize: "none", fontSize: 14, padding: "2px 0", color: text, lineHeight: 1.65, width: "100%", fontFamily: "inherit", height: composerFocused || newPostContent ? "72px" : "26px", transition: "height 0.2s ease", overflow: "hidden" }}
                       />
                       {/* Hashtag chips — shown when idle */}
