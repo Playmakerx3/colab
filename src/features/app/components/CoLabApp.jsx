@@ -4781,14 +4781,11 @@ const setViewingProfile = (user) => {
                   return following.includes(aid);
                 })
               : baseList;
-            const chronoFeed = [...followFilteredList].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
             const forYouFeed = diversifyFeed([...followFilteredList].sort((a, b) => scoreItem(b) - scoreItem(a)));
-            const topFeed = [...followFilteredList].sort((a, b) => {
-              const la = a._type === "post" ? (a.like_count || 0) : 0;
-              const lb = b._type === "post" ? (b.like_count || 0) : 0;
-              return lb - la;
-            });
-            const mergedFeed = feedSort === "for-you" ? forYouFeed : feedSort === "top" ? topFeed : chronoFeed;
+            const followingFeed = [...baseList]
+              .filter(item => following.includes(item.user_id || item.project?.owner_id))
+              .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+            const mergedFeed = feedSort === "following" ? followingFeed : forYouFeed;
             const visibleFeed = mergedFeed.filter(item => !hiddenFeedIds.has(item.id));
             const FEED_PAGE_SIZE = 20;
             const pagedFeed = visibleFeed.slice(0, feedPage * FEED_PAGE_SIZE);
@@ -4862,17 +4859,13 @@ const setViewingProfile = (user) => {
                 {/* Sort + following filter */}
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: `1px solid ${border}`, marginBottom: 24 }}>
                   <div style={{ display: "flex" }}>
-                    {[["for-you", "for you"], ["recent", "recent"], ["top", "top"]].map(([val, label]) => (
+                    {[["for-you", "for you"], ["following", "following"]].map(([val, label]) => (
                       <button key={val} className="hb" onClick={() => { setFeedSort(val); setFeedPage(1); }}
                         style={{ background: "none", border: "none", borderBottom: feedSort === val ? `1px solid ${text}` : "1px solid transparent", color: feedSort === val ? text : textMuted, padding: "8px 16px 8px 0", fontSize: 11, cursor: "pointer", fontFamily: "inherit", marginRight: 8, transition: "all 0.15s" }}>
                         {label}
                       </button>
                     ))}
                   </div>
-                  <button className="hb" onClick={() => setFollowingOnly(prev => !prev)}
-                    style={{ fontSize: 10, padding: "3px 10px", borderRadius: 999, border: `1px solid ${followingOnly ? text : border}`, background: "none", color: followingOnly ? text : textMuted, cursor: "pointer", fontFamily: "inherit", transition: "all 0.15s", marginBottom: 6, letterSpacing: "0.2px" }}>
-                    {followingOnly ? "✓ following" : "following"}
-                  </button>
                 </div>
 
                 {/* New posts banner */}
