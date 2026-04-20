@@ -1965,6 +1965,7 @@ const setViewingProfile = (user) => {
   };
 
   const handleFollow = async (userId) => {
+    if (!userId || userId === authUser?.id) return;
     if (following.includes(userId)) {
       await supabase.from("follows").delete().eq("follower_id", authUser.id).eq("following_id", userId);
       setFollowing(prev => prev.filter(id => id !== userId));
@@ -3658,7 +3659,7 @@ const setViewingProfile = (user) => {
 
           if (skillDepotSelected) {
             const s = skillDepotSelected;
-            const skillPeople = users.filter(u => (u.skills || []).includes(s) && u.name?.trim());
+            const skillPeople = users.filter(u => u.id !== authUser?.id && (u.skills || []).includes(s) && u.name?.trim());
             const skillProjects = projects.filter(p => (p.skills || []).includes(s) && !p.archived && !p.is_private);
             return (
               <div>
@@ -4710,6 +4711,7 @@ const setViewingProfile = (user) => {
 
             const getSkillOverlap = (item) => {
               const authorId = item.user_id || item.project?.owner_id;
+              if (authorId === authUser?.id) return [];
               const author = users.find(u => u.id === authorId);
               return (author?.skills || []).filter(s => mySkillSet.has(s));
             };
