@@ -1197,6 +1197,7 @@ function CoLab() {
   const [newPostMediaUrl, setNewPostMediaUrl] = useState("");
   const [newPostMediaType, setNewPostMediaType] = useState(""); // image|video|audio|youtube|pdf
   const [autoOpenComposer, setAutoOpenComposer] = useState(false);
+  const [showLinkInput, setShowLinkInput] = useState(false);
   const [expandedComments, setExpandedComments] = useState({});
 
   const COMPOSER_PLACEHOLDERS = [
@@ -3116,6 +3117,7 @@ const setViewingProfile = (user) => {
     setNewPostProject("");
     setNewPostMediaUrl("");
     setNewPostMediaType("");
+    setShowLinkInput(false);
     const insertPayload = {
       user_id: authUser.id,
       user_name: profile.name,
@@ -4924,7 +4926,7 @@ const setViewingProfile = (user) => {
                         </div>
                       )}
                       {(newPostContent.trim() || autoOpenComposer) && (
-                        <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 10 }}>
+                        <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 8 }}>
                           {/* Media preview */}
                           {newPostMediaUrl && (
                             <div style={{ position: "relative", display: "inline-block", maxWidth: "100%" }}>
@@ -4933,12 +4935,20 @@ const setViewingProfile = (user) => {
                                 : newPostMediaUrl.match(/\.(jpg|jpeg|png|gif|webp)$/i)
                                   ? <img src={newPostMediaUrl} alt="" style={{ maxWidth: "100%", maxHeight: 200, borderRadius: 8, border: `1px solid ${border}` }} />
                                   : <div style={{ fontSize: 11, color: textMuted, padding: "6px 10px", background: bg3, borderRadius: 6 }}>file: {newPostMediaUrl.split("/").pop()}</div>}
-                              <button onClick={() => { setNewPostMediaUrl(""); setNewPostMediaType(""); }} style={{ position: "absolute", top: 4, right: 4, background: bg, border: `1px solid ${border}`, borderRadius: "50%", width: 20, height: 20, cursor: "pointer", fontSize: 10, display: "flex", alignItems: "center", justifyContent: "center", color: text, fontFamily: "inherit" }}>✕</button>
+                              <button onClick={() => { setNewPostMediaUrl(""); setNewPostMediaType(""); setShowLinkInput(false); }} style={{ position: "absolute", top: 4, right: 4, background: bg, border: `1px solid ${border}`, borderRadius: "50%", width: 20, height: 20, cursor: "pointer", fontSize: 10, display: "flex", alignItems: "center", justifyContent: "center", color: text, fontFamily: "inherit" }}>✕</button>
                             </div>
                           )}
-                          <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-                            <label style={{ cursor: "pointer", flexShrink: 0 }}>
-                              <div style={{ ...btnG, padding: "6px 12px", fontSize: 11, display: "inline-flex", alignItems: "center", gap: 5 }}>↑ photo/video</div>
+                          {/* Link input — revealed by link icon */}
+                          {showLinkInput && (
+                            <input autoFocus placeholder="paste a YouTube URL or link..." value={newPostMediaUrl.includes("youtube") || newPostMediaUrl.includes("youtu.be") ? newPostMediaUrl : newPostMediaType === "youtube" ? newPostMediaUrl : ""} onChange={e => { setNewPostMediaUrl(e.target.value); setNewPostMediaType("youtube"); }} style={{ ...inputStyle, fontSize: 11, padding: "6px 10px" }} />
+                          )}
+                          {/* Single action bar */}
+                          <div style={{ display: "flex", alignItems: "center", gap: 2 }}>
+                            {/* Photo/video */}
+                            <label title="photo / video" style={{ cursor: "pointer", display: "flex", flexShrink: 0 }}>
+                              <div className="hb" style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 28, height: 28, borderRadius: 6, color: textMuted }}>
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+                              </div>
                               <input type="file" accept="image/*,video/*" style={{ display: "none" }} onChange={async (e) => {
                                 const file = e.target.files[0]; if (!file) return;
                                 showToast("Uploading...");
@@ -4951,8 +4961,11 @@ const setViewingProfile = (user) => {
                                 showToast("Ready.");
                               }} />
                             </label>
-                            <label style={{ cursor: "pointer", flexShrink: 0 }}>
-                              <div style={{ ...btnG, padding: "6px 12px", fontSize: 11, display: "inline-flex", alignItems: "center", gap: 5 }}>♪ audio</div>
+                            {/* Audio */}
+                            <label title="audio" style={{ cursor: "pointer", display: "flex", flexShrink: 0 }}>
+                              <div className="hb" style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 28, height: 28, borderRadius: 6, color: textMuted }}>
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+                              </div>
                               <input type="file" accept="audio/*,.mp3,.wav,.ogg,.m4a,.aac,.flac" style={{ display: "none" }} onChange={async (e) => {
                                 const file = e.target.files[0]; if (!file) return;
                                 showToast("Uploading audio...");
@@ -4965,14 +4978,21 @@ const setViewingProfile = (user) => {
                                 showToast("Audio ready.");
                               }} />
                             </label>
-                            <input placeholder="or paste a YouTube URL..." value={newPostMediaUrl.includes("youtube") || newPostMediaUrl.includes("youtu.be") ? newPostMediaUrl : ""} onChange={e => { setNewPostMediaUrl(e.target.value); setNewPostMediaType("youtube"); }} style={{ ...inputStyle, fontSize: 11, padding: "6px 10px", flex: 1 }} />
-                          </div>
-                          <div style={{ display: "flex", gap: 8 }}>
-                            <select value={newPostProject} onChange={e => setNewPostProject(e.target.value)} style={{ ...inputStyle, fontSize: 11, padding: "6px 10px", flex: 1 }}>
-                              <option value="">tag a project (optional)</option>
+                            {/* Link / YouTube */}
+                            <button className="hb" title="YouTube or link" onClick={() => setShowLinkInput(s => !s)}
+                              style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 28, height: 28, borderRadius: 6, background: showLinkInput ? bg3 : "none", border: "none", color: showLinkInput ? text : textMuted, cursor: "pointer", flexShrink: 0 }}>
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+                            </button>
+                            {/* Divider */}
+                            <div style={{ width: 1, height: 14, background: border, margin: "0 6px", flexShrink: 0 }} />
+                            {/* Project tag — borderless select */}
+                            <select value={newPostProject} onChange={e => setNewPostProject(e.target.value)}
+                              style={{ background: "none", border: "none", outline: "none", fontSize: 11, color: newPostProject ? text : textMuted, cursor: "pointer", fontFamily: "inherit", maxWidth: 160, padding: 0, flexShrink: 1, minWidth: 0 }}>
+                              <option value="">+ tag project</option>
                               {myProjects.map(p => <option key={p.id} value={p.id}>{p.title}</option>)}
                             </select>
-                            <button className="hb" onClick={handleCreatePost} style={{ ...btnP, padding: "7px 18px", fontSize: 12, flexShrink: 0 }}>post</button>
+                            <div style={{ flex: 1 }} />
+                            <button className="hb" onClick={handleCreatePost} style={{ ...btnP, padding: "6px 16px", fontSize: 12, flexShrink: 0 }}>post</button>
                           </div>
                         </div>
                       )}
