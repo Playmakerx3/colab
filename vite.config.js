@@ -7,4 +7,8 @@ export default defineConfig({
   server: {
     historyApiFallback: true,
   },
+  watch: {
+    usePolling: true,
+    interval: 300,
+  },
 })
