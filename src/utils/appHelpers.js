@@ -13,6 +13,12 @@ export const relativeTime = (dateStr) => {
   return new Date(dateStr).toLocaleDateString();
 };
 
+import { geohashDistance } from './geohash.js';
+
+// Geohash precision thresholds for "local" and "city" filters
+const LOCAL_PRECISION = 4; // ~40×20 km — same metro/region
+const CITY_PRECISION  = 5; // ~5×5 km   — same city/district
+
 // Region graph: each key maps to the set of region tags it belongs to (specific → broad)
 const REGION_GRAPH = {
   // Bay Area / NorCal
@@ -108,15 +114,34 @@ function getRegionTags(location) {
   return tags;
 }
 
-export const matchesRegion = (locationStr, regionFilter, myLocation) => {
+// matchesRegion supports two calling signatures:
+//   (locationStr, filter, myLocation)                  — text-only fallback
+//   (locationStr, filter, myLocation, theirGH, myGH)   — geohash-preferred
+export const matchesRegion = (locationStr, regionFilter, myLocation, theirGeohash, myGeohash) => {
   if (!regionFilter) return true;
+
+  // ── Geohash path (global, precise) ──────────────────────────────────────
+  if (theirGeohash && myGeohash) {
+    const precision = (regionFilter === 'city') ? CITY_PRECISION : LOCAL_PRECISION;
+    if (regionFilter === 'local' || regionFilter === 'city') {
+      return geohashDistance(theirGeohash, myGeohash) >= precision;
+    }
+    if (regionFilter === 'national') {
+      // Same country ≈ geohash prefix length 2 (covers ~2500 km²)
+      return theirGeohash.slice(0, 2) === myGeohash.slice(0, 2);
+    }
+    if (regionFilter === 'international') {
+      return theirGeohash.slice(0, 2) !== myGeohash.slice(0, 2);
+    }
+  }
+
+  // ── Text/graph fallback (for profiles without geohash yet) ───────────────
   const theirTags = getRegionTags(locationStr);
   const myTags    = getRegionTags(myLocation);
 
   if (regionFilter === 'national') return theirTags.has('us');
   if (regionFilter === 'international') return !theirTags.has('us');
 
-  // local / city — find shared non-broad tags
   const myLocal    = new Set([...myTags].filter(t => !BROAD_TAGS.has(t)));
   const theirLocal = new Set([...theirTags].filter(t => !BROAD_TAGS.has(t)));
   for (const tag of myLocal) { if (theirLocal.has(tag)) return true; }

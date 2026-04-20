@@ -4765,7 +4765,10 @@ const setViewingProfile = (user) => {
               .filter(p => following.includes(p.owner_id) && !p.archived && !p.is_private && !acceptedProjectIds.has(p.id))
               .map(p => ({ _type: "project_created", id: `proj-${p.id}`, created_at: p.created_at, project: p }));
 
-            const filteredPosts = posts.filter(post => matchesRegion((users.find(u => u.id === post.user_id)?.location), regionFilter, profile?.location));
+            const filteredPosts = posts.filter(post => {
+              const author = users.find(u => u.id === post.user_id);
+              return matchesRegion(author?.location, regionFilter, profile?.location, author?.location_geohash, profile?.location_geohash);
+            });
             // Hot community posts from joined communities surfaced in feed
             const hotCommunityFeedItems = topCommunityPosts.map(cp => ({
               ...cp,

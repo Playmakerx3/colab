@@ -1,18 +1,30 @@
 import { supabase } from "../../../supabase";
+import { geocodeLocation } from "../../../utils/geohash";
 
 export const loadCurrentUserProfile = async (userId) => {
   return supabase.from("profiles").select("*").eq("id", userId).single();
 };
 
 export const saveProfile = async (userId, profile) => {
-  return supabase.from("profiles").update({
+  const payload = {
     name: profile.name,
     username: profile.username,
     role: profile.role,
     bio: profile.bio,
     skills: profile.skills,
     location: profile.location || "",
-  }).eq("id", userId).select().single();
+  };
+
+  if (profile.location) {
+    const geo = await geocodeLocation(profile.location);
+    if (geo) {
+      payload.location_geohash = geo.geohash;
+      payload.location_lat     = geo.lat;
+      payload.location_lng     = geo.lng;
+    }
+  }
+
+  return supabase.from("profiles").update(payload).eq("id", userId).select().single();
 };
 
 export const saveBannerPixels = async (userId, pixels) => {
