@@ -1310,6 +1310,7 @@ function CoLab() {
   const dmEndRef = useRef(null);
   const taskMutationSeqRef = useRef({});
   const feedComposerRef = useRef(null);
+  const composerWrapRef = useRef(null);
 
   const bg = dark ? "#0a0a0a" : "#ffffff";
   const bg2 = dark ? "#111111" : "#f5f5f5";
@@ -2427,6 +2428,16 @@ const setViewingProfile = (user) => {
       && posts.length === 0;
     setAutoOpenComposer(shouldAutoOpen);
   }, [appScreen, exploreTab, posts.length]);
+
+  useEffect(() => {
+    const handler = (e) => {
+      if (composerWrapRef.current && !composerWrapRef.current.contains(e.target)) {
+        setComposerFocused(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
 
   useEffect(() => {
     if (!exploreFiltersClearedNotice) return undefined;
@@ -4902,12 +4913,11 @@ const setViewingProfile = (user) => {
                     </div>
                   </div>
                 )}
-                <div style={{ marginBottom: 28 }}>
+                <div ref={composerWrapRef} style={{ marginBottom: 28 }}>
                   <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
                     <Avatar initials={myInitials} src={profile?.avatar_url} size={32} dark={dark} style={{ marginTop: 4, flexShrink: 0 }} />
                     <div
                       style={{ flex: 1, borderBottom: `1px solid ${composerFocused || newPostContent ? text : border}`, paddingBottom: composerFocused || newPostContent ? 12 : 8, transition: "border-color 0.2s" }}
-                      onBlur={e => { if (!e.currentTarget.contains(e.relatedTarget) && !newPostContent) setComposerFocused(false); }}
                     >
                       <MentionInput
                         inputRef={feedComposerRef}
