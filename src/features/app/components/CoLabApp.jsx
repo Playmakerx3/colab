@@ -4927,7 +4927,7 @@ const setViewingProfile = (user) => {
                           ))}
                         </div>
                       )}
-                      {(newPostContent.trim() || autoOpenComposer) && (
+                      {(composerFocused || newPostContent.trim() || autoOpenComposer) && (
                         <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 8 }}>
                           {/* Media preview */}
                           {newPostMediaUrl && (
