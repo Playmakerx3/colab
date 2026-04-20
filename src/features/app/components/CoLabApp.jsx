@@ -892,11 +892,16 @@ function PostCard({ post, ctx }) {
 
 
 // @mention input component
-function MentionInput({ value, onChange, onKeyDown, placeholder, users, style, rows, dark }) {
+function MentionInput({ value, onChange, onKeyDown, placeholder, users, following = [], followers = [], inputRef, style, rows, multiline, dark, onFocus, onBlur, autoFocus }) {
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [suggestions, setSuggestions] = useState([]);
   const [mentionStart, setMentionStart] = useState(-1);
-  const ref = useRef(null);
+  const [activeIdx, setActiveIdx] = useState(0);
+  const internalRef = useRef(null);
+  const ref = inputRef || internalRef;
+
+  const followingSet = useMemo(() => new Set(following), [following]);
+  const followerSet  = useMemo(() => new Set(followers), [followers]);
 
   const handleChange = (e) => {
     const val = e.target.value;
@@ -904,36 +909,73 @@ function MentionInput({ value, onChange, onKeyDown, placeholder, users, style, r
     const cursor = e.target.selectionStart;
     const textBefore = val.slice(0, cursor);
     const atIndex = textBefore.lastIndexOf("@");
-    if (atIndex !== -1 && (atIndex === 0 || textBefore[atIndex - 1] === " ")) {
+    if (atIndex !== -1 && (atIndex === 0 || /\s/.test(textBefore[atIndex - 1]))) {
       const query = textBefore.slice(atIndex + 1).toLowerCase();
-      const matches = users.filter(u => u.name.toLowerCase().includes(query)).slice(0, 4);
-      setSuggestions(matches);
-      setShowSuggestions(matches.length > 0);
-      setMentionStart(atIndex);
-    } else {
-      setShowSuggestions(false);
+      if (!query.includes(" ") && query.length >= 0) {
+        const matches = users
+          .filter(u => {
+            const uname = (u.username || "").toLowerCase();
+            const name  = (u.name || "").toLowerCase();
+            return uname.startsWith(query) || name.toLowerCase().startsWith(query) || uname.includes(query) || name.includes(query);
+          })
+          .map(u => {
+            const isMutual    = followingSet.has(u.id) && followerSet.has(u.id);
+            const isFollowing = followingSet.has(u.id);
+            const isFollower  = followerSet.has(u.id);
+            return { ...u, _priority: isMutual ? 0 : isFollowing ? 1 : isFollower ? 2 : 3 };
+          })
+          .sort((a, b) => a._priority - b._priority)
+          .slice(0, 5);
+        setSuggestions(matches);
+        setShowSuggestions(matches.length > 0);
+        setMentionStart(atIndex);
+        setActiveIdx(0);
+        return;
+      }
     }
+    setShowSuggestions(false);
   };
 
   const selectUser = (user) => {
+    const handle = user.username || user.name.toLowerCase().replace(/\s+/g, "");
+    const cursor = ref.current?.selectionStart ?? value.length;
     const before = value.slice(0, mentionStart);
-    const after = value.slice(ref.current.selectionStart);
-    onChange(`${before}@${user.name} ${after}`);
+    const after  = value.slice(cursor);
+    onChange(`${before}@${handle} ${after}`);
     setShowSuggestions(false);
-    ref.current.focus();
+    setTimeout(() => ref.current?.focus(), 0);
   };
 
-  const Tag = rows ? "textarea" : "input";
+  const handleKeyDown = (e) => {
+    if (showSuggestions) {
+      if (e.key === "ArrowDown") { e.preventDefault(); setActiveIdx(i => Math.min(i + 1, suggestions.length - 1)); return; }
+      if (e.key === "ArrowUp")   { e.preventDefault(); setActiveIdx(i => Math.max(i - 1, 0)); return; }
+      if (e.key === "Enter" && suggestions.length > 0) { e.preventDefault(); selectUser(suggestions[activeIdx]); return; }
+      if (e.key === "Escape") { setShowSuggestions(false); }
+    }
+    if (onKeyDown) onKeyDown(e);
+  };
+
+  const Tag = (rows || multiline) ? "textarea" : "input";
   return (
     <div style={{ position: "relative", width: "100%" }}>
-      <Tag ref={ref} value={value} onChange={handleChange} onKeyDown={e => { if (e.key === "Escape") setShowSuggestions(false); if (onKeyDown) onKeyDown(e); }} placeholder={placeholder} rows={rows} style={{ ...style, resize: rows ? "none" : undefined }} />
+      <Tag ref={ref} value={value} onChange={handleChange} onKeyDown={handleKeyDown}
+        onFocus={onFocus} onBlur={onBlur} autoFocus={autoFocus}
+        placeholder={placeholder} rows={rows}
+        style={{ ...style, resize: (rows || multiline) ? "none" : undefined }} />
       {showSuggestions && (
-        <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: dark ? "#111" : "#fff", border: `1px solid ${dark ? "#222" : "#e0e0e0"}`, borderRadius: 8, zIndex: 100, overflow: "hidden", marginTop: 4 }}>
-          {suggestions.map(u => (
-            <button key={u.id} onClick={() => selectUser(u)} style={{ width: "100%", padding: "8px 12px", background: "none", border: "none", color: dark ? "#fff" : "#000", cursor: "pointer", textAlign: "left", fontSize: 12, fontFamily: "inherit", display: "flex", gap: 8, alignItems: "center" }}
-              onMouseEnter={e => e.currentTarget.style.background = dark ? "#1a1a1a" : "#f0f0f0"} onMouseLeave={e => e.currentTarget.style.background = "none"}>
+        <div style={{ position: "absolute", top: "100%", left: 0, zIndex: 350, background: dark ? "#111" : "#fff", border: `1px solid ${dark ? "#2a2a2a" : "#e0e0e0"}`, borderRadius: 8, overflow: "hidden", marginTop: 4, minWidth: 200, boxShadow: dark ? "0 8px 24px rgba(0,0,0,0.6)" : "0 8px 24px rgba(0,0,0,0.1)" }}>
+          {suggestions.map((u, i) => (
+            <button key={u.id} onClick={() => selectUser(u)}
+              onMouseEnter={() => setActiveIdx(i)}
+              style={{ width: "100%", padding: "8px 12px", background: i === activeIdx ? (dark ? "#1c1c1c" : "#f5f5f5") : "none", border: "none", color: dark ? "#fff" : "#000", cursor: "pointer", textAlign: "left", fontSize: 12, fontFamily: "inherit", display: "flex", gap: 8, alignItems: "center" }}>
               <Avatar initials={initials(u.name)} src={u.avatar_url} size={24} dark={dark} />
-              <div><div style={{ fontSize: 12, color: dark ? "#fff" : "#000" }}>{u.name}</div><div style={{ fontSize: 10, color: dark ? "#555" : "#aaa" }}>{u.role}</div></div>
+              <div>
+                <div style={{ fontSize: 12, color: dark ? "#fff" : "#000" }}>@{u.username || u.name}</div>
+                <div style={{ fontSize: 10, color: dark ? "#555" : "#aaa" }}>
+                  {u.name}{u._priority === 0 ? " · mutual" : u._priority === 1 ? " · following" : ""}
+                </div>
+              </div>
             </button>
           ))}
         </div>
@@ -4856,11 +4898,16 @@ const setViewingProfile = (user) => {
                   <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
                     <Avatar initials={myInitials} src={profile?.avatar_url} size={32} dark={dark} style={{ marginTop: 4, flexShrink: 0 }} />
                     <div style={{ flex: 1, borderBottom: `1px solid ${composerFocused || newPostContent ? text : border}`, paddingBottom: composerFocused || newPostContent ? 12 : 8, transition: "border-color 0.2s" }}>
-                      <textarea
-                        ref={feedComposerRef}
+                      <MentionInput
+                        inputRef={feedComposerRef}
+                        multiline
+                        users={users}
+                        following={following}
+                        followers={followers}
+                        dark={dark}
                         placeholder={COMPOSER_PLACEHOLDERS[composerPlaceholderIdx]}
                         value={newPostContent}
-                        onChange={e => setNewPostContent(e.target.value)}
+                        onChange={setNewPostContent}
                         onFocus={() => setComposerFocused(true)}
                         onBlur={() => { if (!newPostContent) setComposerFocused(false); }}
                         style={{ background: "none", border: "none", outline: "none", resize: "none", fontSize: 14, padding: "2px 0", color: text, lineHeight: 1.65, width: "100%", fontFamily: "inherit", height: composerFocused || newPostContent ? "72px" : "26px", transition: "height 0.2s ease", overflow: "hidden" }}
@@ -5644,10 +5691,16 @@ const setViewingProfile = (user) => {
                     <div style={{ display: "flex", gap: 10, marginBottom: 24 }}>
                       <Avatar initials={myInitials} src={profile?.avatar_url} size={28} dark={dark} />
                       <div style={{ flex: 1 }}>
-                        <textarea value={newCommentText} onChange={e => setNewCommentText(e.target.value)}
+                        <MentionInput
+                          value={newCommentText}
+                          onChange={setNewCommentText}
                           placeholder="add a comment..."
-                          style={{ ...inputStyle, resize: "none", fontSize: 12, padding: "8px 12px", minHeight: 60, width: "100%", boxSizing: "border-box" }}
+                          users={users}
+                          following={following}
+                          followers={followers}
+                          dark={dark}
                           rows={2}
+                          style={{ ...inputStyle, resize: "none", fontSize: 12, padding: "8px 12px", minHeight: 60, width: "100%", boxSizing: "border-box" }}
                         />
                         {newCommentText.trim() && (
                           <button className="hb" onClick={async () => {
@@ -6552,7 +6605,7 @@ const setViewingProfile = (user) => {
                   <div ref={messagesEndRef} />
                 </div>
                 <div style={{ display: "flex", gap: 8, borderTop: `1px solid ${border}`, paddingTop: 12 }}>
-                  <MentionInput dark={dark} value={newMessage} onChange={setNewMessage} onKeyDown={e => e.key === "Enter" && !e.shiftKey && handleSendMessage(activeProject.id)} placeholder="message the team... (@mention)" users={users} style={{ ...inputStyle, fontSize: 12 }} />
+                  <MentionInput dark={dark} value={newMessage} onChange={setNewMessage} onKeyDown={e => e.key === "Enter" && !e.shiftKey && handleSendMessage(activeProject.id)} placeholder="message the team... (@mention)" users={users} following={following} followers={followers} style={{ ...inputStyle, fontSize: 12 }} />
                   <label style={{ ...btnG, padding: "10px 12px", cursor: "pointer", flexShrink: 0 }}>
                     + file
                     <input type="file" multiple style={{ display: "none" }} onChange={(e) => addProjectAttachments(Array.from(e.target.files || []), activeProject.id)} />
@@ -6743,7 +6796,7 @@ const setViewingProfile = (user) => {
                 <div style={{ display: "flex", gap: 10, marginBottom: 22, alignItems: "flex-start" }}>
                   <Avatar initials={myInitials} src={profile?.avatar_url} size={28} dark={dark} />
                   <div style={{ flex: 1 }}>
-                    <MentionInput dark={dark} value={newUpdate} onChange={setNewUpdate} placeholder="post an update... (@mention someone)" users={users} style={{ ...inputStyle, resize: "none", fontSize: 12, padding: "8px 12px" }} rows={2} />
+                    <MentionInput dark={dark} value={newUpdate} onChange={setNewUpdate} placeholder="post an update... (@mention someone)" users={users} following={following} followers={followers} style={{ ...inputStyle, resize: "none", fontSize: 12, padding: "8px 12px" }} rows={2} />
                     {newUpdate.trim() && (
                       <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 8 }}>
                         <button className="hb" onClick={async () => {
