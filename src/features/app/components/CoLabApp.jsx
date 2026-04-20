@@ -159,26 +159,31 @@ const toHost = (url = "") => {
 
 const URL_REGEX = /https?:\/\/[^\s<>"]+[^\s<>.,;!?"')\]]/g;
 
-const linkifyText = (text, linkColor) => {
+const linkifyText = (text, linkColor, onMentionClick) => {
   if (!text) return null;
   const parts = [];
   let last = 0;
   let match;
-  const re = new RegExp(URL_REGEX.source, "g");
+  const re = /https?:\/\/[^\s)]+|@([a-zA-Z0-9_]+)/g;
   while ((match = re.exec(text)) !== null) {
     if (match.index > last) parts.push(text.slice(last, match.index));
-    parts.push(
-      <a
-        key={match.index}
-        href={match[0]}
-        target="_blank"
-        rel="noopener noreferrer"
-        style={{ color: linkColor, textDecoration: "underline", wordBreak: "break-all" }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        {match[0]}
-      </a>
-    );
+    if (match[1]) {
+      const username = match[1];
+      parts.push(
+        <button key={match.index} onClick={(e) => { e.stopPropagation(); onMentionClick?.(username); }}
+          style={{ background: "none", border: "none", color: linkColor, cursor: onMentionClick ? "pointer" : "default", padding: 0, fontFamily: "inherit", fontSize: "inherit", fontWeight: 600 }}>
+          @{username}
+        </button>
+      );
+    } else {
+      parts.push(
+        <a key={match.index} href={match[0]} target="_blank" rel="noopener noreferrer"
+          style={{ color: linkColor, textDecoration: "underline", wordBreak: "break-all" }}
+          onClick={(e) => e.stopPropagation()}>
+          {match[0]}
+        </a>
+      );
+    }
     last = match.index + match[0].length;
   }
   if (last < text.length) parts.push(text.slice(last));
@@ -729,7 +734,7 @@ function PostCard({ post, ctx }) {
         </div>
       ) : (
         <div style={{ fontSize: 14, color: text, lineHeight: 1.75, marginBottom: 14, paddingLeft: 52, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
-          {linkifyText(post.content, text)}{post.edited_at && <span style={{ fontSize: 10, color: textMuted, marginLeft: 8 }}>(edited)</span>}
+          {linkifyText(post.content, text, (username) => { const u = users.find(u => u.username === username); if (u) setViewingProfile(u); })}{post.edited_at && <span style={{ fontSize: 10, color: textMuted, marginLeft: 8 }}>(edited)</span>}
         </div>
       )}
 
@@ -1199,7 +1204,6 @@ function CoLab() {
   const [newPostMediaUrl, setNewPostMediaUrl] = useState("");
   const [newPostMediaType, setNewPostMediaType] = useState(""); // image|video|audio|youtube|pdf
   const [autoOpenComposer, setAutoOpenComposer] = useState(false);
-  const [showLinkInput, setShowLinkInput] = useState(false);
   const [expandedComments, setExpandedComments] = useState({});
 
   const COMPOSER_PLACEHOLDERS = [
@@ -2440,6 +2444,12 @@ const setViewingProfile = (user) => {
   }, []);
 
   useEffect(() => {
+    if (!newPostContent || newPostMediaUrl) return;
+    const ytMatch = newPostContent.match(/https?:\/\/(?:www\.)?(?:youtube\.com\/watch\?[^\s]*v=|youtu\.be\/)([a-zA-Z0-9_-]{11})[^\s]*/);
+    if (ytMatch) { setNewPostMediaUrl(ytMatch[0]); setNewPostMediaType("youtube"); }
+  }, [newPostContent]);
+
+  useEffect(() => {
     if (!exploreFiltersClearedNotice) return undefined;
     const timeoutId = setTimeout(() => setExploreFiltersClearedNotice(false), 3000);
     return () => clearTimeout(timeoutId);
@@ -3131,7 +3141,6 @@ const setViewingProfile = (user) => {
     setNewPostProject("");
     setNewPostMediaUrl("");
     setNewPostMediaType("");
-    setShowLinkInput(false);
     const insertPayload = {
       user_id: authUser.id,
       user_name: profile.name,
@@ -3387,7 +3396,6 @@ const setViewingProfile = (user) => {
                             showToast("Audio ready.");
                           }} />
                         </label>
-                        <input placeholder="or paste a YouTube URL..." value={newPostMediaUrl.includes("youtube") || newPostMediaUrl.includes("youtu.be") ? newPostMediaUrl : ""} onChange={e => { setNewPostMediaUrl(e.target.value); setNewPostMediaType("youtube"); }} style={{ ...inputStyle, fontSize: 11, padding: "6px 10px", flex: 1 }} />
                       </div>
                       <div style={{ display: "flex", gap: 8 }}>
                         <select value={newPostProject} onChange={e => setNewPostProject(e.target.value)} style={{ ...inputStyle, fontSize: 11, padding: "6px 10px", flex: 1 }}>
@@ -4954,12 +4962,8 @@ const setViewingProfile = (user) => {
                                 : newPostMediaUrl.match(/\.(jpg|jpeg|png|gif|webp)$/i)
                                   ? <img src={newPostMediaUrl} alt="" style={{ maxWidth: "100%", maxHeight: 200, borderRadius: 8, border: `1px solid ${border}` }} />
                                   : <div style={{ fontSize: 11, color: textMuted, padding: "6px 10px", background: bg3, borderRadius: 6 }}>file: {newPostMediaUrl.split("/").pop()}</div>}
-                              <button onClick={() => { setNewPostMediaUrl(""); setNewPostMediaType(""); setShowLinkInput(false); }} style={{ position: "absolute", top: 4, right: 4, background: bg, border: `1px solid ${border}`, borderRadius: "50%", width: 20, height: 20, cursor: "pointer", fontSize: 10, display: "flex", alignItems: "center", justifyContent: "center", color: text, fontFamily: "inherit" }}>✕</button>
+                              <button onClick={() => { setNewPostMediaUrl(""); setNewPostMediaType(""); }} style={{ position: "absolute", top: 4, right: 4, background: bg, border: `1px solid ${border}`, borderRadius: "50%", width: 20, height: 20, cursor: "pointer", fontSize: 10, display: "flex", alignItems: "center", justifyContent: "center", color: text, fontFamily: "inherit" }}>✕</button>
                             </div>
-                          )}
-                          {/* Link input — revealed by link icon */}
-                          {showLinkInput && (
-                            <input autoFocus placeholder="paste a YouTube URL or link..." value={newPostMediaUrl.includes("youtube") || newPostMediaUrl.includes("youtu.be") ? newPostMediaUrl : newPostMediaType === "youtube" ? newPostMediaUrl : ""} onChange={e => { setNewPostMediaUrl(e.target.value); setNewPostMediaType("youtube"); }} style={{ ...inputStyle, fontSize: 11, padding: "6px 10px" }} />
                           )}
                           {/* Single action bar */}
                           <div style={{ display: "flex", alignItems: "center", gap: 2 }}>
@@ -4997,11 +5001,6 @@ const setViewingProfile = (user) => {
                                 showToast("Audio ready.");
                               }} />
                             </label>
-                            {/* Link / YouTube */}
-                            <button className="hb" title="YouTube or link" onClick={() => setShowLinkInput(s => !s)}
-                              style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 28, height: 28, borderRadius: 6, background: showLinkInput ? bg3 : "none", border: "none", color: showLinkInput ? text : textMuted, cursor: "pointer", flexShrink: 0 }}>
-                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
-                            </button>
                             {/* Divider */}
                             <div style={{ width: 1, height: 14, background: border, margin: "0 6px", flexShrink: 0 }} />
                             {/* Project tag — borderless select */}
