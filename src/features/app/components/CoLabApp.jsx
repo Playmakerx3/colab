@@ -1203,11 +1203,11 @@ function CoLab() {
   const [expandedComments, setExpandedComments] = useState({});
 
   const COMPOSER_PLACEHOLDERS = [
-    "What are you shipping?",
     "Who are you looking for?",
     "What did you just learn?",
     "What are you building?",
     "Got a win to share?",
+    "What's blocking you?",
   ];
   useEffect(() => {
     if (composerFocused) return;
@@ -4703,7 +4703,7 @@ const setViewingProfile = (user) => {
             const quickActions = [
               { label: "#share-update", text: "Working on " },
               { label: "#collaborators", text: "Looking for someone who can " },
-              { label: "#open-to-work", text: "I'm available to collaborate on " },
+              { label: "#feedback-wanted", text: "Would love feedback on " },
             ];
             // ── Feed data prep ─────────────────────────────────────────────
             const mySkillSet = new Set(profile?.skills || []);
