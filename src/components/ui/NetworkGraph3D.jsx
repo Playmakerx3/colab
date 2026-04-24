@@ -357,7 +357,7 @@ export default function NetworkGraph3D({ users, applications, projects = [], aut
         if (!s || !t) return;
         const dimmed = isDimmed(t);
         ctx.beginPath(); ctx.moveTo(s.sx, s.sy); ctx.lineTo(t.sx, t.sy);
-        ctx.strokeStyle = dark ? `rgba(255,255,255,${dimmed ? 0.06 : 0.3})` : `rgba(0,0,0,${dimmed ? 0.04 : 0.18})`;
+        ctx.strokeStyle = dark ? `rgba(255,255,255,${dimmed ? 0.1 : 0.6})` : `rgba(0,0,0,${dimmed ? 0.04 : 0.18})`;
         ctx.lineWidth = 1; ctx.setLineDash([]); ctx.stroke();
       });
 
@@ -368,7 +368,7 @@ export default function NetworkGraph3D({ users, applications, projects = [], aut
           if (!s || !t) return;
           const dimmed = isDimmed(t);
           ctx.beginPath(); ctx.moveTo(s.sx, s.sy); ctx.lineTo(t.sx, t.sy);
-          ctx.strokeStyle = dark ? `rgba(255,255,255,${dimmed ? 0.03 : 0.1})` : `rgba(0,0,0,${dimmed ? 0.02 : 0.08})`;
+          ctx.strokeStyle = dark ? `rgba(255,255,255,${dimmed ? 0.05 : 0.28})` : `rgba(0,0,0,${dimmed ? 0.02 : 0.08})`;
           ctx.lineWidth = 0.75; ctx.setLineDash([3, 4]); ctx.stroke();
           ctx.setLineDash([]);
         });
