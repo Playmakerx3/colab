@@ -300,36 +300,52 @@ export default function NetworkGraph3D({ users, applications, projects = [], aut
       };
       const isDimmed = (n) => !isHighlighted(n);
 
-      // ── Clear
+      // ── Clear + background
       ctx.clearRect(0, 0, w, h);
-      ctx.fillStyle = dark ? "#080808" : "#f0f0f0";
+      ctx.fillStyle = dark ? "#0d0d0d" : "#ffffff";
       ctx.fillRect(0, 0, w, h);
 
-      // ── Cluster zone labels
-      Object.entries(SKILL_CLUSTERS).forEach(([name, { color }]) => {
-        const center = mc[name];
-        if (!center) return;
-        const { sx, sy, pd } = project(center.x - cx, center.y - cy);
-        const fontSize = Math.max(7, Math.round(Math.min(w, h) * 0.016 * pd * zoom));
-        ctx.font = `${fontSize}px monospace`;
-        ctx.textAlign = "center";
-        const alpha = (hasFilter && filterCluster !== name) ? 0.025 : (dark ? 0.07 : 0.09);
-        ctx.fillStyle = `rgba(${hexToRgb(color)},${alpha})`;
-        ctx.fillText(name.toUpperCase(), sx, sy);
-      });
+      // ── Subtle dot grid (projected for 3D depth feel)
+      const gridStep = 48;
+      const gridCols = Math.ceil(w / gridStep) + 2;
+      const gridRows = Math.ceil(h / gridStep) + 2;
+      ctx.fillStyle = dark ? "rgba(255,255,255,0.045)" : "rgba(0,0,0,0.055)";
+      for (let r = -1; r < gridRows; r++) {
+        for (let c = -1; c < gridCols; c++) {
+          const wx = (c * gridStep) - cx;
+          const wy = (r * gridStep) - cy;
+          const { sx, sy, pd } = project(wx, wy);
+          const dotR = Math.max(0.5, 1 * pd);
+          ctx.beginPath(); ctx.arc(sx, sy, dotR, 0, Math.PI * 2); ctx.fill();
+        }
+      }
+
+      // ── Cluster zone labels (very faint, only when not filtered)
+      if (!hasFilter && !hasSearch) {
+        Object.entries(SKILL_CLUSTERS).forEach(([name, { color }]) => {
+          const center = mc[name];
+          if (!center) return;
+          const { sx, sy, pd } = project(center.x - cx, center.y - cy);
+          const fontSize = Math.max(8, Math.round(Math.min(w, h) * 0.014 * pd * zoom));
+          ctx.font = `${fontSize}px -apple-system, monospace`;
+          ctx.textAlign = "center";
+          ctx.fillStyle = dark ? `rgba(${hexToRgb(color)},0.08)` : `rgba(${hexToRgb(color)},0.1)`;
+          ctx.fillText(name.toUpperCase(), sx, sy);
+        });
+      }
 
       // ── Skill sub-labels at high zoom
-      if (zoom > 1.6) {
+      if (zoom > 1.8) {
         Object.entries(skillCenters).forEach(([skill, pos]) => {
           if (!skillPopulation[skill]) return;
           const meta = SKILL_META[skill];
           if (!meta) return;
           const { sx, sy, pd } = project(pos.x - cx, pos.y - cy);
           if (pd < 0.5) return;
-          const fontSize = Math.max(6, Math.round(8 * pd * zoom));
+          const fontSize = Math.max(6, Math.round(7 * pd * zoom));
           ctx.font = `${fontSize}px monospace`;
           ctx.textAlign = "center";
-          const dimAlpha = (hasFilter && filterCluster !== meta.cluster) ? 0.06 : (dark ? 0.22 : 0.28);
+          const dimAlpha = (hasFilter && filterCluster !== meta.cluster) ? 0.04 : (dark ? 0.16 : 0.18);
           ctx.fillStyle = `rgba(${hexToRgb(meta.color)},${dimAlpha})`;
           ctx.fillText(skill, sx, sy - Math.round(10 * pd * zoom));
         });
@@ -341,8 +357,8 @@ export default function NetworkGraph3D({ users, applications, projects = [], aut
         if (!s || !t) return;
         const dimmed = isDimmed(t);
         ctx.beginPath(); ctx.moveTo(s.sx, s.sy); ctx.lineTo(t.sx, t.sy);
-        ctx.strokeStyle = dark ? `rgba(255,255,255,${dimmed ? 0.12 : 0.75})` : `rgba(0,0,0,${dimmed ? 0.08 : 0.6})`;
-        ctx.lineWidth = 1.5; ctx.setLineDash([]); ctx.stroke();
+        ctx.strokeStyle = dark ? `rgba(255,255,255,${dimmed ? 0.06 : 0.3})` : `rgba(0,0,0,${dimmed ? 0.04 : 0.18})`;
+        ctx.lineWidth = 1; ctx.setLineDash([]); ctx.stroke();
       });
 
       // ── Mutual follow links
@@ -352,88 +368,64 @@ export default function NetworkGraph3D({ users, applications, projects = [], aut
           if (!s || !t) return;
           const dimmed = isDimmed(t);
           ctx.beginPath(); ctx.moveTo(s.sx, s.sy); ctx.lineTo(t.sx, t.sy);
-          ctx.strokeStyle = dark ? `rgba(255,255,255,${dimmed ? 0.04 : 0.18})` : `rgba(0,0,0,${dimmed ? 0.03 : 0.14})`;
-          ctx.lineWidth = 1; ctx.setLineDash([]); ctx.stroke();
+          ctx.strokeStyle = dark ? `rgba(255,255,255,${dimmed ? 0.03 : 0.1})` : `rgba(0,0,0,${dimmed ? 0.02 : 0.08})`;
+          ctx.lineWidth = 0.75; ctx.setLineDash([3, 4]); ctx.stroke();
+          ctx.setLineDash([]);
         });
       }
 
-      // ── Glow halos
-      projected.forEach(n => {
-        const dimmed = isDimmed(n);
-        const rgb = n.isMe ? (dark ? "200,210,255" : "80,80,120") : hexToRgb(n.color);
-        const glowR = n.sr * (n.isMe ? 5 : n.isCollab ? 4.5 : n.isMutual ? 3.5 : 2.5);
-        const peak = dimmed ? 0.01 : (dark
-          ? (n.isMe ? 0.35 : n.isCollab ? 0.25 : n.isMutual ? 0.15 : 0.05)
-          : (n.isMe ? 0.16 : n.isCollab ? 0.12 : n.isMutual ? 0.08 : 0.03));
-        const g = ctx.createRadialGradient(n.sx, n.sy, n.sr * 0.3, n.sx, n.sy, glowR);
-        g.addColorStop(0, `rgba(${rgb},${peak})`);
-        g.addColorStop(1, `rgba(${rgb},0)`);
-        ctx.beginPath(); ctx.arc(n.sx, n.sy, glowR, 0, Math.PI * 2);
-        ctx.fillStyle = g; ctx.fill();
-      });
-
       // ── Nodes
-      const nowMs = Date.now();
       const meColor = dark ? "#ffffff" : "#111111";
       projected.forEach(n => {
         const rgb = hexToRgb(n.color);
         const dimmed = isDimmed(n);
-        // Highlight searched node with ring
         const isSearchHit = hasSearch && n.name.toLowerCase().includes(searchLower) && !n.isMe;
 
         if (n.isMe) {
-          const p1 = 0.5 + 0.5 * Math.sin(nowMs * 0.0018);
-          const p2 = 0.5 + 0.5 * Math.sin(nowMs * 0.0018 + Math.PI);
-          ctx.beginPath(); ctx.arc(n.sx, n.sy, n.sr * (2.1 + p1 * 0.6), 0, Math.PI * 2);
-          ctx.strokeStyle = dark ? `rgba(255,255,255,${(0.04 + p1 * 0.09).toFixed(3)})` : `rgba(0,0,0,${(0.04 + p1 * 0.09).toFixed(3)})`;
+          // Clean solid node — single subtle outer ring, solid fill
+          ctx.beginPath(); ctx.arc(n.sx, n.sy, n.sr * 1.9, 0, Math.PI * 2);
+          ctx.strokeStyle = dark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.08)";
           ctx.lineWidth = 1; ctx.setLineDash([]); ctx.stroke();
-          ctx.beginPath(); ctx.arc(n.sx, n.sy, n.sr * (1.5 + p2 * 0.35), 0, Math.PI * 2);
-          ctx.strokeStyle = dark ? `rgba(255,255,255,${(0.1 + p2 * 0.12).toFixed(3)})` : `rgba(0,0,0,${(0.1 + p2 * 0.12).toFixed(3)})`;
-          ctx.lineWidth = 1; ctx.stroke();
-          ctx.beginPath(); ctx.arc(n.sx, n.sy, n.sr * 1.18, 0, Math.PI * 2);
-          ctx.strokeStyle = dark ? "rgba(255,255,255,0.3)" : "rgba(0,0,0,0.22)";
-          ctx.lineWidth = 1; ctx.stroke();
           ctx.beginPath(); ctx.arc(n.sx, n.sy, n.sr, 0, Math.PI * 2);
           ctx.fillStyle = meColor; ctx.fill();
-          const lfs = Math.max(7, Math.round(11 * n.pd * zoom));
-          ctx.textAlign = "center"; ctx.fillStyle = meColor;
-          ctx.font = `bold ${lfs}px monospace`;
-          ctx.fillText(n.name.split(" ")[0], n.sx, n.sy + n.sr + Math.round(14 * n.pd * zoom));
+          const lfs = Math.max(8, Math.round(10 * n.pd * zoom));
+          ctx.textAlign = "center";
+          ctx.font = `600 ${lfs}px -apple-system, sans-serif`;
+          ctx.fillStyle = meColor;
+          ctx.fillText(n.name.split(" ")[0], n.sx, n.sy + n.sr + Math.round(13 * n.pd * zoom));
         } else {
-          // Search highlight ring
+          // Search highlight
           if (isSearchHit) {
-            ctx.beginPath(); ctx.arc(n.sx, n.sy, n.sr * 2.2, 0, Math.PI * 2);
-            ctx.strokeStyle = `rgba(${rgb},0.6)`;
-            ctx.lineWidth = 1.5; ctx.setLineDash([3, 3]); ctx.stroke();
+            ctx.beginPath(); ctx.arc(n.sx, n.sy, n.sr * 2.4, 0, Math.PI * 2);
+            ctx.strokeStyle = `rgba(${rgb},${dark ? 0.5 : 0.4})`;
+            ctx.lineWidth = 1; ctx.setLineDash([3, 3]); ctx.stroke();
             ctx.setLineDash([]);
           }
 
-          const opacity = dimmed ? 0.1 : (n.isCollab ? 0.95 : n.isMutual ? 0.7 : n.isFollowing ? 0.55 : 0.42);
+          // Fill: very light tint of node color
+          const fillAlpha = dimmed ? 0.03 : (n.isCollab ? 0.18 : n.isMutual ? 0.12 : 0.07);
           ctx.beginPath(); ctx.arc(n.sx, n.sy, n.sr, 0, Math.PI * 2);
-          ctx.fillStyle = `rgba(${rgb},${opacity})`; ctx.fill();
-          if (!dimmed && (n.isCollab || n.isMutual)) {
-            ctx.strokeStyle = n.isCollab ? n.color : `rgba(${rgb},0.5)`;
-            ctx.lineWidth = n.isCollab ? 1.5 : 1; ctx.setLineDash([]); ctx.stroke();
-          }
+          ctx.fillStyle = `rgba(${rgb},${fillAlpha})`; ctx.fill();
 
-          // Labels: always show when zoom > 1.4, otherwise only collab/mutual
-          const showLabel = !dimmed && n.pd > 0.45 && (
-            isSearchHit ||
-            n.isCollab || n.isMutual ||
-            zoom > 1.4
+          // Border: clean ring in node color
+          const strokeAlpha = dimmed ? 0.08 : (n.isCollab ? 0.9 : n.isMutual ? 0.65 : isSearchHit ? 0.8 : 0.4);
+          ctx.strokeStyle = `rgba(${rgb},${strokeAlpha})`;
+          ctx.lineWidth = dimmed ? 0.5 : (n.isCollab ? 1.5 : 1);
+          ctx.setLineDash([]); ctx.stroke();
+
+          // Labels
+          const showLabel = !dimmed && n.pd > 0.4 && (
+            isSearchHit || n.isCollab || n.isMutual || zoom > 1.4
           );
           if (showLabel) {
-            const lfs = Math.max(7, Math.round((n.isCollab ? 10 : 9) * n.pd * zoom));
-            ctx.font = `${n.isCollab ? "bold " : ""}${lfs}px monospace`;
+            const lfs = Math.max(7, Math.round((n.isCollab ? 9 : 8) * n.pd * zoom));
+            ctx.font = `${n.isCollab ? "600 " : ""}${lfs}px -apple-system, sans-serif`;
             ctx.textAlign = "center";
-            // Dim label for regular nodes even at high zoom
-            const labelAlpha = n.isCollab ? 1 : n.isMutual ? 0.75 : isSearchHit ? 1 : 0.55;
-            ctx.fillStyle = n.isCollab
-              ? n.color
-              : isSearchHit
-                ? (dark ? `rgba(${rgb},1)` : `rgba(${rgb},1)`)
-                : (dark ? `rgba(${rgb},${labelAlpha})` : `rgba(${rgb},${labelAlpha})`);
-            ctx.fillText(n.name.split(" ")[0], n.sx, n.sy + n.sr + Math.round(12 * n.pd * zoom));
+            const labelAlpha = n.isCollab ? 0.85 : n.isMutual ? 0.6 : isSearchHit ? 0.85 : 0.45;
+            ctx.fillStyle = dark
+              ? `rgba(255,255,255,${labelAlpha})`
+              : `rgba(0,0,0,${labelAlpha})`;
+            ctx.fillText(n.name.split(" ")[0], n.sx, n.sy + n.sr + Math.round(11 * n.pd * zoom));
           }
         }
       });
