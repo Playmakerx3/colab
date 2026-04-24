@@ -4532,7 +4532,7 @@ const setViewingProfile = (user) => {
           {showFirstTimeGuide && renderFirstTimeGuide()}
 
           {/* Top-level explore tabs: feed | projects */}
-          <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px", marginBottom: 16 }}>{exploreTab === "projects" ? "OPEN PROJECTS" : "BUILDER FEED"}</div>
+          <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px", marginBottom: 16 }}>BUILDER FEED</div>
           <div style={{ borderBottom: `1px solid ${border}`, marginBottom: 28, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <button onClick={() => setExploreTab("feed")} style={{ background: "none", border: "none", borderBottom: exploreTab === "feed" ? `1px solid ${text}` : "1px solid transparent", color: exploreTab === "feed" ? text : textMuted, padding: "8px 0", fontSize: 12, cursor: "pointer", fontFamily: "inherit", transition: "all 0.15s", display: "inline-flex", alignItems: "center", whiteSpace: "nowrap" }}>
               feed
@@ -4548,6 +4548,13 @@ const setViewingProfile = (user) => {
 
               {/* Left: main project list */}
               <div style={{ flex: 1, minWidth: 0 }}>
+
+                {/* Hero */}
+                <div style={{ marginBottom: 24 }}>
+                  <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px", marginBottom: 10 }}>OPEN PROJECTS</div>
+                  <h2 style={{ fontSize: "clamp(26px, 4vw, 44px)", fontWeight: 400, lineHeight: 1.05, letterSpacing: "-2px", marginBottom: 10, color: text }}>Build together.</h2>
+                  <p style={{ fontSize: 13, color: textMuted, lineHeight: 1.75 }}>Find projects that need your skills, or post one and find your team.</p>
+                </div>
 
                 {/* Sub-tabs */}
                 <div style={{ display: "flex", gap: 4, marginBottom: 24, background: bg2, borderRadius: 8, padding: 3, border: `1px solid ${border}`, width: "fit-content" }}>
@@ -4860,11 +4867,11 @@ const setViewingProfile = (user) => {
                 )}
 
                 {/* Sort + following filter */}
-                <div style={{ display: "flex", alignItems: "center", marginBottom: 24 }}>
-                  <div style={{ display: "flex", gap: 4, background: bg2, borderRadius: 8, padding: 3, border: `1px solid ${border}`, width: "fit-content" }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: `1px solid ${border}`, marginBottom: 24 }}>
+                  <div style={{ display: "flex" }}>
                     {[["for-you", "for you"], ["following", "following"]].map(([val, label]) => (
                       <button key={val} className="hb" onClick={() => { setFeedSort(val); setFeedPage(1); }}
-                        style={{ padding: "5px 14px", borderRadius: 6, fontSize: 11, cursor: "pointer", fontFamily: "inherit", border: "none", background: feedSort === val ? (dark ? "#fff" : "#111") : "transparent", color: feedSort === val ? (dark ? "#111" : "#fff") : textMuted, transition: "all 0.15s", fontWeight: feedSort === val ? 500 : 400 }}>
+                        style={{ background: "none", border: "none", borderBottom: feedSort === val ? `1px solid ${text}` : "1px solid transparent", color: feedSort === val ? text : textMuted, padding: "8px 16px 8px 0", fontSize: 11, cursor: "pointer", fontFamily: "inherit", marginRight: 8, transition: "all 0.15s" }}>
                         {label}
                       </button>
                     ))}
