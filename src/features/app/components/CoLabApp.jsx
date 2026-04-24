@@ -4532,7 +4532,7 @@ const setViewingProfile = (user) => {
           {showFirstTimeGuide && renderFirstTimeGuide()}
 
           {/* Top-level explore tabs: feed | projects */}
-          <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px", marginBottom: 16 }}>Builder Feed</div>
+          <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px", marginBottom: 16 }}>BUILDER FEED</div>
           <div style={{ borderBottom: `1px solid ${border}`, marginBottom: 28, display: "flex" }}>
             {[
               { id: "feed", label: "feed" },
