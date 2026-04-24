@@ -1208,7 +1208,6 @@ function CoLab() {
 
   const COMPOSER_PLACEHOLDERS = [
     "Who are you looking for?",
-    "What did you just learn?",
     "What are you building?",
     "Got a win to share?",
     "What's blocking you?",
@@ -4720,11 +4719,6 @@ const setViewingProfile = (user) => {
               editingFeedPostId, setEditingFeedPostId, editingFeedPostContent, setEditingFeedPostContent,
               handleSaveFeedPostEdit, showToast,
             };
-            const quickActions = [
-              { label: "#share-update", text: "Working on " },
-              { label: "#collaborators", text: "Looking for someone who can " },
-              { label: "#feedback-wanted", text: "Would love feedback on " },
-            ];
             // ── Feed data prep ─────────────────────────────────────────────
             const mySkillSet = new Set(profile?.skills || []);
 
@@ -4859,9 +4853,8 @@ const setViewingProfile = (user) => {
 
                 {/* Hero header */}
                 <div style={{ marginBottom: 24 }}>
-                  <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px", marginBottom: 10 }}>WHAT'S HAPPENING</div>
+                  <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px", marginBottom: 10 }}>Builder Feed</div>
                   <h2 style={{ fontSize: "clamp(26px, 4vw, 44px)", fontWeight: 400, lineHeight: 1.05, letterSpacing: "-2px", marginBottom: 10, color: text }}>The builder feed.</h2>
-                  <p style={{ fontSize: 13, color: textMuted, lineHeight: 1.75 }}>Updates from builders, new projects, and people looking to collaborate.</p>
                 </div>
 
                 {shouldShowOnboardingChecklist && (
@@ -4941,17 +4934,6 @@ const setViewingProfile = (user) => {
                         onBlur={undefined}
                         style={{ background: "none", border: "none", outline: "none", resize: "none", fontSize: 14, padding: "2px 0", color: text, lineHeight: 1.65, width: "100%", fontFamily: "inherit", height: composerFocused || newPostContent ? "72px" : "26px", transition: "height 0.2s ease", overflow: "hidden" }}
                       />
-                      {/* Hashtag chips — shown when idle */}
-                      {!newPostContent && !composerFocused && !autoOpenComposer && (
-                        <div style={{ display: "flex", gap: 10, marginTop: 6, flexWrap: "wrap" }}>
-                          {quickActions.map(({ label, text }) => (
-                            <button key={label} className="hb" onClick={() => { setNewPostContent(text); setComposerFocused(true); feedComposerRef.current?.focus(); }}
-                              style={{ fontSize: 11, padding: "0", background: "none", border: "none", color: textMuted, cursor: "pointer", fontFamily: "inherit", opacity: 0.7, letterSpacing: "0.1px" }}>
-                              {label}
-                            </button>
-                          ))}
-                        </div>
-                      )}
                       {(composerFocused || newPostContent.trim() || autoOpenComposer) && (
                         <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 8 }}>
                           {/* Media preview */}
