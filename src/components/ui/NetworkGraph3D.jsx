@@ -40,20 +40,21 @@ function hexToRgb(hex) {
   return `${parseInt(hex.slice(1,3),16)},${parseInt(hex.slice(3,5),16)},${parseInt(hex.slice(5,7),16)}`;
 }
 
-const MIN_ZOOM = 1;
+const MIN_ZOOM = 0.6;
 const MAX_ZOOM = 6;
-const FOV = 900; // perspective focal length — higher = less extreme depth distortion
+const FOV = 900;
+const IDLE_MS = 2500; // ms before auto-rotate kicks in
 
-export default function NetworkGraph3D({ users, applications, projects = [], authUser, onNodeClick, dark, following = [], followers = [] }) {
+export default function NetworkGraph3D({ users, applications, projects = [], authUser, onNodeClick, dark, following = [], followers = [], onFollow }) {
   const canvasRef = useRef();
   const nodesRef = useRef([]);
   const rafRef = useRef();
-  const projectedRef = useRef([]); // last-frame projected screen positions, used for hit detection
+  const projectedRef = useRef([]);
 
-  // rotX = tilt up/down, rotY = spin left/right, panX/panY = translate, zoom = scale
   const viewRef = useRef({ panX: 0, panY: 0, zoom: 1, rotX: 0, rotY: 0 });
-  const velocityRef = useRef({ vrX: 0, vrY: 0 }); // angular spin inertia
+  const velocityRef = useRef({ vrX: 0, vrY: 0 });
   const lastSampleRef = useRef({ rotX: 0, rotY: 0, t: 0 });
+  const lastInteractRef = useRef(Date.now());
 
   const interactRef = useRef({ mode: null, startX: 0, startY: 0, originView: null, panMoved: false });
   const pinchRef = useRef(null);
@@ -62,9 +63,11 @@ export default function NetworkGraph3D({ users, applications, projects = [], aut
   const [dims, setDims] = useState({ w: 900, h: 600 });
   const [showMutualLines, setShowMutualLines] = useState(true);
   const [hintsVisible, setHintsVisible] = useState(true);
+  const [filterCluster, setFilterCluster] = useState(null); // skill cluster filter
+  const [searchQuery, setSearchQuery] = useState("");
+
   useEffect(() => { const t = setTimeout(() => setHintsVisible(false), 4000); return () => clearTimeout(t); }, []);
 
-  // Hit detection uses projectedRef (screen positions from last frame)
   const getHit = useCallback((sx, sy) => {
     return projectedRef.current.find(n => {
       const dx = n.sx - sx, dy = n.sy - sy;
@@ -79,7 +82,6 @@ export default function NetworkGraph3D({ users, applications, projects = [], aut
     const ratio = newZoom / v.zoom;
     const c = canvasRef.current;
     const cx = c ? c.width / 2 : 0, cy = c ? c.height / 2 : 0;
-    // Keep the point under the cursor fixed by adjusting pan
     const pivotX = sx ?? cx;
     const pivotY = sy ?? cy;
     viewRef.current = {
@@ -121,8 +123,8 @@ export default function NetworkGraph3D({ users, applications, projects = [], aut
     return { macroCenters, skillCenters, cx, cy };
   }, []);
 
-  const { nodes, collabLinks, mutualLinks, skillPopulation } = useMemo(() => {
-    if (!users?.length || !authUser) return { nodes: [], collabLinks: [], mutualLinks: [], skillPopulation: {} };
+  const { nodes, collabLinks, mutualLinks, skillPopulation, stats } = useMemo(() => {
+    if (!users?.length || !authUser) return { nodes: [], collabLinks: [], mutualLinks: [], skillPopulation: {}, stats: { total: 0, collabs: 0, mutuals: 0 } };
     const { macroCenters, skillCenters, cx, cy } = getLayout(dims.w, dims.h);
 
     const myProjectIds = new Set([
@@ -137,10 +139,18 @@ export default function NetworkGraph3D({ users, applications, projects = [], aut
     const skillPopulation = {};
     users.forEach(u => (u.skills || []).forEach(s => { skillPopulation[s] = (skillPopulation[s] || 0) + 1; }));
 
+    // Count connections per user for node sizing
+    const connectionCount = {};
+    users.forEach(u => { connectionCount[u.id] = 0; });
+    collaboratorIds.forEach(id => { if (connectionCount[id] !== undefined) connectionCount[id] += 3; });
+    mutualFollowIds.forEach(id => { if (connectionCount[id] !== undefined) connectionCount[id] += 2; });
+    following.forEach(id => { if (connectionCount[id] !== undefined) connectionCount[id] += 1; });
+
     const userNodes = users.filter(u => u.name?.trim()).map(u => {
       const isMe = u.id === authUser.id;
       const isCollab = collaboratorIds.has(u.id);
       const isMutual = !isCollab && mutualFollowIds.has(u.id);
+      const isFollowing = !isCollab && !isMutual && following.includes(u.id);
       const primarySkill = (u.skills || []).find(s => skillCenters[s]);
       const skillCenter = primarySkill ? skillCenters[primarySkill] : null;
       const macroCluster = getClusterName(u.skills);
@@ -148,12 +158,17 @@ export default function NetworkGraph3D({ users, applications, projects = [], aut
       const fallback = { x: cx + (Math.random() - 0.5) * 160, y: cy + (Math.random() - 0.5) * 160 };
       const target = skillCenter || macroCenter || fallback;
       const jitter = isCollab ? 32 : isMutual ? 42 : 30;
+      // Node size: base + bonus for connections + bonus for skills count
+      const skillBonus = Math.min(3, Math.floor((u.skills || []).length / 3));
+      const connBonus = Math.min(4, Math.floor((connectionCount[u.id] || 0) / 2));
+      const baseR = isMe ? 12 : isCollab ? 9 : isMutual ? 7 : isFollowing ? 5.5 : 4;
+      const r = isMe ? 12 : Math.min(baseR + skillBonus * 0.5 + connBonus * 0.5, baseR + 2.5);
       return {
         id: u.id, name: u.name, role: u.role || "", skills: u.skills || [], nodeType: "user",
         primarySkill: primarySkill || null, macroCluster,
         color: getNodeColor(u.skills),
-        isMe, isCollab, isMutual,
-        r: isMe ? 12 : isCollab ? 9 : isMutual ? 6 : 4,
+        isMe, isCollab, isMutual, isFollowing,
+        r,
         x: isMe ? cx : target.x + (Math.random() - 0.5) * jitter,
         y: isMe ? cy : target.y + (Math.random() - 0.5) * jitter,
         vx: 0, vy: 0,
@@ -168,8 +183,14 @@ export default function NetworkGraph3D({ users, applications, projects = [], aut
     const mutualLinks = [];
     mutualFollowIds.forEach(uid => { if (users.find(u => u.id === uid)) mutualLinks.push({ source: authUser.id, target: uid }); });
 
-    return { nodes, collabLinks, mutualLinks, skillPopulation };
-  }, [users, applications, projects, authUser, dims, mutualFollowIds, getLayout, dark]);
+    const stats = {
+      total: userNodes.length - 1, // exclude self
+      collabs: collaboratorIds.size,
+      mutuals: mutualFollowIds.size,
+    };
+
+    return { nodes, collabLinks, mutualLinks, skillPopulation, stats };
+  }, [users, applications, projects, authUser, dims, mutualFollowIds, following, getLayout]);
 
   useEffect(() => { nodesRef.current = nodes.map(n => ({ ...n })); }, [nodes]);
 
@@ -184,6 +205,9 @@ export default function NetworkGraph3D({ users, applications, projects = [], aut
     return () => ro.disconnect();
   }, []);
 
+  // Derived sets for render
+  const searchLower = searchQuery.trim().toLowerCase();
+
   // ── Render loop ──────────────────────────────────────────────────────────────
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -196,6 +220,12 @@ export default function NetworkGraph3D({ users, applications, projects = [], aut
       const w = canvas.width, h = canvas.height;
       const cx = w / 2, cy = h / 2;
 
+      // ── Auto-rotate when idle
+      const idleMs = Date.now() - lastInteractRef.current;
+      if (!interactRef.current.mode && idleMs > IDLE_MS) {
+        velocityRef.current.vrY = 0.0006;
+      }
+
       // ── Spin inertia
       if (!interactRef.current.mode) {
         const vel = velocityRef.current;
@@ -207,17 +237,13 @@ export default function NetworkGraph3D({ users, applications, projects = [], aut
       const cosX = Math.cos(rotX), sinX = Math.sin(rotX);
       const cosY = Math.cos(rotY), sinY = Math.sin(rotY);
 
-      // Project a flat (z=0) world-space point (centered around cx,cy) into screen space
       const project = (worldX, worldY) => {
-        // Rotate around Y axis (horizontal spin)
         const x1 = worldX * cosY;
         const y1 = worldY;
         const z1 = -worldX * sinY;
-        // Rotate around X axis (vertical tilt)
         const x2 = x1;
         const y2 = y1 * cosX - z1 * sinX;
         const z2 = y1 * sinX + z1 * cosX;
-        // Perspective divisor: nodes further back appear smaller
         const pd = Math.max(0.2, FOV / (FOV + z2));
         return {
           sx: cx + panX + x2 * pd * zoom,
@@ -227,7 +253,7 @@ export default function NetworkGraph3D({ users, applications, projects = [], aut
         };
       };
 
-      // ── Physics (2D world space — 3D is purely visual)
+      // ── Physics
       ns.forEach(n => {
         if (n.isMe) return;
         n.vx += (n.targetX - n.x) * 0.004;
@@ -249,29 +275,37 @@ export default function NetworkGraph3D({ users, applications, projects = [], aut
         n.y = Math.max(n.r, Math.min(h - n.r, n.y));
       });
 
-      // ── Project all nodes to screen
+      // ── Project all nodes
       const projected = ns.map(n => {
         const { sx, sy, z, pd } = project(n.x - cx, n.y - cy);
         const sr = Math.max(1.5, n.r * pd * zoom);
         return { ...n, sx, sy, sr, z, pd };
       });
 
-      // ── Painter's algorithm: draw back-to-front
       projected.sort((a, b) => b.z - a.z);
-
-      // ── Store for hit detection (this frame's screen positions)
       projectedRef.current = projected;
 
-      // ── Build nodeMap for links
       const nodeMap = {};
       projected.forEach(n => { nodeMap[n.id] = n; });
+
+      // ── Compute highlight/dim state
+      const hasFilter = !!filterCluster;
+      const hasSearch = searchLower.length > 0;
+
+      const isHighlighted = (n) => {
+        if (n.isMe) return true;
+        if (hasSearch) return n.name.toLowerCase().includes(searchLower);
+        if (hasFilter) return n.macroCluster === filterCluster;
+        return true;
+      };
+      const isDimmed = (n) => !isHighlighted(n);
 
       // ── Clear
       ctx.clearRect(0, 0, w, h);
       ctx.fillStyle = dark ? "#080808" : "#f0f0f0";
       ctx.fillRect(0, 0, w, h);
 
-      // ── Cluster zone labels (projected) — subtle background markers
+      // ── Cluster zone labels
       Object.entries(SKILL_CLUSTERS).forEach(([name, { color }]) => {
         const center = mc[name];
         if (!center) return;
@@ -279,11 +313,12 @@ export default function NetworkGraph3D({ users, applications, projects = [], aut
         const fontSize = Math.max(7, Math.round(Math.min(w, h) * 0.016 * pd * zoom));
         ctx.font = `${fontSize}px monospace`;
         ctx.textAlign = "center";
-        ctx.fillStyle = dark ? `rgba(${hexToRgb(color)},0.07)` : `rgba(${hexToRgb(color)},0.09)`;
+        const alpha = (hasFilter && filterCluster !== name) ? 0.025 : (dark ? 0.07 : 0.09);
+        ctx.fillStyle = `rgba(${hexToRgb(color)},${alpha})`;
         ctx.fillText(name.toUpperCase(), sx, sy);
       });
 
-      // ── Skill sub-labels — only show when zoomed in (zoom > 1.6)
+      // ── Skill sub-labels at high zoom
       if (zoom > 1.6) {
         Object.entries(skillCenters).forEach(([skill, pos]) => {
           if (!skillPopulation[skill]) return;
@@ -294,7 +329,8 @@ export default function NetworkGraph3D({ users, applications, projects = [], aut
           const fontSize = Math.max(6, Math.round(8 * pd * zoom));
           ctx.font = `${fontSize}px monospace`;
           ctx.textAlign = "center";
-          ctx.fillStyle = dark ? `rgba(${hexToRgb(meta.color)},0.22)` : `rgba(${hexToRgb(meta.color)},0.28)`;
+          const dimAlpha = (hasFilter && filterCluster !== meta.cluster) ? 0.06 : (dark ? 0.22 : 0.28);
+          ctx.fillStyle = `rgba(${hexToRgb(meta.color)},${dimAlpha})`;
           ctx.fillText(skill, sx, sy - Math.round(10 * pd * zoom));
         });
       }
@@ -303,8 +339,9 @@ export default function NetworkGraph3D({ users, applications, projects = [], aut
       collabLinks.forEach(link => {
         const s = nodeMap[link.source], t = nodeMap[link.target];
         if (!s || !t) return;
+        const dimmed = isDimmed(t);
         ctx.beginPath(); ctx.moveTo(s.sx, s.sy); ctx.lineTo(t.sx, t.sy);
-        ctx.strokeStyle = dark ? "rgba(255,255,255,0.75)" : "rgba(0,0,0,0.6)";
+        ctx.strokeStyle = dark ? `rgba(255,255,255,${dimmed ? 0.12 : 0.75})` : `rgba(0,0,0,${dimmed ? 0.08 : 0.6})`;
         ctx.lineWidth = 1.5; ctx.setLineDash([]); ctx.stroke();
       });
 
@@ -313,19 +350,21 @@ export default function NetworkGraph3D({ users, applications, projects = [], aut
         mutualLinks.forEach(link => {
           const s = nodeMap[link.source], t = nodeMap[link.target];
           if (!s || !t) return;
+          const dimmed = isDimmed(t);
           ctx.beginPath(); ctx.moveTo(s.sx, s.sy); ctx.lineTo(t.sx, t.sy);
-          ctx.strokeStyle = dark ? "rgba(255,255,255,0.18)" : "rgba(0,0,0,0.14)";
+          ctx.strokeStyle = dark ? `rgba(255,255,255,${dimmed ? 0.04 : 0.18})` : `rgba(0,0,0,${dimmed ? 0.03 : 0.14})`;
           ctx.lineWidth = 1; ctx.setLineDash([]); ctx.stroke();
         });
       }
 
-      // ── Glow halos (back-to-front order, under nodes)
+      // ── Glow halos
       projected.forEach(n => {
+        const dimmed = isDimmed(n);
         const rgb = n.isMe ? (dark ? "200,210,255" : "80,80,120") : hexToRgb(n.color);
         const glowR = n.sr * (n.isMe ? 5 : n.isCollab ? 4.5 : n.isMutual ? 3.5 : 2.5);
-        const peak = dark
+        const peak = dimmed ? 0.01 : (dark
           ? (n.isMe ? 0.35 : n.isCollab ? 0.25 : n.isMutual ? 0.15 : 0.05)
-          : (n.isMe ? 0.16 : n.isCollab ? 0.12 : n.isMutual ? 0.08 : 0.03);
+          : (n.isMe ? 0.16 : n.isCollab ? 0.12 : n.isMutual ? 0.08 : 0.03));
         const g = ctx.createRadialGradient(n.sx, n.sy, n.sr * 0.3, n.sx, n.sy, glowR);
         g.addColorStop(0, `rgba(${rgb},${peak})`);
         g.addColorStop(1, `rgba(${rgb},0)`);
@@ -333,16 +372,18 @@ export default function NetworkGraph3D({ users, applications, projects = [], aut
         ctx.fillStyle = g; ctx.fill();
       });
 
-      // ── Nodes (back-to-front)
+      // ── Nodes
       const nowMs = Date.now();
       const meColor = dark ? "#ffffff" : "#111111";
       projected.forEach(n => {
         const rgb = hexToRgb(n.color);
+        const dimmed = isDimmed(n);
+        // Highlight searched node with ring
+        const isSearchHit = hasSearch && n.name.toLowerCase().includes(searchLower) && !n.isMe;
 
         if (n.isMe) {
           const p1 = 0.5 + 0.5 * Math.sin(nowMs * 0.0018);
           const p2 = 0.5 + 0.5 * Math.sin(nowMs * 0.0018 + Math.PI);
-          // Pulsing rings (proportional to projected node size)
           ctx.beginPath(); ctx.arc(n.sx, n.sy, n.sr * (2.1 + p1 * 0.6), 0, Math.PI * 2);
           ctx.strokeStyle = dark ? `rgba(255,255,255,${(0.04 + p1 * 0.09).toFixed(3)})` : `rgba(0,0,0,${(0.04 + p1 * 0.09).toFixed(3)})`;
           ctx.lineWidth = 1; ctx.setLineDash([]); ctx.stroke();
@@ -352,27 +393,46 @@ export default function NetworkGraph3D({ users, applications, projects = [], aut
           ctx.beginPath(); ctx.arc(n.sx, n.sy, n.sr * 1.18, 0, Math.PI * 2);
           ctx.strokeStyle = dark ? "rgba(255,255,255,0.3)" : "rgba(0,0,0,0.22)";
           ctx.lineWidth = 1; ctx.stroke();
-          // Core
           ctx.beginPath(); ctx.arc(n.sx, n.sy, n.sr, 0, Math.PI * 2);
           ctx.fillStyle = meColor; ctx.fill();
-          // Label: name only
           const lfs = Math.max(7, Math.round(11 * n.pd * zoom));
           ctx.textAlign = "center"; ctx.fillStyle = meColor;
           ctx.font = `bold ${lfs}px monospace`;
           ctx.fillText(n.name.split(" ")[0], n.sx, n.sy + n.sr + Math.round(14 * n.pd * zoom));
         } else {
-          const opacity = n.isCollab ? 0.95 : n.isMutual ? 0.7 : 0.42;
+          // Search highlight ring
+          if (isSearchHit) {
+            ctx.beginPath(); ctx.arc(n.sx, n.sy, n.sr * 2.2, 0, Math.PI * 2);
+            ctx.strokeStyle = `rgba(${rgb},0.6)`;
+            ctx.lineWidth = 1.5; ctx.setLineDash([3, 3]); ctx.stroke();
+            ctx.setLineDash([]);
+          }
+
+          const opacity = dimmed ? 0.1 : (n.isCollab ? 0.95 : n.isMutual ? 0.7 : n.isFollowing ? 0.55 : 0.42);
           ctx.beginPath(); ctx.arc(n.sx, n.sy, n.sr, 0, Math.PI * 2);
           ctx.fillStyle = `rgba(${rgb},${opacity})`; ctx.fill();
-          if (n.isCollab || n.isMutual) {
+          if (!dimmed && (n.isCollab || n.isMutual)) {
             ctx.strokeStyle = n.isCollab ? n.color : `rgba(${rgb},0.5)`;
             ctx.lineWidth = n.isCollab ? 1.5 : 1; ctx.setLineDash([]); ctx.stroke();
           }
-          if ((n.isCollab || n.isMutual) && n.pd > 0.45) {
+
+          // Labels: always show when zoom > 1.4, otherwise only collab/mutual
+          const showLabel = !dimmed && n.pd > 0.45 && (
+            isSearchHit ||
+            n.isCollab || n.isMutual ||
+            zoom > 1.4
+          );
+          if (showLabel) {
             const lfs = Math.max(7, Math.round((n.isCollab ? 10 : 9) * n.pd * zoom));
             ctx.font = `${n.isCollab ? "bold " : ""}${lfs}px monospace`;
             ctx.textAlign = "center";
-            ctx.fillStyle = n.isCollab ? n.color : (dark ? `rgba(${rgb},0.65)` : `rgba(${rgb},0.8)`);
+            // Dim label for regular nodes even at high zoom
+            const labelAlpha = n.isCollab ? 1 : n.isMutual ? 0.75 : isSearchHit ? 1 : 0.55;
+            ctx.fillStyle = n.isCollab
+              ? n.color
+              : isSearchHit
+                ? (dark ? `rgba(${rgb},1)` : `rgba(${rgb},1)`)
+                : (dark ? `rgba(${rgb},${labelAlpha})` : `rgba(${rgb},${labelAlpha})`);
             ctx.fillText(n.name.split(" ")[0], n.sx, n.sy + n.sr + Math.round(12 * n.pd * zoom));
           }
         }
@@ -383,21 +443,21 @@ export default function NetworkGraph3D({ users, applications, projects = [], aut
 
     rafRef.current = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(rafRef.current);
-  }, [collabLinks, mutualLinks, showMutualLines, dark, dims, getLayout, skillPopulation]);
+  }, [collabLinks, mutualLinks, showMutualLines, dark, dims, getLayout, skillPopulation, filterCluster, searchLower]);
 
   // ── Mouse ─────────────────────────────────────────────────────────────────
   const handleMouseDown = useCallback((e) => {
     if (e.button !== 0 && e.button !== 2) return;
+    lastInteractRef.current = Date.now();
+    velocityRef.current = { vrX: 0, vrY: 0 };
     const canvas = canvasRef.current;
     if (!canvas) return;
     const rect = canvas.getBoundingClientRect();
     const sx = e.clientX - rect.left, sy = e.clientY - rect.top;
 
-    velocityRef.current = { vrX: 0, vrY: 0 };
     lastSampleRef.current = { rotX: viewRef.current.rotX, rotY: viewRef.current.rotY, t: performance.now() };
 
     if (e.button === 2) {
-      // Right-click drag = pan (translate)
       interactRef.current = { mode: "pan", startX: e.clientX, startY: e.clientY, originView: { ...viewRef.current }, panMoved: false };
       canvas.style.cursor = "grabbing";
     } else {
@@ -405,7 +465,6 @@ export default function NetworkGraph3D({ users, applications, projects = [], aut
       if (hit) {
         interactRef.current = { mode: "click", startX: e.clientX, startY: e.clientY, originView: null, panMoved: false };
       } else {
-        // Left drag = 3D rotate (drag up/down tilts, left/right spins)
         interactRef.current = { mode: "rotate", startX: e.clientX, startY: e.clientY, originView: { ...viewRef.current }, panMoved: false };
         canvas.style.cursor = "grabbing";
       }
@@ -420,6 +479,7 @@ export default function NetworkGraph3D({ users, applications, projects = [], aut
     const { mode, startX, startY, originView } = interactRef.current;
 
     if (mode === "rotate") {
+      lastInteractRef.current = Date.now();
       const dx = e.clientX - startX;
       const dy = e.clientY - startY;
       if (Math.abs(dx) > 2 || Math.abs(dy) > 2) interactRef.current.panMoved = true;
@@ -427,7 +487,6 @@ export default function NetworkGraph3D({ users, applications, projects = [], aut
       const newRotY = originView.rotY - dx * 0.007;
       const newRotX = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, originView.rotX + dy * 0.007));
 
-      // Track velocity for spin inertia
       const now = performance.now();
       const dt = now - lastSampleRef.current.t;
       if (dt > 0 && dt < 80) {
@@ -441,16 +500,16 @@ export default function NetworkGraph3D({ users, applications, projects = [], aut
     }
 
     if (mode === "pan") {
+      lastInteractRef.current = Date.now();
       const dx = e.clientX - startX, dy = e.clientY - startY;
       if (Math.abs(dx) > 2 || Math.abs(dy) > 2) interactRef.current.panMoved = true;
       viewRef.current = { ...viewRef.current, panX: originView.panX + dx, panY: originView.panY + dy };
       return;
     }
 
-    // Hover tooltip
     const hit = getHit(sx, sy);
     if (hit && !hit.isMe) {
-      setTooltip({ name: hit.name, role: hit.role, primarySkill: hit.primarySkill, isMutual: hit.isMutual, isCollab: hit.isCollab, x: hit.sx, y: hit.sy });
+      setTooltip({ id: hit.id, name: hit.name, role: hit.role, skills: hit.skills, primarySkill: hit.primarySkill, isMutual: hit.isMutual, isCollab: hit.isCollab, x: hit.sx, y: hit.sy });
       canvas.style.cursor = "pointer";
     } else {
       setTooltip(null);
@@ -479,6 +538,7 @@ export default function NetworkGraph3D({ users, applications, projects = [], aut
 
   const handleWheel = useCallback((e) => {
     e.preventDefault();
+    lastInteractRef.current = Date.now();
     velocityRef.current = { vrX: 0, vrY: 0 };
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -486,8 +546,8 @@ export default function NetworkGraph3D({ users, applications, projects = [], aut
     applyZoom(e.deltaY < 0 ? 1.1 : 0.9, e.clientX - rect.left, e.clientY - rect.top);
   }, [applyZoom]);
 
-  // Touch: 1 finger = 3D rotate, 2 finger = pinch zoom + twist
   const handleTouchStart = useCallback((e) => {
+    lastInteractRef.current = Date.now();
     velocityRef.current = { vrX: 0, vrY: 0 };
     if (e.touches.length === 1) {
       interactRef.current = { mode: "rotate", startX: e.touches[0].clientX, startY: e.touches[0].clientY, originView: { ...viewRef.current }, panMoved: false };
@@ -502,6 +562,7 @@ export default function NetworkGraph3D({ users, applications, projects = [], aut
 
   const handleTouchMove = useCallback((e) => {
     e.preventDefault();
+    lastInteractRef.current = Date.now();
     const { mode, startX, startY, originView } = interactRef.current;
 
     if (e.touches.length === 1 && mode === "rotate") {
@@ -546,12 +607,15 @@ export default function NetworkGraph3D({ users, applications, projects = [], aut
     };
   }, [handleWheel, handleTouchMove]);
 
+  const panelBg = dark ? "rgba(10,10,10,0.78)" : "rgba(255,255,255,0.88)";
+  const panelBorder = dark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)";
+  const mutedColor = dark ? "rgba(255,255,255,0.4)" : "rgba(0,0,0,0.4)";
   const btnStyle = {
-    width: 32, height: 32, borderRadius: 6, fontSize: 16, cursor: "pointer",
+    width: 22, height: 22, borderRadius: 4, fontSize: 13, cursor: "pointer",
     display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "monospace",
     background: dark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)",
-    border: `1px solid ${dark ? "rgba(255,255,255,0.14)" : "rgba(0,0,0,0.14)"}`,
-    color: dark ? "rgba(255,255,255,0.6)" : "rgba(0,0,0,0.6)",
+    border: `1px solid ${panelBorder}`,
+    color: mutedColor,
   };
 
   return (
@@ -571,84 +635,163 @@ export default function NetworkGraph3D({ users, applications, projects = [], aut
         style={{ display: "block", cursor: "grab", touchAction: "none" }}
       />
 
-      {/* Legend + controls — unified panel */}
+      {/* Left panel: legend + search + controls */}
       <div style={{
         position: "absolute", top: 12, left: 12,
-        background: dark ? "rgba(10,10,10,0.72)" : "rgba(255,255,255,0.82)",
+        background: panelBg,
         backdropFilter: "blur(10px)",
-        border: `1px solid ${dark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)"}`,
+        border: `1px solid ${panelBorder}`,
         borderRadius: 8, padding: "10px 12px",
         display: "flex", flexDirection: "column", gap: 5,
-        minWidth: 130,
+        minWidth: 148,
       }}>
-        {/* Skill clusters */}
-        {Object.entries(SKILL_CLUSTERS).map(([name, { color }]) => (
-          <div key={name} style={{ display: "flex", alignItems: "center", gap: 7 }}>
-            <div style={{ width: 6, height: 6, borderRadius: "50%", background: color, flexShrink: 0, opacity: 0.9 }} />
-            <span style={{ fontSize: 9, color: dark ? "rgba(255,255,255,0.45)" : "rgba(0,0,0,0.45)", fontFamily: "monospace" }}>{name}</span>
-          </div>
-        ))}
+        {/* Search */}
+        <input
+          value={searchQuery}
+          onChange={e => setSearchQuery(e.target.value)}
+          placeholder="search people..."
+          style={{
+            background: dark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.05)",
+            border: `1px solid ${panelBorder}`,
+            borderRadius: 4, padding: "4px 7px",
+            fontSize: 9, color: dark ? "rgba(255,255,255,0.7)" : "rgba(0,0,0,0.7)",
+            fontFamily: "monospace", outline: "none", width: "100%",
+            boxSizing: "border-box",
+          }}
+        />
 
-        {/* Divider */}
-        <div style={{ borderTop: `1px solid ${dark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)"}`, margin: "2px 0" }} />
+        <div style={{ borderTop: `1px solid ${dark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)"}`, margin: "1px 0" }} />
+
+        {/* Skill cluster filters */}
+        {Object.entries(SKILL_CLUSTERS).map(([name, { color }]) => {
+          const active = filterCluster === name;
+          return (
+            <button
+              key={name}
+              onClick={() => setFilterCluster(active ? null : name)}
+              style={{
+                display: "flex", alignItems: "center", gap: 7,
+                background: active ? `rgba(${hexToRgb(color)},0.15)` : "none",
+                border: active ? `1px solid rgba(${hexToRgb(color)},0.4)` : "1px solid transparent",
+                borderRadius: 4, padding: "2px 4px", cursor: "pointer",
+                transition: "all 0.15s",
+              }}>
+              <div style={{ width: 6, height: 6, borderRadius: "50%", background: color, flexShrink: 0, opacity: active ? 1 : 0.9 }} />
+              <span style={{ fontSize: 9, color: active ? (dark ? "rgba(255,255,255,0.75)" : "rgba(0,0,0,0.75)") : mutedColor, fontFamily: "monospace" }}>{name}</span>
+            </button>
+          );
+        })}
+
+        <div style={{ borderTop: `1px solid ${dark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)"}`, margin: "1px 0" }} />
 
         {/* Line types */}
         <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
           <div style={{ width: 14, height: 0, borderTop: `2px solid ${dark ? "rgba(255,255,255,0.6)" : "rgba(0,0,0,0.5)"}`, flexShrink: 0 }} />
-          <span style={{ fontSize: 9, color: dark ? "rgba(255,255,255,0.4)" : "rgba(0,0,0,0.4)", fontFamily: "monospace" }}>collaborator</span>
+          <span style={{ fontSize: 9, color: mutedColor, fontFamily: "monospace" }}>collaborator</span>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
           <div style={{ width: 14, height: 0, borderTop: `1px solid ${dark ? "rgba(255,255,255,0.2)" : "rgba(0,0,0,0.18)"}`, flexShrink: 0 }} />
-          <span style={{ fontSize: 9, color: dark ? "rgba(255,255,255,0.4)" : "rgba(0,0,0,0.4)", fontFamily: "monospace" }}>mutual follow</span>
+          <span style={{ fontSize: 9, color: mutedColor, fontFamily: "monospace" }}>mutual follow</span>
         </div>
 
-        {/* Divider */}
-        <div style={{ borderTop: `1px solid ${dark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)"}`, margin: "2px 0" }} />
+        <div style={{ borderTop: `1px solid ${dark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)"}`, margin: "1px 0" }} />
 
-        {/* Controls row */}
+        {/* Controls */}
         <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
           <button onClick={() => setShowMutualLines(v => !v)}
-            style={{ flex: 1, background: "none", border: `1px solid ${dark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)"}`, borderRadius: 4, padding: "3px 6px", fontSize: 9, color: dark ? "rgba(255,255,255,0.4)" : "rgba(0,0,0,0.4)", cursor: "pointer", fontFamily: "monospace" }}>
+            style={{ flex: 1, background: "none", border: `1px solid ${panelBorder}`, borderRadius: 4, padding: "3px 6px", fontSize: 9, color: mutedColor, cursor: "pointer", fontFamily: "monospace" }}>
             {showMutualLines ? "hide lines" : "show lines"}
           </button>
-          <button onClick={() => { const c = canvasRef.current; if (c) applyZoom(1.25, c.width/2, c.height/2); }}
-            style={{ ...btnStyle, width: 22, height: 22, fontSize: 13, borderRadius: 4 }}>+</button>
-          <button onClick={() => { const c = canvasRef.current; if (c) applyZoom(0.8, c.width/2, c.height/2); }}
-            style={{ ...btnStyle, width: 22, height: 22, fontSize: 13, borderRadius: 4 }}>−</button>
-          <button onClick={resetView}
-            style={{ ...btnStyle, width: 22, height: 22, fontSize: 10, borderRadius: 4 }} title="Reset">⊙</button>
+          <button onClick={() => { const c = canvasRef.current; if (c) applyZoom(1.25, c.width/2, c.height/2); }} style={btnStyle}>+</button>
+          <button onClick={() => { const c = canvasRef.current; if (c) applyZoom(0.8, c.width/2, c.height/2); }} style={btnStyle}>−</button>
+          <button onClick={resetView} style={{ ...btnStyle, fontSize: 10 }} title="Reset">⊙</button>
         </div>
 
-        {/* Hint text — fades after 4s */}
         <div style={{ fontSize: 8, color: dark ? "rgba(255,255,255,0.2)" : "rgba(0,0,0,0.22)", fontFamily: "monospace", lineHeight: 1.6, opacity: hintsVisible ? 1 : 0, transition: "opacity 1s ease" }}>
           drag to rotate · scroll to zoom
         </div>
+      </div>
+
+      {/* Stats overlay — top right */}
+      <div style={{
+        position: "absolute", top: 12, right: 12,
+        background: panelBg,
+        backdropFilter: "blur(10px)",
+        border: `1px solid ${panelBorder}`,
+        borderRadius: 8, padding: "8px 12px",
+        display: "flex", flexDirection: "column", gap: 4,
+        minWidth: 110,
+      }}>
+        <div style={{ fontSize: 8, color: mutedColor, fontFamily: "monospace", letterSpacing: "1.5px", marginBottom: 2 }}>YOUR NETWORK</div>
+        {[
+          ["people", stats.total],
+          ["collaborators", stats.collabs],
+          ["mutual follows", stats.mutuals],
+        ].map(([label, val]) => (
+          <div key={label} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
+            <span style={{ fontSize: 9, color: mutedColor, fontFamily: "monospace" }}>{label}</span>
+            <span style={{ fontSize: 11, color: dark ? "rgba(255,255,255,0.75)" : "rgba(0,0,0,0.75)", fontFamily: "monospace", fontWeight: 600 }}>{val}</span>
+          </div>
+        ))}
       </div>
 
       {/* Tooltip */}
       {tooltip && (
         <div style={{
           position: "absolute",
-          left: Math.min(tooltip.x + 14, dims.w - 160),
+          left: Math.min(tooltip.x + 14, dims.w - 180),
           top: Math.max(8, tooltip.y - 20),
-          background: dark ? "rgba(18,18,18,0.95)" : "rgba(255,255,255,0.97)",
+          background: dark ? "rgba(18,18,18,0.97)" : "rgba(255,255,255,0.98)",
           backdropFilter: "blur(8px)",
           border: `1px solid ${dark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.1)"}`,
           borderRadius: 8, padding: "9px 13px",
-          pointerEvents: "none", fontSize: 11,
+          pointerEvents: "auto", fontSize: 11,
           color: dark ? "#fff" : "#000",
           fontFamily: "monospace", whiteSpace: "nowrap",
           boxShadow: dark ? "0 4px 20px rgba(0,0,0,0.5)" : "0 4px 20px rgba(0,0,0,0.1)",
+          minWidth: 150,
         }}>
           <div style={{ fontWeight: 600, letterSpacing: "-0.3px" }}>{tooltip.name}</div>
           {tooltip.role && <div style={{ opacity: 0.45, fontSize: 10, marginTop: 2 }}>{tooltip.role}</div>}
+          {/* Top skills */}
+          {tooltip.skills?.length > 0 && (
+            <div style={{ marginTop: 5, display: "flex", gap: 4, flexWrap: "wrap" }}>
+              {tooltip.skills.slice(0, 3).map(s => (
+                <span key={s} style={{
+                  fontSize: 8, padding: "2px 6px", borderRadius: 3,
+                  background: dark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)",
+                  color: SKILL_META[s]?.color || (dark ? "rgba(255,255,255,0.5)" : "rgba(0,0,0,0.5)"),
+                }}>{s}</span>
+              ))}
+            </div>
+          )}
           {(tooltip.isCollab || tooltip.isMutual) && (
-            <div style={{ fontSize: 9, marginTop: 4, opacity: 0.5, display: "flex", alignItems: "center", gap: 4 }}>
+            <div style={{ fontSize: 9, marginTop: 5, opacity: 0.5, display: "flex", alignItems: "center", gap: 4 }}>
               <span style={{ width: 5, height: 5, borderRadius: "50%", background: tooltip.isCollab ? "#22c55e" : "#60a5fa", display: "inline-block" }} />
               {tooltip.isCollab ? "collaborator" : "mutual follow"}
             </div>
           )}
-          <div style={{ fontSize: 9, marginTop: 5, opacity: 0.35 }}>click to view profile →</div>
+          <div style={{ marginTop: 7, display: "flex", gap: 5 }}>
+            <button
+              onClick={() => { const user = users.find(u => u.id === tooltip.id); if (user) onNodeClick(user); }}
+              style={{ flex: 1, background: dark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.07)", border: "none", borderRadius: 4, padding: "4px 0", fontSize: 9, color: dark ? "rgba(255,255,255,0.7)" : "rgba(0,0,0,0.6)", cursor: "pointer", fontFamily: "monospace" }}>
+              view profile →
+            </button>
+            {onFollow && (
+              <button
+                onClick={(e) => { e.stopPropagation(); onFollow(tooltip.id); }}
+                style={{
+                  flex: 1, border: "none", borderRadius: 4, padding: "4px 0", fontSize: 9,
+                  cursor: "pointer", fontFamily: "monospace",
+                  background: following.includes(tooltip.id)
+                    ? (dark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)")
+                    : (dark ? "rgba(255,255,255,0.18)" : "rgba(0,0,0,0.12)"),
+                  color: dark ? "rgba(255,255,255,0.8)" : "rgba(0,0,0,0.7)",
+                }}>
+                {following.includes(tooltip.id) ? "unfollow" : "follow"}
+              </button>
+            )}
+          </div>
         </div>
       )}
     </div>

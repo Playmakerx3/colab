@@ -3651,6 +3651,7 @@ const setViewingProfile = (user) => {
               dark={dark}
               following={following}
               followers={followers}
+              onFollow={handleFollow}
               onNodeClick={(user) => {
                 setViewingProfile(user);
               }}
