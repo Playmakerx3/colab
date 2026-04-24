@@ -4854,7 +4854,6 @@ const setViewingProfile = (user) => {
                 {/* Hero header */}
                 <div style={{ marginBottom: 24 }}>
                   <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px", marginBottom: 10 }}>Builder Feed</div>
-                  <h2 style={{ fontSize: "clamp(26px, 4vw, 44px)", fontWeight: 400, lineHeight: 1.05, letterSpacing: "-2px", marginBottom: 10, color: text }}>The builder feed.</h2>
                 </div>
 
                 {shouldShowOnboardingChecklist && (
