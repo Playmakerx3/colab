@@ -4532,6 +4532,7 @@ const setViewingProfile = (user) => {
           {showFirstTimeGuide && renderFirstTimeGuide()}
 
           {/* Top-level explore tabs: feed | projects */}
+          <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px", marginBottom: 16 }}>Builder Feed</div>
           <div style={{ borderBottom: `1px solid ${border}`, marginBottom: 28, display: "flex" }}>
             {[
               { id: "feed", label: "feed" },
@@ -4851,12 +4852,7 @@ const setViewingProfile = (user) => {
                 {/* Left: main feed column */}
                 <div style={{ flex: 1, minWidth: 0 }}>
 
-                {/* Hero header */}
-                <div style={{ marginBottom: 24 }}>
-                  <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px", marginBottom: 10 }}>Builder Feed</div>
-                </div>
-
-                {shouldShowOnboardingChecklist && (
+{shouldShowOnboardingChecklist && (
                   <div style={{ marginBottom: 20, border: `1px solid ${border}`, background: bg2, borderRadius: 10, padding: "14px 16px" }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
                       <div style={{ fontSize: 12, color: text }}>Get started</div>
