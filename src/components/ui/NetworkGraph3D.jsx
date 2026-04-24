@@ -769,18 +769,16 @@ export default function NetworkGraph3D({ users, applications, projects = [], aut
               style={{ flex: 1, background: dark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.07)", border: "none", borderRadius: 4, padding: "4px 0", fontSize: 9, color: dark ? "rgba(255,255,255,0.7)" : "rgba(0,0,0,0.6)", cursor: "pointer", fontFamily: "monospace" }}>
               view profile →
             </button>
-            {onFollow && (
+            {onFollow && !following.includes(tooltip.id) && (
               <button
                 onClick={(e) => { e.stopPropagation(); onFollow(tooltip.id); }}
                 style={{
                   flex: 1, border: "none", borderRadius: 4, padding: "4px 0", fontSize: 9,
                   cursor: "pointer", fontFamily: "monospace",
-                  background: following.includes(tooltip.id)
-                    ? (dark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)")
-                    : (dark ? "rgba(255,255,255,0.18)" : "rgba(0,0,0,0.12)"),
+                  background: dark ? "rgba(255,255,255,0.18)" : "rgba(0,0,0,0.12)",
                   color: dark ? "rgba(255,255,255,0.8)" : "rgba(0,0,0,0.7)",
                 }}>
-                {following.includes(tooltip.id) ? "unfollow" : "follow"}
+                follow
               </button>
             )}
           </div>
