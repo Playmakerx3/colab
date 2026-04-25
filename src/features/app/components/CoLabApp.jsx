@@ -1278,6 +1278,7 @@ function CoLab() {
   const [showApplicationForm, setShowApplicationForm] = useState(null);
   const [showNewDm, setShowNewDm] = useState(false);
   const [newDmSearch, setNewDmSearch] = useState("");
+  const [dmSearchQuery, setDmSearchQuery] = useState("");
   const [showAddPortfolio, setShowAddPortfolio] = useState(false);
   const [newPortfolioItem, setNewPortfolioItem] = useState({ title: "", description: "", url: "" });
   const [editingTaskId, setEditingTaskId] = useState(null);
@@ -5838,12 +5839,27 @@ const setViewingProfile = (user) => {
               <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px" }}>MESSAGES</div>
               <button className="hb" onClick={() => { setShowNewDm(true); setNewDmSearch(""); }} style={{ background: "none", border: `1px solid ${border}`, borderRadius: 5, width: 22, height: 22, cursor: "pointer", fontSize: 14, color: textMuted, fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center", lineHeight: 1 }}>+</button>
             </div>
+            {dmThreads.length > 0 && (
+              <div style={{ padding: "8px 12px", borderBottom: `1px solid ${border}` }}>
+                <input
+                  placeholder="search..."
+                  value={dmSearchQuery || ""}
+                  onChange={e => setDmSearchQuery(e.target.value)}
+                  style={{ ...inputStyle, fontSize: 11, padding: "5px 9px", width: "100%", boxSizing: "border-box" }}
+                />
+              </div>
+            )}
             {dmThreads.length === 0
               ? <div style={{ padding: "24px 20px", fontSize: 12, color: textMuted, lineHeight: 1.7 }}>
                   No conversations yet.<br />
                   <button className="hb" onClick={() => { setShowNewDm(true); setNewDmSearch(""); }} style={{ background: "none", border: "none", color: text, cursor: "pointer", fontFamily: "inherit", fontSize: 12, textDecoration: "underline", padding: 0 }}>+ new message</button>
                 </div>
-              : dmThreads.map(thread => {
+              : dmThreads.filter(thread => {
+                  if (!dmSearchQuery?.trim()) return true;
+                  const otherId = thread.user_a === authUser?.id ? thread.user_b : thread.user_a;
+                  const other = users.find(u => u.id === otherId);
+                  return other?.name?.toLowerCase().includes(dmSearchQuery.toLowerCase());
+                }).map(thread => {
                   const otherId = thread.user_a === authUser?.id ? thread.user_b : thread.user_a;
                   const other = users.find(u => u.id === otherId);
                   if (!other) return null;
@@ -5956,13 +5972,30 @@ const setViewingProfile = (user) => {
                 )}
               </>
             ) : (
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "center", flex: 1, color: textMuted, fontSize: 13 }}>
-                {dmThreads.length > 0 ? "select a conversation →" : (
-                  <div style={{ textAlign: "center", lineHeight: 1.7 }}>
-                    message someone from their profile to get started.<br />
-                    {(myCollaborators || []).slice(0, 3).map((c) => (
-                      <button key={c.user.id} className="hb" onClick={() => openDm(c.user)} style={{ background: "none", border: "none", color: text, textDecoration: "underline", margin: "0 4px", fontFamily: "inherit", fontSize: 12 }}>{c.user.name}</button>
-                    ))}
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", flex: 1, gap: 12 }}>
+                {dmThreads.length > 0 ? (
+                  <div style={{ textAlign: "center" }}>
+                    <div style={{ fontSize: 13, color: textMuted, marginBottom: 8 }}>Select a conversation</div>
+                    <div style={{ fontSize: 11, color: textMuted, opacity: 0.6 }}>or start a new one →</div>
+                  </div>
+                ) : (
+                  <div style={{ textAlign: "center" }}>
+                    <div style={{ fontSize: 13, color: text, marginBottom: 6 }}>No messages yet</div>
+                    <div style={{ fontSize: 12, color: textMuted, marginBottom: 16, lineHeight: 1.6 }}>Message your collaborators or anyone on CoLab</div>
+                    {(myCollaborators || []).slice(0, 3).length > 0 && (
+                      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                        <div style={{ fontSize: 10, color: textMuted, letterSpacing: "1.5px", marginBottom: 4 }}>YOUR COLLABORATORS</div>
+                        {(myCollaborators || []).slice(0, 3).map((c) => (
+                          <button key={c.user.id} className="hb" onClick={() => openDm(c.user)}
+                            style={{ background: bg2, border: `1px solid ${border}`, borderRadius: 6, padding: "7px 14px", color: text, cursor: "pointer", fontFamily: "inherit", fontSize: 12, display: "flex", alignItems: "center", gap: 8 }}>
+                            <Avatar initials={initials(c.user.name)} src={c.user.avatar_url} size={22} dark={dark} />
+                            {c.user.name}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    <button className="hb" onClick={() => { setShowNewDm(true); setNewDmSearch(""); }}
+                      style={{ ...btnP, marginTop: 14, fontSize: 12 }}>+ new message</button>
                   </div>
                 )}
               </div>
@@ -6122,12 +6155,12 @@ const setViewingProfile = (user) => {
                     </div>;
               })()}
 
-              {/* Pending notifications */}
-              {notifications.length > 0 && (
+              {/* Pending notifications — project-relevant only */}
+              {notifications.filter(n => n.type !== "follow").length > 0 && (
                 <div>
                   <div style={{ fontSize: 10, color: textMuted, letterSpacing: "1.5px", marginBottom: 14 }}>NEEDS ATTENTION</div>
                   <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                    {notifications.slice(0, 3).map(n => (
+                    {notifications.filter(n => n.type !== "follow").slice(0, 3).map(n => (
                       <div key={n.id} style={{ background: bg2, border: `1px solid ${border}`, borderRadius: 8, padding: "10px 14px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
                         <div style={{ minWidth: 0 }}>
                           <div style={{ fontSize: 12, color: text, marginBottom: 1 }}>{n.text}</div>
