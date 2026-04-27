@@ -1519,16 +1519,11 @@ function CoLab() {
       return;
     }
     if (n.type === "application" || n.type === "application_status" || key === "applications") {
-      await openProjectWorkspace(n.project_id || n.projectId, "applicants");
+      await openProjectWorkspace(n.project_id || n.projectId, "team");
       return;
     }
     if (n.type === "like" || n.type === "comment" || String(n.type || "").includes("reply") || n.postId || n.post_id) {
       await focusFeedPost(n.postId || n.post_id);
-      setShowNotifications(false);
-      return;
-    }
-    if (String(n.type || "").includes("community")) {
-      setAppScreen("communities");
       setShowNotifications(false);
       return;
     }
