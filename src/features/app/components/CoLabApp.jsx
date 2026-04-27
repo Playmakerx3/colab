@@ -4535,15 +4535,16 @@ const setViewingProfile = (user) => {
 
           {/* Top-level explore tabs: feed | projects */}
           <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px", marginBottom: 16 }}>{exploreTab === "projects" ? "OPEN PROJECTS" : "BUILDER FEED"}</div>
-          <div style={{ borderBottom: `1px solid ${border}`, marginBottom: 28, display: "flex", gap: 0, alignItems: "center" }}>
+          <div style={{ display: "flex", flexDirection: "column", marginBottom: 28 }}>
             {[["feed", "feed"], ["projects", "projects"]].map(([id, label]) => (
               <button key={id} onClick={() => setExploreTab(id)} style={{
                 background: "none", border: "none",
-                borderBottom: exploreTab === id ? `1px solid ${text}` : "1px solid transparent",
+                borderBottom: `1px solid ${border}`,
                 color: exploreTab === id ? text : textMuted,
-                padding: "8px 0", marginRight: 24,
+                padding: "10px 0", textAlign: "left",
                 fontSize: 12, cursor: "pointer", fontFamily: "inherit",
-                transition: "all 0.15s", whiteSpace: "nowrap",
+                transition: "color 0.15s", whiteSpace: "nowrap",
+                fontWeight: exploreTab === id ? 500 : 400,
               }}>
                 {label}
               </button>
