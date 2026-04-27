@@ -3556,7 +3556,7 @@ function CoLab() {
   const renderNetwork = () => {
 
     return (
-      <div className="pad fu" style={{ width: "100%", padding: "48px 32px" }}>
+      <div className="pad fu" style={{ width: "100%", padding: "28px 32px" }}>
         <div style={{ marginBottom: 28 }}>
           <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px", marginBottom: 10 }}>NETWORK</div>
           <h2 style={{ fontSize: "clamp(24px, 4vw, 36px)", fontWeight: 400, letterSpacing: "-1.5px", color: text, marginBottom: 8 }}>Your network.</h2>
@@ -6238,7 +6238,7 @@ function CoLab() {
 
       {/* WORKSPACE */}
       {!viewFullProfile && appScreen === "workspace" && !activeProject && (
-        <div className="pad fu" style={{ width: "100%", padding: "44px 32px" }}>
+        <div className="pad fu" style={{ width: "100%", padding: "28px 32px" }}>
           {showFirstTimeGuide && renderFirstTimeGuide()}
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 32, flexWrap: "wrap", gap: 14 }}>
             <div>
