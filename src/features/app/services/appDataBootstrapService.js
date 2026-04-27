@@ -108,3 +108,17 @@ export async function fetchTopCommunityPosts(communityIds) {
     return [];
   }
 }
+
+export async function fetchAllCommunityTrending(limit = 30) {
+  try {
+    const { data } = await supabase
+      .from("community_posts")
+      .select("*, communities(name, emoji, slug)")
+      .order("upvotes", { ascending: false })
+      .order("created_at", { ascending: false })
+      .limit(limit);
+    return data || [];
+  } catch (e) {
+    return [];
+  }
+}

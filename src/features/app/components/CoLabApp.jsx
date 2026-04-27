@@ -39,7 +39,7 @@ import { useAuthBootstrap } from "../../../hooks/useAuthBootstrap";
 import { signIn, signOut, signUp } from "../../../services/authService";
 import { useProfileState } from "../../profile/hooks/useProfileState";
 import { useAppDataBootstrap } from "../hooks/useAppDataBootstrap";
-import { fetchCommunityPosts, fetchThreadComments, fetchTopCommunityPosts } from "../services/appDataBootstrapService";
+import { fetchCommunityPosts, fetchThreadComments, fetchTopCommunityPosts, fetchAllCommunityTrending } from "../services/appDataBootstrapService";
 import { useRealtimeSubscriptions } from "../../realtime/hooks/useRealtimeSubscriptions";
 import { useMessaging } from "../../messaging/hooks/useMessaging";
 import { useApplications } from "../../applications/hooks/useApplications";
@@ -1243,6 +1243,8 @@ function CoLab() {
   const [editingPostContent, setEditingPostContent] = useState("");
   const [communityPostPage, setCommunityPostPage] = useState(1);
   const [topCommunityPosts, setTopCommunityPosts] = useState([]);
+  const [allTrendingCommunityPosts, setAllTrendingCommunityPosts] = useState([]);
+  const [allTrendingLoading, setAllTrendingLoading] = useState(false);
   const [projectsSubTab, setProjectsSubTab] = useState("for-you");
   const [networkTab, setNetworkTab] = useState("graph");
   const [discoverSkillFilter, setDiscoverSkillFilter] = useState([]);
@@ -2658,6 +2660,17 @@ function CoLab() {
     if (joinedCommunityIds.length === 0) { setTopCommunityPosts([]); return; }
     fetchTopCommunityPosts(joinedCommunityIds).then(posts => setTopCommunityPosts(posts));
   }, [joinedCommunityIds.join(",")]);
+
+  // Load all-community trending when communities screen opens
+  useEffect(() => {
+    if (appScreen !== "communities") return;
+    if (allTrendingCommunityPosts.length > 0) return; // already loaded
+    setAllTrendingLoading(true);
+    fetchAllCommunityTrending(40).then(posts => {
+      setAllTrendingCommunityPosts(posts);
+      setAllTrendingLoading(false);
+    });
+  }, [appScreen]);
 
   useEffect(() => {
     if (!activeProject?.id) return;
@@ -5861,11 +5874,40 @@ function CoLab() {
             {/* Main area */}
             <div className="communities-main" style={{ flex: 1, overflowY: "auto", minWidth: 0 }}>
               {!activeCommunity ? (
-                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100%", gap: 12 }}>
-                  <button className="hb community-drawer-toggle" onClick={() => setShowCommunityDrawer(true)} style={{ background: "none", border: `1px solid ${border}`, borderRadius: 8, padding: "6px 10px", fontSize: 11, cursor: "pointer", color: textMuted, fontFamily: "inherit" }}>communities</button>
-                  <div style={{ fontSize: 32 }}>...</div>
-                  <div style={{ fontSize: 14, color: textMuted }}>Select a community to browse threads</div>
-                  {joinedCommunities.length === 0 && <div style={{ fontSize: 12, color: textMuted, opacity: 0.6 }}>Join a community on the left to get started</div>}
+                <div style={{ maxWidth: 720, margin: "0 auto", padding: "28px 32px" }}>
+                  <button className="hb community-drawer-toggle" onClick={() => setShowCommunityDrawer(true)} style={{ background: "none", border: `1px solid ${border}`, borderRadius: 8, padding: "6px 10px", fontSize: 11, cursor: "pointer", color: textMuted, fontFamily: "inherit", marginBottom: 24 }}>communities</button>
+                  <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px", marginBottom: 20 }}>TRENDING ACROSS COMMUNITIES</div>
+                  {allTrendingLoading ? <Spinner dark={dark} /> : allTrendingCommunityPosts.length === 0 ? (
+                    <div style={{ fontSize: 13, color: textMuted, padding: "40px 0", textAlign: "center" }}>No threads yet. Be the first to post in a community.</div>
+                  ) : (
+                    <div style={{ display: "flex", flexDirection: "column" }}>
+                      {allTrendingCommunityPosts.map((post) => {
+                        const commName = post.communities?.name || "";
+                        const commSlug = post.communities?.slug || "";
+                        const commEmoji = COMMUNITY_SYMBOLS[commSlug] || post.communities?.emoji || "◈";
+                        const comm = communities.find(x => x.id === post.community_id);
+                        return (
+                          <div key={post.id}
+                            onClick={() => { if (comm) loadCommunity(comm); }}
+                            style={{ padding: "16px 0", borderBottom: `1px solid ${border}`, cursor: comm ? "pointer" : "default" }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                              <span style={{ fontSize: 12 }}>{commEmoji}</span>
+                              <span style={{ fontSize: 10, color: textMuted, letterSpacing: "0.5px" }}>{commName}</span>
+                              <span style={{ fontSize: 10, color: textMuted, opacity: 0.5 }}>·</span>
+                              <span style={{ fontSize: 10, color: textMuted }}>{relativeTime(post.created_at)}</span>
+                            </div>
+                            <div style={{ fontSize: 14, color: text, fontWeight: 500, marginBottom: 4, lineHeight: 1.4 }}>{post.title}</div>
+                            {post.content && <div style={{ fontSize: 12, color: textMuted, lineHeight: 1.6, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{post.content}</div>}
+                            <div style={{ display: "flex", gap: 14, marginTop: 8 }}>
+                              <span style={{ fontSize: 11, color: textMuted }}>{post.upvotes || 0} votes</span>
+                              <span style={{ fontSize: 11, color: textMuted }}>{post.comment_count || 0} replies</span>
+                              <span style={{ fontSize: 11, color: textMuted }}>{post.user_name}</span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               ) : activeThread ? (
                 /* Thread detail */
