@@ -18,7 +18,6 @@ export async function fetchAppBootstrapData(userId) {
     { data: mentionNotifs },
     { data: notifs },
     { data: reviewsData },
-    { data: mvpData },
   ] = await Promise.all([
     supabase.from("projects").select("*").order("created_at", { ascending: false }),
     supabase.from("tasks").select("*"),
@@ -35,8 +34,16 @@ export async function fetchAppBootstrapData(userId) {
     supabase.from("mention_notifications").select("*").eq("user_id", userId).eq("read", false).order("created_at", { ascending: false }),
     supabase.from("notifications").select("*").eq("user_id", userId).eq("read", false).order("created_at", { ascending: false }),
     supabase.from("team_reviews").select("*"),
-    supabase.from("project_mvps").select("*"),
   ]);
+
+  // MVP awards — fetched separately so missing table never breaks core load
+  let mvpData = [];
+  try {
+    const { data: mvpRows } = await supabase.from("project_mvps").select("*");
+    mvpData = mvpRows || [];
+  } catch (e) {
+    console.warn("project_mvps table not yet available — run the SQL migration.", e);
+  }
 
   // Communities data — fetched separately so a missing table never breaks core load
   let communitiesData = [], myMembershipsData = [], myVotesData = [], myDownvotesData = [];
