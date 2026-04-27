@@ -309,7 +309,7 @@ export default function NetworkGraph3D({ users, applications, projects = [], aut
       const gridStep = 48;
       const gridCols = Math.ceil(w / gridStep) + 2;
       const gridRows = Math.ceil(h / gridStep) + 2;
-      ctx.fillStyle = dark ? "rgba(255,255,255,0.045)" : "rgba(0,0,0,0.055)";
+      ctx.fillStyle = dark ? "rgba(255,255,255,0.045)" : "rgba(0,0,0,0.12)";
       for (let r = -1; r < gridRows; r++) {
         for (let c = -1; c < gridCols; c++) {
           const wx = (c * gridStep) - cx;
@@ -329,7 +329,7 @@ export default function NetworkGraph3D({ users, applications, projects = [], aut
           const fontSize = Math.max(8, Math.round(Math.min(w, h) * 0.014 * pd * zoom));
           ctx.font = `${fontSize}px -apple-system, monospace`;
           ctx.textAlign = "center";
-          ctx.fillStyle = dark ? `rgba(${hexToRgb(color)},0.08)` : `rgba(${hexToRgb(color)},0.1)`;
+          ctx.fillStyle = dark ? `rgba(${hexToRgb(color)},0.08)` : `rgba(${hexToRgb(color)},0.18)`;
           ctx.fillText(name.toUpperCase(), sx, sy);
         });
       }
@@ -357,7 +357,7 @@ export default function NetworkGraph3D({ users, applications, projects = [], aut
         if (!s || !t) return;
         const dimmed = isDimmed(t);
         ctx.beginPath(); ctx.moveTo(s.sx, s.sy); ctx.lineTo(t.sx, t.sy);
-        ctx.strokeStyle = dark ? `rgba(255,255,255,${dimmed ? 0.1 : 0.6})` : `rgba(0,0,0,${dimmed ? 0.04 : 0.18})`;
+        ctx.strokeStyle = dark ? `rgba(255,255,255,${dimmed ? 0.1 : 0.6})` : `rgba(0,0,0,${dimmed ? 0.08 : 0.45})`;
         ctx.lineWidth = 1; ctx.setLineDash([]); ctx.stroke();
       });
 
@@ -368,7 +368,7 @@ export default function NetworkGraph3D({ users, applications, projects = [], aut
           if (!s || !t) return;
           const dimmed = isDimmed(t);
           ctx.beginPath(); ctx.moveTo(s.sx, s.sy); ctx.lineTo(t.sx, t.sy);
-          ctx.strokeStyle = dark ? `rgba(255,255,255,${dimmed ? 0.05 : 0.28})` : `rgba(0,0,0,${dimmed ? 0.02 : 0.08})`;
+          ctx.strokeStyle = dark ? `rgba(255,255,255,${dimmed ? 0.05 : 0.28})` : `rgba(0,0,0,${dimmed ? 0.04 : 0.22})`;
           ctx.lineWidth = 0.75; ctx.setLineDash([3, 4]); ctx.stroke();
           ctx.setLineDash([]);
         });
@@ -384,7 +384,7 @@ export default function NetworkGraph3D({ users, applications, projects = [], aut
         if (n.isMe) {
           // Clean solid node — single subtle outer ring, solid fill
           ctx.beginPath(); ctx.arc(n.sx, n.sy, n.sr * 1.9, 0, Math.PI * 2);
-          ctx.strokeStyle = dark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.08)";
+          ctx.strokeStyle = dark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.18)";
           ctx.lineWidth = 1; ctx.setLineDash([]); ctx.stroke();
           ctx.beginPath(); ctx.arc(n.sx, n.sy, n.sr, 0, Math.PI * 2);
           ctx.fillStyle = meColor; ctx.fill();
@@ -397,7 +397,7 @@ export default function NetworkGraph3D({ users, applications, projects = [], aut
           // Search highlight
           if (isSearchHit) {
             ctx.beginPath(); ctx.arc(n.sx, n.sy, n.sr * 2.4, 0, Math.PI * 2);
-            ctx.strokeStyle = `rgba(${rgb},${dark ? 0.5 : 0.4})`;
+            ctx.strokeStyle = `rgba(${rgb},${dark ? 0.5 : 0.7})`;
             ctx.lineWidth = 1; ctx.setLineDash([3, 3]); ctx.stroke();
             ctx.setLineDash([]);
           }
@@ -600,7 +600,7 @@ export default function NetworkGraph3D({ users, applications, projects = [], aut
   }, [handleWheel, handleTouchMove]);
 
   const panelBg = dark ? "rgba(10,10,10,0.78)" : "rgba(255,255,255,0.88)";
-  const panelBorder = dark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)";
+  const panelBorder = dark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.18)";
   const mutedColor = dark ? "rgba(255,255,255,0.4)" : "rgba(0,0,0,0.4)";
   const btnStyle = {
     width: 22, height: 22, borderRadius: 4, fontSize: 13, cursor: "pointer",
@@ -678,11 +678,11 @@ export default function NetworkGraph3D({ users, applications, projects = [], aut
 
         {/* Line types */}
         <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
-          <div style={{ width: 14, height: 0, borderTop: `2px solid ${dark ? "rgba(255,255,255,0.6)" : "rgba(0,0,0,0.5)"}`, flexShrink: 0 }} />
+          <div style={{ width: 14, height: 0, borderTop: `2px solid ${dark ? "rgba(255,255,255,0.6)" : "rgba(0,0,0,0.75)"}`, flexShrink: 0 }} />
           <span style={{ fontSize: 9, color: mutedColor, fontFamily: "monospace" }}>collaborator</span>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
-          <div style={{ width: 14, height: 0, borderTop: `1px solid ${dark ? "rgba(255,255,255,0.2)" : "rgba(0,0,0,0.18)"}`, flexShrink: 0 }} />
+          <div style={{ width: 14, height: 0, borderTop: `1px solid ${dark ? "rgba(255,255,255,0.2)" : "rgba(0,0,0,0.4)"}`, flexShrink: 0 }} />
           <span style={{ fontSize: 9, color: mutedColor, fontFamily: "monospace" }}>mutual follow</span>
         </div>
 
