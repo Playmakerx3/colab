@@ -185,7 +185,7 @@ export function useProjectWorkspace({
           user_name: payload.owner_name,
           user_initials: payload.owner_initials,
           user_role: profile?.role || "",
-          content: `🚀 Just posted: ${payload.title}\n\n${snippet}\n\nLooking for collaborators — apply on CoLab.`,
+          content: `Just posted: ${payload.title}\n\n${snippet}\n\nLooking for collaborators — apply on CoLab.`,
           project_id: data.id,
           project_title: payload.title,
         });

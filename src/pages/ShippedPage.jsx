@@ -50,7 +50,7 @@ export default function ShippedPage({ projectId }) {
         <a href={`/p/${projectId}`} style={{ fontSize: 11, color: textMuted, textDecoration: "none" }}>view project →</a>
       </nav>
       <div style={{ maxWidth: 600, margin: "0 auto", padding: "80px 24px", textAlign: "center" }}>
-        <div style={{ fontSize: 48, marginBottom: 24 }}>🚀</div>
+        <div style={{ fontSize: 48, marginBottom: 24 }}></div>
         <div style={{ fontSize: 10, color: "#22c55e", letterSpacing: "3px", marginBottom: 16 }}>SHIPPED</div>
         <h1 style={{ fontSize: "clamp(24px, 5vw, 40px)", fontWeight: 400, letterSpacing: "-1.5px", lineHeight: 1.1, marginBottom: 16, color: text }}>{project.title}</h1>
         {owner && (
