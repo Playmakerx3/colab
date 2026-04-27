@@ -865,7 +865,7 @@ function PostCard({ post, ctx }) {
             animation: isLikePending ? "feedPulse 260ms ease-out" : "none",
           }}
         >
-          {isLiked ? "♥" : "♡"}
+          {isLiked ? "liked" : "like"}
           <span style={{ fontSize: 12, opacity: (post.like_count || 0) === 0 ? 0.35 : 1 }}>{post.like_count || 0}</span>
         </button>
         <button
@@ -885,7 +885,7 @@ function PostCard({ post, ctx }) {
             fontWeight: isReposted ? 500 : 400,
           }}
         >
-          ⇄
+          repost
           {(post.repost_count || 0) > 0 && <span style={{ fontSize: 12 }}>{post.repost_count}</span>}
         </button>
         <button
@@ -909,7 +909,7 @@ function PostCard({ post, ctx }) {
             animation: commentPulseIds.includes(post.id) ? "feedPulse 260ms ease-out" : "none",
           }}
         >
-          ◎ {comments.length > 0 ? <span>{comments.length}</span> : <span>{isOpen ? "hide" : "comment"}</span>}
+          {comments.length > 0 ? <span>{comments.length}</span> : <span>{isOpen ? "hide" : "comment"}</span>}
         </button>
         <button className="hb" onClick={copyPostLink} style={{ background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: 12, color: textMuted }}>
           ↗ share
@@ -930,7 +930,7 @@ function PostCard({ post, ctx }) {
                     <div style={{ background: bg2, border: `1px solid ${border}`, borderRadius: 10, padding: "8px 13px", flex: 1, minWidth: 0 }}>
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 3 }}>
                         <button onClick={() => cUser && setViewingProfile(cUser)} style={{ background: "none", border: "none", cursor: "pointer", padding: 0, fontSize: 11, fontWeight: 500, color: text, fontFamily: "inherit" }}>{c.user_name}</button>
-                        {isMyComment && <button className="hb" onClick={() => handleDeleteComment(c.id)} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontSize: 10, fontFamily: "inherit", opacity: 0.6 }}>✕</button>}
+                        {isMyComment && <button className="hb" onClick={() => handleDeleteComment(c.id)} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontSize: 10, fontFamily: "inherit", opacity: 0.6 }}>×</button>}
                       </div>
                       <div style={{ fontSize: 13, color: textMuted, lineHeight: 1.6 }}>{c.content}</div>
                     </div>
@@ -1101,7 +1101,7 @@ function BannerEditor({ pixels, onSave, onClose, dark, bg, border, text, textMut
             <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px", marginBottom: 4 }}>PROFILE BANNER</div>
             <div style={{ fontSize: 14, color: text }}>design your 8-bit banner</div>
           </div>
-          <button onClick={onClose} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontSize: 16, fontFamily: "inherit" }}>✕</button>
+          <button onClick={onClose} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontSize: 16, fontFamily: "inherit" }}>×</button>
         </div>
 
         {/* Preview */}
@@ -1244,7 +1244,7 @@ function CoLab() {
   const [communityPostPage, setCommunityPostPage] = useState(1);
   const [topCommunityPosts, setTopCommunityPosts] = useState([]);
   const [projectsSubTab, setProjectsSubTab] = useState("for-you");
-  const [networkTab, setNetworkTab] = useState("discover");
+  const [networkTab, setNetworkTab] = useState("graph");
   const [discoverSkillFilter, setDiscoverSkillFilter] = useState([]);
   const [discoverLocationFilter, setDiscoverLocationFilter] = useState("");
   const [discoverSmartMatch, setDiscoverSmartMatch] = useState(false);
@@ -2473,7 +2473,7 @@ function CoLab() {
     overdueTasks.forEach((t) => {
       if (taskSeen.has(t.id) || focusTasks.length >= 4) return;
       taskSeen.add(t.id);
-      focusTasks.push({ id: t.id, text: t.text, dueDate: t.due_date, tone: "overdue", label: "⚠ overdue" });
+      focusTasks.push({ id: t.id, text: t.text, dueDate: t.due_date, tone: "overdue", label: "overdue" });
     });
     assignedToMeTasks.forEach((t) => {
       if (taskSeen.has(t.id) || focusTasks.length >= 4) return;
@@ -2784,7 +2784,7 @@ function CoLab() {
             <span style={{ color: textSub }}>·</span>
             <span style={{ fontSize: 11, color: textMuted }}>{new Date(p.created_at).toLocaleDateString()}</span>
             {appliedProjectIds.includes(p.id) && <span style={{ fontSize: 10, color: textMuted, border: `1px solid ${border}`, borderRadius: 3, padding: "1px 6px" }}>applied</span>}
-            {p._s > 0 && <span style={{ fontSize: 10, padding: "1px 8px", borderRadius: 3, border: `1px solid ${dark ? "#ffffff20" : "#00000015"}`, color: text }}>{p._s >= 2 ? "★★ strong match" : "★ match"}</span>}
+            {p._s > 0 && <span style={{ fontSize: 10, padding: "1px 8px", borderRadius: 3, border: `1px solid ${dark ? "#ffffff20" : "#00000015"}`, color: text }}>{p._s >= 2 ? "strong match" : "match"}</span>}
           </div>
           <div style={{ fontSize: 15, color: text, marginBottom: 6, letterSpacing: "-0.3px", lineHeight: 1.3 }}>{p.title}</div>
           <div style={{ fontSize: 12, color: textMuted, lineHeight: 1.65, marginBottom: 10 }}>{(p.description || "").slice(0, 100)}...</div>
@@ -2842,7 +2842,7 @@ function CoLab() {
         <p style={{ fontSize: 12, color: textMuted, lineHeight: 1.65, marginBottom: 8 }}>{safeBio}{u.bio && u.bio.length > 90 ? "..." : ""}</p>
         <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "center" }}>
           {sharedSkills.length > 0
-            ? <div style={{ fontSize: 10, color: textMuted }}>★ {sharedSkills.length} shared skill{sharedSkills.length !== 1 ? "s" : ""}</div>
+            ? <div style={{ fontSize: 10, color: textMuted }}>{sharedSkills.length} shared skill{sharedSkills.length !== 1 ? "s" : ""}</div>
             : <div style={{ fontSize: 10, color: textMuted }}>discover profile →</div>}
           {typeof lastActiveDays === "number" && lastActiveDays > 7 && <div style={{ fontSize: 10, color: textMuted }}>active {lastActiveDays}d ago</div>}
         </div>
@@ -2864,7 +2864,7 @@ function CoLab() {
         <div className="profile-modal-card" style={{ background: bg, border: `1px solid ${border}`, borderRadius: 16, padding: "32px 28px", width: "100%", maxWidth: 520, maxHeight: "92vh", overflowY: "auto", cursor: "pointer" }} onClick={() => { setViewFullProfile(u); onClose(); }}>
           <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 24 }}>
             <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px" }}>PROFILE</div>
-            <button onClick={e => { e.stopPropagation(); onClose(); }} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontSize: 14, fontFamily: "inherit" }}>✕</button>
+            <button onClick={e => { e.stopPropagation(); onClose(); }} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontSize: 14, fontFamily: "inherit" }}>×</button>
           </div>
           <div style={{ display: "flex", gap: 16, alignItems: "center", marginBottom: 16 }}>
             <Avatar initials={uInitials} src={u?.avatar_url} size={52} dark={dark} />
@@ -2878,9 +2878,9 @@ function CoLab() {
           <div style={{ marginBottom: 20 }}>
             <div style={{ ...labelStyle, marginBottom: 8 }}>SKILLS</div>
             <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
-              {(u.skills || []).map(s => <span key={s} style={{ fontSize: 11, padding: "3px 10px", border: `1px solid ${sharedSkills.includes(s) ? (dark ? "#ffffff40" : "#00000030") : border}`, borderRadius: 3, color: sharedSkills.includes(s) ? text : textMuted, fontWeight: sharedSkills.includes(s) ? 500 : 400 }}>{s}{sharedSkills.includes(s) ? " ★" : ""}</span>)}
+              {(u.skills || []).map(s => <span key={s} style={{ fontSize: 11, padding: "3px 10px", border: `1px solid ${sharedSkills.includes(s) ? (dark ? "#ffffff40" : "#00000030") : border}`, borderRadius: 3, color: sharedSkills.includes(s) ? text : textMuted, fontWeight: sharedSkills.includes(s) ? 500 : 400 }}>{s}</span>)}
             </div>
-            {sharedSkills.length > 0 && <div style={{ fontSize: 11, color: textMuted, marginTop: 8 }}>★ {sharedSkills.length} shared skill{sharedSkills.length !== 1 ? "s" : ""} with you</div>}
+            {sharedSkills.length > 0 && <div style={{ fontSize: 11, color: textMuted, marginTop: 8 }}>{sharedSkills.length} shared skill{sharedSkills.length !== 1 ? "s" : ""} with you</div>}
           </div>
           {userProjects.length > 0 && (
             <div style={{ marginBottom: 20 }}>
@@ -2941,7 +2941,7 @@ function CoLab() {
       <div style={{ background: bg, border: `1px solid ${border}`, borderRadius: 16, padding: "28px", width: "100%", maxWidth: 520, maxHeight: "92vh", overflowY: "auto" }} onClick={e => e.stopPropagation()}>
         {applicationSuccess ? (
           <div style={{ textAlign: "center", padding: "20px 0" }}>
-            <div style={{ fontSize: 28, marginBottom: 16 }}>✓</div>
+            <div style={{ fontSize: 28, marginBottom: 16 }}>done</div>
             <div style={{ fontSize: 16, color: text, fontWeight: 500, marginBottom: 10 }}>Application sent!</div>
             <div style={{ fontSize: 13, color: textMuted, lineHeight: 1.75, marginBottom: 28, maxWidth: 320, margin: "0 auto 28px" }}>
               {project.owner_name ? `${project.owner_name} will` : "The project owner will"} reach out via Messages if they want to move forward.
@@ -2958,7 +2958,7 @@ function CoLab() {
                 <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px", marginBottom: 6 }}>APPLY</div>
                 <div style={{ fontSize: 16, color: text, fontWeight: 500 }}>{project.title}</div>
               </div>
-              <button onClick={closeForm} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontSize: 14, fontFamily: "inherit" }}>✕</button>
+              <button onClick={closeForm} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontSize: 14, fontFamily: "inherit" }}>×</button>
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
               <div>
@@ -2967,7 +2967,7 @@ function CoLab() {
                   <div style={{ marginBottom: 8, padding: "10px 12px", background: bg2, borderRadius: 6, border: `1px solid ${border}` }}>
                     <div style={{ fontSize: 10, color: textMuted, letterSpacing: "1px", marginBottom: 6 }}>NEEDED FOR THIS PROJECT</div>
                     <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
-                      {projectSkills.map(s => { const sel = applicationForm.skills.includes(s); const match = (profile?.skills || []).includes(s); return <button key={s} className="hb" onClick={() => toggleSkill(s)} style={{ padding: "3px 10px", borderRadius: 3, fontSize: 10, cursor: "pointer", fontFamily: "inherit", background: sel ? text : "none", color: sel ? bg : match ? text : textMuted, border: `1px solid ${sel ? text : match ? (dark ? "#ffffff45" : "#00000025") : border}`, fontWeight: match ? 500 : 400, transition: "all 0.15s" }}>{s}{match && !sel ? " ★" : ""}</button>; })}
+                      {projectSkills.map(s => { const sel = applicationForm.skills.includes(s); const match = (profile?.skills || []).includes(s); return <button key={s} className="hb" onClick={() => toggleSkill(s)} style={{ padding: "3px 10px", borderRadius: 3, fontSize: 10, cursor: "pointer", fontFamily: "inherit", background: sel ? text : "none", color: sel ? bg : match ? text : textMuted, border: `1px solid ${sel ? text : match ? (dark ? "#ffffff45" : "#00000025") : border}`, fontWeight: match ? 500 : 400, transition: "all 0.15s" }}>{s}</button>; })}
                     </div>
                   </div>
                 )}
@@ -3016,7 +3016,7 @@ function CoLab() {
               <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px", marginBottom: 6 }}>APPLICANTS</div>
               <div style={{ fontSize: 16, color: text, fontWeight: 500 }}>{project.title}</div>
             </div>
-            <button onClick={onClose} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontSize: 14, fontFamily: "inherit" }}>✕</button>
+            <button onClick={onClose} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontSize: 14, fontFamily: "inherit" }}>×</button>
           </div>
           {projectApps.length === 0
             ? <div style={{ fontSize: 13, color: textMuted, padding: "24px 0" }}>no applications yet.</div>
@@ -3605,7 +3605,7 @@ function CoLab() {
                           ) : (
                             <div style={{ fontSize: 11, color: textMuted, padding: "6px 10px", background: bg3, borderRadius: 6 }}>file: {newPostMediaUrl.split("/").pop()}</div>
                           )}
-                          <button onClick={() => { setNewPostMediaUrl(""); setNewPostMediaType(""); }} style={{ position: "absolute", top: 4, right: 4, background: bg, border: `1px solid ${border}`, borderRadius: "50%", width: 20, height: 20, cursor: "pointer", fontSize: 10, display: "flex", alignItems: "center", justifyContent: "center", color: text, fontFamily: "inherit" }}>✕</button>
+                          <button onClick={() => { setNewPostMediaUrl(""); setNewPostMediaType(""); }} style={{ position: "absolute", top: 4, right: 4, background: bg, border: `1px solid ${border}`, borderRadius: "50%", width: 20, height: 20, cursor: "pointer", fontSize: 10, display: "flex", alignItems: "center", justifyContent: "center", color: text, fontFamily: "inherit" }}>×</button>
                         </div>
                       )}
                       <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
@@ -3628,7 +3628,7 @@ function CoLab() {
                         </label>
                         {/* Audio upload */}
                         <label style={{ cursor: "pointer", flexShrink: 0 }}>
-                          <div style={{ ...btnG, padding: "6px 12px", fontSize: 11, display: "inline-flex", alignItems: "center", gap: 5 }}>♪ audio</div>
+                          <div style={{ ...btnG, padding: "6px 12px", fontSize: 11, display: "inline-flex", alignItems: "center", gap: 5 }}>audio</div>
                           <input type="file" accept="audio/*,.mp3,.wav,.ogg,.m4a,.aac,.flac" style={{ display: "none" }} onChange={async (e) => {
                             const file = e.target.files[0];
                             if (!file) return;
@@ -3669,7 +3669,7 @@ function CoLab() {
               return visibleFeed.length === 0
                 ? <div style={{ fontSize: 13, color: textMuted, padding: "24px 0" }}>
                     {regionFilter ? `no posts from ${regionFilter} builders yet.` : networkTab === "feed-following"
-                      ? <>nothing yet from people you follow. <button className="hb" onClick={() => setNetworkTab("people")} style={{ background: "none", border: "none", color: text, cursor: "pointer", fontFamily: "inherit", fontSize: 13, textDecoration: "underline" }}>find people →</button></>
+                      ? <>nothing yet from people you follow. <button className="hb" onClick={() => setNetworkTab("discover")} style={{ background: "none", border: "none", color: text, cursor: "pointer", fontFamily: "inherit", fontSize: 13, textDecoration: "underline" }}>find people →</button></>
                       : <div style={{ display: "flex", flexDirection: "column", gap: 10, maxWidth: 560 }}>
                           <div>Nothing here yet — be the first to post</div>
                           {suggestedConnectUsers.length > 0 && (
@@ -4003,7 +4003,7 @@ function CoLab() {
                   return (
                     <button key={s} onClick={() => setSkillDepotSelected(s)}
                       style={{ background: bg2, border: `1px solid ${hasMe ? text : border}`, borderRadius: 10, padding: "16px", cursor: "pointer", textAlign: "left", fontFamily: "inherit", transition: "all 0.15s" }}>
-                      <div style={{ fontSize: 13, color: text, letterSpacing: "-0.3px", marginBottom: 8 }}>{s}{hasMe ? " ★" : ""}</div>
+                      <div style={{ fontSize: 13, color: text, letterSpacing: "-0.3px", marginBottom: 8 }}>{s}</div>
                       <div style={{ fontSize: 10, color: textMuted }}>{pCount} builder{pCount !== 1 ? "s" : ""}</div>
                       <div style={{ fontSize: 10, color: textMuted }}>{prCount} project{prCount !== 1 ? "s" : ""}</div>
                     </button>
@@ -4155,7 +4155,7 @@ function CoLab() {
           <div onClick={e => e.stopPropagation()} style={{ background: bg, border: `1px solid ${border}`, borderRadius: 12, width: "100%", maxWidth: 600, maxHeight: "80vh", display: "flex", flexDirection: "column", overflow: "hidden" }}>
             <div style={{ padding: "24px 28px 16px", borderBottom: `1px solid ${border}`, display: "flex", justifyContent: "space-between", alignItems: "center", flexShrink: 0 }}>
               <div style={{ fontSize: 10, letterSpacing: "2px", color: textMuted }}>LEGAL NOTICE & USER ACKNOWLEDGMENT</div>
-              <button onClick={() => setShowLegalModal(false)} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontSize: 18, fontFamily: "inherit", lineHeight: 1 }}>✕</button>
+              <button onClick={() => setShowLegalModal(false)} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontSize: 18, fontFamily: "inherit", lineHeight: 1 }}>×</button>
             </div>
             <div style={{ overflowY: "auto", padding: "24px 28px", flex: 1, fontSize: 12, color: text, lineHeight: 1.8 }}>
               <p style={{ color: textMuted, marginBottom: 20 }}>Welcome to CoLab. Before creating an account and using our platform, please carefully review the following legal notice. By proceeding with registration, you acknowledge that you have read, understood, and agreed to be bound by these terms.</p>
@@ -4196,7 +4196,7 @@ function CoLab() {
     <div style={{ minHeight: "100vh", width: "100%", background: bg, color: text, fontFamily: "'DM Mono', monospace", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "24px 16px" }}>
       <style>{CSS}</style>
       <div style={{ width: "100%", maxWidth: 400, textAlign: "center" }}>
-        <div style={{ fontSize: 32, marginBottom: 20 }}>✉</div>
+        <div style={{ fontSize: 32, marginBottom: 20 }}>·</div>
         <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px", marginBottom: 14 }}>CHECK YOUR EMAIL</div>
         <h2 style={{ fontSize: 24, fontWeight: 400, letterSpacing: "-1px", marginBottom: 16, color: text }}>Confirm your account.</h2>
         <p style={{ fontSize: 13, color: textMuted, lineHeight: 1.7, marginBottom: 28 }}>
@@ -4271,7 +4271,7 @@ function CoLab() {
                   {onboardData.skills.filter(s => !SKILLS.includes(s)).map(s => (
                     <button key={s} className="hb" onClick={() => setOnboardData({ ...onboardData, skills: onboardData.skills.filter(x => x !== s) })}
                       style={{ padding: "6px 14px", borderRadius: 4, fontSize: 12, cursor: "pointer", fontFamily: "inherit", background: text, color: bg, border: `1px solid ${text}` }}>
-                      {s} ✕
+                      {s} ×
                     </button>
                   ))}
                 </div>
@@ -4449,7 +4449,7 @@ function CoLab() {
         {/* Nav items */}
         <div className="desktop-nav-items" style={{ display: "flex", gap: 0, alignItems: "center" }}>
           {navItems.map(({ id, label, badge }) => (
-            <button key={id} onClick={() => { setAppScreen(id); setActiveProject(null); setViewingProfile(null); setViewFullProfile(null); setShowNotifications(false); if (id === "explore") setExploreTab("feed"); if (id === "network") setNetworkTab("discover"); }}
+            <button key={id} onClick={() => { setAppScreen(id); setActiveProject(null); setViewingProfile(null); setViewFullProfile(null); setShowNotifications(false); if (id === "explore") setExploreTab("feed"); if (id === "network") setNetworkTab("graph"); }}
               style={{ position: "relative", background: appScreen === id && !activeProject && !showNotifications ? bg3 : "none", color: appScreen === id && !activeProject && !showNotifications ? text : textMuted, border: "none", borderRadius: 6, padding: "5px 5px", fontSize: 11, cursor: "pointer", fontFamily: "inherit", transition: "all 0.15s", whiteSpace: "nowrap", flexShrink: 0 }}>
               {label}
               {badge > 0 && <span style={{ position: "absolute", top: 2, right: 2, width: 5, height: 5, borderRadius: "50%", background: text, border: `1px solid ${bg}` }} />}
@@ -4471,7 +4471,7 @@ function CoLab() {
       </nav>
       <div className="mobile-tabbar" style={{ display: "none", position: "fixed", left: 0, right: 0, bottom: 0, zIndex: 220, background: bg, borderTop: `1px solid ${border}`, height: 56, alignItems: "center", justifyContent: "space-around", padding: "0 8px", paddingBottom: "env(safe-area-inset-bottom)" }}>
         {navItems.map(({ id, label, badge }) => (
-          <button key={`mobile-${id}`} onClick={() => { setAppScreen(id); setActiveProject(null); setViewingProfile(null); setViewFullProfile(null); setShowNotifications(false); if (id === "explore") setExploreTab("feed"); if (id === "network") setNetworkTab("discover"); }}
+          <button key={`mobile-${id}`} onClick={() => { setAppScreen(id); setActiveProject(null); setViewingProfile(null); setViewFullProfile(null); setShowNotifications(false); if (id === "explore") setExploreTab("feed"); if (id === "network") setNetworkTab("graph"); }}
             style={{ position: "relative", background: "none", color: appScreen === id ? text : textMuted, border: "none", padding: "4px 6px", fontSize: 11, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap" }}>
             {label}
             {badge > 0 && <span style={{ position: "absolute", top: 2, right: 0, width: 5, height: 5, borderRadius: "50%", background: text, border: `1px solid ${bg}` }} />}
@@ -4491,7 +4491,7 @@ function CoLab() {
                 <button className="hb" onClick={() => { setShowNotifications(false); setAppScreen("notifications"); }} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontFamily: "inherit", fontSize: 10 }}>view all →</button>
               </div>
             </div>
-            {notifications.length === 0 && mentionNotifications.length === 0 ? <div style={{ padding: "24px 16px", fontSize: 12, color: textMuted, textAlign: "center" }}>✓ You're all caught up.</div>
+            {notifications.length === 0 && mentionNotifications.length === 0 ? <div style={{ padding: "24px 16px", fontSize: 12, color: textMuted, textAlign: "center" }}>You're all caught up.</div>
               : <>
                 {mentionNotifications.map(n => (
                   <div key={n.id} style={{ padding: "14px 16px", borderBottom: `1px solid ${border}`, display: "flex", justifyContent: "space-between", gap: 8, cursor: n.project_id ? "pointer" : "default" }}
@@ -4500,7 +4500,7 @@ function CoLab() {
                       <div style={{ fontSize: 12, color: text, marginBottom: 2 }}>{n.from_name} mentioned you</div>
                       <div style={{ fontSize: 11, color: textMuted, fontStyle: "italic" }}>"{n.context}..."</div>
                     </div>
-                    <button className="hb" onClick={async (e) => { e.stopPropagation(); await supabase.from("mention_notifications").update({ read: true }).eq("id", n.id); setMentionNotifications(prev => prev.filter(x => x.id !== n.id)); }} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontSize: 12, fontFamily: "inherit", flexShrink: 0 }}>✕</button>
+                    <button className="hb" onClick={async (e) => { e.stopPropagation(); await supabase.from("mention_notifications").update({ read: true }).eq("id", n.id); setMentionNotifications(prev => prev.filter(x => x.id !== n.id)); }} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontSize: 12, fontFamily: "inherit", flexShrink: 0 }}>×</button>
                   </div>
                 ))}
                 {notifications.map(n => (
@@ -4510,7 +4510,7 @@ function CoLab() {
                     <button className="hb" onClick={async () => {
                       setNotifications(prev => prev.filter(x => x.id !== n.id));
                       await supabase.from("notifications").update({ read: true }).eq("id", n.id);
-                    }} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontSize: 12, fontFamily: "inherit", marginLeft: 8 }}>✕</button>
+                    }} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontSize: 12, fontFamily: "inherit", marginLeft: 8 }}>×</button>
                   </div>
                   {n.type === "application_status" && (
                     <div style={{ marginBottom: 8 }}>
@@ -4578,7 +4578,7 @@ function CoLab() {
           <div style={{ background: bg, border: `1px solid ${border}`, borderRadius: 16, padding: "24px", width: "100%", maxWidth: 440, maxHeight: "70vh", display: "flex", flexDirection: "column" }} onClick={e => e.stopPropagation()}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
               <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px" }}>NEW MESSAGE</div>
-              <button onClick={() => setShowNewDm(false)} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontSize: 14, fontFamily: "inherit" }}>✕</button>
+              <button onClick={() => setShowNewDm(false)} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontSize: 14, fontFamily: "inherit" }}>×</button>
             </div>
             <input
               autoFocus
@@ -4637,7 +4637,7 @@ function CoLab() {
             <div onClick={e => e.stopPropagation()} style={{ background: bg, border: `1px solid ${border}`, borderRadius: 16, padding: "24px", width: "100%", maxWidth: 540, maxHeight: "80vh", overflowY: "auto" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }}>
                 <button onClick={() => setShowCollaboratorsList(false)} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontFamily: "inherit", fontSize: 12, padding: 0 }}>← back</button>
-                <button onClick={() => setShowCollaboratorsList(false)} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontFamily: "inherit", fontSize: 16 }}>✕</button>
+                <button onClick={() => setShowCollaboratorsList(false)} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontFamily: "inherit", fontSize: 16 }}>×</button>
               </div>
               <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px", marginBottom: 6 }}>COLLABORATORS</div>
               <div style={{ fontSize: 16, color: text, marginBottom: 16 }}>{subjectUser?.name || "Profile"} · {collabs.length} collaborator{collabs.length !== 1 ? "s" : ""}</div>
@@ -4684,7 +4684,7 @@ function CoLab() {
                   <div style={{ fontSize: 16, color: text, fontWeight: 400 }}>{isMe ? "your" : `${subjectUser?.name?.split(" ")[0]}'s`} projects</div>
                   <div style={{ fontSize: 12, color: textMuted, marginTop: 3 }}>{subjectProjects.length} owned · {collaboratedProjects.length} collaborated</div>
                 </div>
-                <button onClick={() => setShowProjectsFor(null)} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontSize: 16, fontFamily: "inherit" }}>✕</button>
+                <button onClick={() => setShowProjectsFor(null)} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontSize: 16, fontFamily: "inherit" }}>×</button>
               </div>
               {subjectProjects.length === 0 && collaboratedProjects.length === 0 ? (
                 <div style={{ fontSize: 13, color: textMuted, padding: "20px 0", textAlign: "center" }}>no projects yet.</div>
@@ -4750,7 +4750,7 @@ function CoLab() {
                   <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px", marginBottom: 6 }}>{isFollowers ? "FOLLOWERS" : "FOLLOWING"}</div>
                   <div style={{ fontSize: 16, color: text, fontWeight: 400 }}>{isFollowers ? `${followers.length} follower${followers.length !== 1 ? "s" : ""}` : `${following.length} following`}</div>
                 </div>
-                <button onClick={() => setShowFollowList(null)} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontSize: 16, fontFamily: "inherit" }}>✕</button>
+                <button onClick={() => setShowFollowList(null)} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontSize: 16, fontFamily: "inherit" }}>×</button>
               </div>
               {listUsers.length === 0 ? (
                 <div style={{ fontSize: 13, color: textMuted, padding: "20px 0", textAlign: "center" }}>{isFollowers ? "no followers yet." : "not following anyone yet."}</div>
@@ -5182,7 +5182,7 @@ function CoLab() {
                                 : newPostMediaUrl.match(/\.(jpg|jpeg|png|gif|webp)$/i)
                                   ? <img src={newPostMediaUrl} alt="" style={{ maxWidth: "100%", maxHeight: 200, borderRadius: 8, border: `1px solid ${border}` }} />
                                   : <div style={{ fontSize: 11, color: textMuted, padding: "6px 10px", background: bg3, borderRadius: 6 }}>file: {newPostMediaUrl.split("/").pop()}</div>}
-                              <button onClick={() => { setNewPostMediaUrl(""); setNewPostMediaType(""); }} style={{ position: "absolute", top: 4, right: 4, background: bg, border: `1px solid ${border}`, borderRadius: "50%", width: 20, height: 20, cursor: "pointer", fontSize: 10, display: "flex", alignItems: "center", justifyContent: "center", color: text, fontFamily: "inherit" }}>✕</button>
+                              <button onClick={() => { setNewPostMediaUrl(""); setNewPostMediaType(""); }} style={{ position: "absolute", top: 4, right: 4, background: bg, border: `1px solid ${border}`, borderRadius: "50%", width: 20, height: 20, cursor: "pointer", fontSize: 10, display: "flex", alignItems: "center", justifyContent: "center", color: text, fontFamily: "inherit" }}>×</button>
                             </div>
                           )}
                           {/* Single action bar */}
@@ -5254,7 +5254,7 @@ function CoLab() {
                             <div style={{ flex: 1, minWidth: 0 }}>
                               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
                                 <button onClick={() => poster && setViewingProfile(poster)} style={{ background: "none", border: "none", cursor: "pointer", padding: 0, fontSize: 12, fontWeight: 500, color: text, fontFamily: "inherit" }}>{p.user_name}</button>
-                                <span style={{ fontSize: 10, color: textMuted }}>♥ {p.like_count || 0}</span>
+                                <span style={{ fontSize: 10, color: textMuted }}>{p.like_count || 0} likes</span>
                               </div>
                               <div style={{ fontSize: 12, color: text, lineHeight: 1.6, marginBottom: 6, overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>{p.content}</div>
                               {overlap.length > 0 && <span style={{ fontSize: 9, color: textMuted, border: `1px solid ${border}`, borderRadius: 3, padding: "1px 7px" }}>{overlap.slice(0, 2).join(" · ")}</span>}
@@ -5319,7 +5319,7 @@ function CoLab() {
                               <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginBottom: 10 }}>
                                 {(proj.skills || []).slice(0, 5).map(s => {
                                   const isMatch = mySkillSet.has(s);
-                                  return <span key={s} style={{ fontSize: 10, color: isMatch ? text : textMuted, border: `1px solid ${isMatch ? text : border}`, borderRadius: 3, padding: "1px 8px", fontWeight: isMatch ? 500 : 400, background: isMatch ? (dark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.05)") : "none" }}>{s}{isMatch ? " ✓" : ""}</span>;
+                                  return <span key={s} style={{ fontSize: 10, color: isMatch ? text : textMuted, border: `1px solid ${isMatch ? text : border}`, borderRadius: 3, padding: "1px 8px", fontWeight: isMatch ? 500 : 400, background: isMatch ? (dark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.05)") : "none" }}>{s}{isMatch ? "" : ""}</span>;
                                 })}
                               </div>
                               <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
@@ -5331,7 +5331,7 @@ function CoLab() {
                             </div>
                             {/* Hide button */}
                             {!isOwn && (
-                              <button className="hb" onClick={() => hideItem(item.id)} title="Not interested" style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontSize: 11, fontFamily: "inherit", opacity: 0.5, flexShrink: 0, padding: "2px 4px" }}>✕</button>
+                              <button className="hb" onClick={() => hideItem(item.id)} title="Not interested" style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontSize: 11, fontFamily: "inherit", opacity: 0.5, flexShrink: 0, padding: "2px 4px" }}>×</button>
                             )}
                           </div>
                         </div>
@@ -5402,7 +5402,7 @@ function CoLab() {
                               <div style={{ fontSize: 10, color: textMuted }}>{item.user_name} · {relativeTime(item.created_at)} · ... {item.comment_count}</div>
                             </div>
                             {!isOwn && (
-                              <button className="hb" onClick={() => hideItem(item.id)} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontSize: 11, fontFamily: "inherit", opacity: 0.5, flexShrink: 0 }}>✕</button>
+                              <button className="hb" onClick={() => hideItem(item.id)} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontSize: 11, fontFamily: "inherit", opacity: 0.5, flexShrink: 0 }}>×</button>
                             )}
                           </div>
                         </div>
@@ -5535,7 +5535,7 @@ function CoLab() {
           <div style={{ marginBottom: 22 }}>
             <div style={labelStyle}>SKILLS NEEDED</div>
             <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
-              {(activeProject.skills || []).map(s => { const m = (profile?.skills || []).includes(s); return <span key={s} style={{ fontSize: 11, padding: "3px 10px", border: `1px solid ${m ? (dark ? "#ffffff45" : "#00000030") : border}`, borderRadius: 3, color: m ? text : textMuted, fontWeight: m ? 500 : 400 }}>{s}{m ? " ★" : ""}</span>; })}
+              {(activeProject.skills || []).map(s => { const m = (profile?.skills || []).includes(s); return <span key={s} style={{ fontSize: 11, padding: "3px 10px", border: `1px solid ${m ? (dark ? "#ffffff45" : "#00000030") : border}`, borderRadius: 3, color: m ? text : textMuted, fontWeight: m ? 500 : 400 }}>{s}</span>; })}
             </div>
           </div>
           {(activeProject.open_roles || []).length > 0 && (
@@ -5567,15 +5567,15 @@ function CoLab() {
             <button className="hb" onClick={markAllNotificationsRead} style={{ ...btnG, fontSize: 11 }}>mark all read</button>
           </div>
           {Object.values(notificationGroups).every((items) => items.length === 0) ? (
-            <div style={{ fontSize: 14, color: textMuted, textAlign: "center", padding: "50px 0" }}>You're all caught up ✓</div>
+            <div style={{ fontSize: 14, color: textMuted, textAlign: "center", padding: "50px 0" }}>You're all caught up</div>
           ) : (
             <div style={{ border: `1px solid ${border}`, borderRadius: 10, overflow: "hidden" }}>
               {[
-                ["replies", "Replies", "↩"],
-                ["invites", "Invites", "✉"],
-                ["taskAssigned", "Task assigned", "•"],
-                ["follows", "Follows", "+"],
-                ["applications", "Applications", "◈"],
+                ["replies", "Replies", "·"],
+                ["invites", "Invites", "·"],
+                ["taskAssigned", "Task assigned", "·"],
+                ["follows", "Follows", "·"],
+                ["applications", "Applications", "·"],
                 ["mentions", "Mentions", "@"],
               ].map(([key, label, icon]) => notificationGroups[key].length > 0 && (
                 <div key={key}>
@@ -5810,7 +5810,7 @@ function CoLab() {
               <span style={{ flex: 1, fontSize: 12, color: isActive ? text : textMuted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.name}</span>
               <button className="hb" onClick={e => { e.stopPropagation(); isJoined ? handleLeave(c.id) : handleJoin(c.id); }}
                 style={{ fontSize: 10, padding: "3px 9px", borderRadius: 6, border: `1px solid ${border}`, background: "none", color: isJoined ? text : textMuted, cursor: "pointer", fontFamily: "inherit", flexShrink: 0, letterSpacing: "0.2px" }}>
-                {isJoined ? "joined ✓" : "+ join"}
+                {isJoined ? "joined" : "+ join"}
               </button>
             </div>
           );
@@ -5862,7 +5862,7 @@ function CoLab() {
             <div className="communities-main" style={{ flex: 1, overflowY: "auto", minWidth: 0 }}>
               {!activeCommunity ? (
                 <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100%", gap: 12 }}>
-                  <button className="hb community-drawer-toggle" onClick={() => setShowCommunityDrawer(true)} style={{ background: "none", border: `1px solid ${border}`, borderRadius: 8, padding: "6px 10px", fontSize: 11, cursor: "pointer", color: textMuted, fontFamily: "inherit" }}>☰ communities</button>
+                  <button className="hb community-drawer-toggle" onClick={() => setShowCommunityDrawer(true)} style={{ background: "none", border: `1px solid ${border}`, borderRadius: 8, padding: "6px 10px", fontSize: 11, cursor: "pointer", color: textMuted, fontFamily: "inherit" }}>communities</button>
                   <div style={{ fontSize: 32 }}>...</div>
                   <div style={{ fontSize: 14, color: textMuted }}>Select a community to browse threads</div>
                   {joinedCommunities.length === 0 && <div style={{ fontSize: 12, color: textMuted, opacity: 0.6 }}>Join a community on the left to get started</div>}
@@ -5870,7 +5870,7 @@ function CoLab() {
               ) : activeThread ? (
                 /* Thread detail */
                 <div className="community-main-inner" style={{ maxWidth: 1100, margin: "0 auto", padding: "32px 40px" }}>
-                  <button className="hb community-drawer-toggle" onClick={() => setShowCommunityDrawer(true)} style={{ background: "none", border: `1px solid ${border}`, borderRadius: 8, padding: "6px 10px", fontSize: 11, cursor: "pointer", color: textMuted, fontFamily: "inherit", marginBottom: 12 }}>☰ communities</button>
+                  <button className="hb community-drawer-toggle" onClick={() => setShowCommunityDrawer(true)} style={{ background: "none", border: `1px solid ${border}`, borderRadius: 8, padding: "6px 10px", fontSize: 11, cursor: "pointer", color: textMuted, fontFamily: "inherit", marginBottom: 12 }}>communities</button>
                   <button className="hb" onClick={() => setActiveThread(null)}
                     style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontFamily: "inherit", fontSize: 12, marginBottom: 24, padding: 0, display: "flex", alignItems: "center", gap: 6 }}>
                     ← back to {activeCommunity.name}
@@ -5970,7 +5970,7 @@ function CoLab() {
               ) : (
                 /* Thread list */
                 <div className="community-main-inner" style={{ maxWidth: 1100, margin: "0 auto", padding: "32px 40px" }}>
-                  <button className="hb community-drawer-toggle" onClick={() => setShowCommunityDrawer(true)} style={{ background: "none", border: `1px solid ${border}`, borderRadius: 8, padding: "6px 10px", fontSize: 11, cursor: "pointer", color: textMuted, fontFamily: "inherit", marginBottom: 12 }}>☰ communities</button>
+                  <button className="hb community-drawer-toggle" onClick={() => setShowCommunityDrawer(true)} style={{ background: "none", border: `1px solid ${border}`, borderRadius: 8, padding: "6px 10px", fontSize: 11, cursor: "pointer", color: textMuted, fontFamily: "inherit", marginBottom: 12 }}>communities</button>
                   {/* Community header */}
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24, flexWrap: "wrap", gap: 12 }}>
                     <div>
@@ -6379,7 +6379,7 @@ function CoLab() {
                             <div style={{ minWidth: 0 }}><div style={{ fontSize: 12, color: text, marginBottom: 1 }}>{p.title}</div><div style={{ fontSize: 10, color: textMuted }}>{p.owner_name}</div></div>
                             <div style={{ display: "flex", gap: 6, alignItems: "center", flexShrink: 0 }}>
                               <span style={{ fontSize: 10, color: textMuted, border: `1px solid ${border}`, borderRadius: 3, padding: "1px 6px" }}>{normalizeApplicationStatus(myApp?.status || "pending")}</span>
-                              {normalizeApplicationStatus(myApp?.status) === "rejected" && <button className="hb" onClick={() => handleRemoveDeniedApp(myApp.id)} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontSize: 10, fontFamily: "inherit" }}>✕</button>}
+                              {normalizeApplicationStatus(myApp?.status) === "rejected" && <button className="hb" onClick={() => handleRemoveDeniedApp(myApp.id)} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontSize: 10, fontFamily: "inherit" }}>×</button>}
                             </div>
                           </div>
                         );
@@ -6502,7 +6502,7 @@ function CoLab() {
                   )}
                   {todayNextUp.readyToShip && (
                     <span style={{ fontSize: 10, color: "#22c55e", border: "1px solid #22c55e55", borderRadius: 999, padding: "2px 8px", background: dark ? "#0a1a0a88" : "#f0fdf4" }}>
-                      Ready to ship 🚀
+                      Ready to ship
                     </span>
                   )}
                 </div>
@@ -6759,7 +6759,7 @@ function CoLab() {
                               {col.id === "todo" && <button className="hb" onClick={async (e) => { e.stopPropagation(); await moveTaskToColumn(task.id, "inprogress"); }} style={{ fontSize: 9, padding: "2px 7px", border: `1px solid ${border}`, borderRadius: 3, background: "none", color: textMuted, cursor: "pointer", fontFamily: "inherit" }}>in progress →</button>}
                               {col.id === "inprogress" && <button className="hb" onClick={(e) => { e.stopPropagation(); handleToggleTask(task); }} style={{ fontSize: 9, padding: "2px 7px", border: `1px solid ${border}`, borderRadius: 3, background: "none", color: textMuted, cursor: "pointer", fontFamily: "inherit" }}>done →</button>}
                               <button className="hb" onClick={(e) => { e.stopPropagation(); openTaskEditor(task); }} style={{ fontSize: 9, padding: "2px 7px", border: `1px solid ${border}`, borderRadius: 3, background: "none", color: textMuted, cursor: "pointer", fontFamily: "inherit" }}>edit</button>
-                              <button className="hb" onClick={(e) => { e.stopPropagation(); handleDeleteTask(task.id); }} style={{ fontSize: 9, padding: "2px 7px", border: `1px solid ${border}`, borderRadius: 3, background: "none", color: textMuted, cursor: "pointer", fontFamily: "inherit" }}>✕</button>
+                              <button className="hb" onClick={(e) => { e.stopPropagation(); handleDeleteTask(task.id); }} style={{ fontSize: 9, padding: "2px 7px", border: `1px solid ${border}`, borderRadius: 3, background: "none", color: textMuted, cursor: "pointer", fontFamily: "inherit" }}>×</button>
                             </div>
                           </div>
                           );
@@ -7222,7 +7222,7 @@ function CoLab() {
                 <div style={{ marginBottom: 24 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
                     <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                      <span style={{ fontSize: 15 }}>◎</span>
+                      <span style={{ fontSize: 15 }}>·</span>
                       <div>
                         <div style={{ fontSize: 13, color: text }}>GitHub</div>
                         <div style={{ fontSize: 11, color: textMuted }}>Connect a repo to see recent commits</div>
@@ -7366,7 +7366,7 @@ function CoLab() {
                       const alreadyVouched = hasVouchedForSkill(viewFullProfile.id, s);
                       return (
                         <span key={s} style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 11, padding: "3px 10px", border: `1px solid ${shared ? (dark ? "#ffffff40" : "#00000030") : border}`, borderRadius: 999, color: shared ? text : textMuted, fontWeight: shared ? 500 : 400 }}>
-                          <span>{s}{shared ? " ★" : ""}</span>
+                          <span>{s}</span>
                           <span style={{ fontSize: 10, opacity: 0.7 }}>+{count}</span>
                           {viewFullProfile.id !== authUser?.id && (
                             <button className="hb" disabled={alreadyVouched} onClick={(e) => { e.stopPropagation(); handleSkillVouch(viewFullProfile.id, s); }} style={{ background: alreadyVouched ? text : "none", color: alreadyVouched ? bg : text, border: `1px solid ${alreadyVouched ? text : border}`, borderRadius: 999, padding: "1px 6px", fontSize: 9, cursor: alreadyVouched ? "default" : "pointer", fontFamily: "inherit", opacity: alreadyVouched ? 0.7 : 1 }}>
@@ -7378,7 +7378,7 @@ function CoLab() {
                     })}
                   </div>
                   {viewFullProfile.skills.filter(s => (profile?.skills || []).includes(s)).length > 0 &&
-                    <div style={{ fontSize: 10, color: textMuted }}>★ {viewFullProfile.skills.filter(s => (profile?.skills || []).includes(s)).length} shared skills with you</div>
+                    <div style={{ fontSize: 10, color: textMuted }}>{viewFullProfile.skills.filter(s => (profile?.skills || []).includes(s)).length} shared skills with you</div>
                   }
                 </div>
             }
@@ -7508,7 +7508,7 @@ function CoLab() {
                   ? <div style={{ fontSize: 12, color: textMuted }}>no skills. <button onClick={() => setEditProfile(true)} style={{ background: "none", border: "none", color: text, cursor: "pointer", fontFamily: "inherit", fontSize: 12, textDecoration: "underline" }}>add →</button></div>
                   : <div>
                       <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginBottom: 8 }}>{(profile?.skills || []).map(s => <span key={s} style={{ fontSize: 11, padding: "3px 10px", border: `1px solid ${border}`, borderRadius: 3, color: textMuted }}>{s} · {getSkillVouchCount(authUser?.id, s)} vouches</span>)}</div>
-                      <div style={{ fontSize: 11, color: textMuted }}>★ {forYou.length} matching project{forYou.length !== 1 ? "s" : ""} <button className="hb" onClick={() => { setAppScreen("explore"); setExploreTab("projects"); setProjectsSubTab("for-you"); }} style={{ background: "none", border: "none", color: text, cursor: "pointer", fontFamily: "inherit", fontSize: 11, textDecoration: "underline", marginLeft: 4 }}>view →</button></div>
+                      <div style={{ fontSize: 11, color: textMuted }}>{forYou.length} matching project{forYou.length !== 1 ? "s" : ""} <button className="hb" onClick={() => { setAppScreen("explore"); setExploreTab("projects"); setProjectsSubTab("for-you"); }} style={{ background: "none", border: "none", color: text, cursor: "pointer", fontFamily: "inherit", fontSize: 11, textDecoration: "underline", marginLeft: 4 }}>view →</button></div>
                   </div>
                 }
               </div>
@@ -7540,7 +7540,7 @@ function CoLab() {
                               </a>
                             )}
                           </div>
-                          <button className="hb" onClick={() => handleDeletePortfolioItem(item.id)} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontSize: 12, fontFamily: "inherit", flexShrink: 0 }}>✕</button>
+                          <button className="hb" onClick={() => handleDeletePortfolioItem(item.id)} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontSize: 12, fontFamily: "inherit", flexShrink: 0 }}>×</button>
                         </div>
                       ))}
                     </div>
@@ -7580,7 +7580,7 @@ function CoLab() {
                           )}
                           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                             <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-                              <span style={{ fontSize: 11, color: textMuted }}>♥ {post.like_count || 0}</span>
+                              <span style={{ fontSize: 11, color: textMuted }}>{post.like_count || 0} likes</span>
                               {post.project_title && <span style={{ fontSize: 10, color: textMuted, border: `1px solid ${border}`, borderRadius: 3, padding: "1px 6px" }}>↗ {post.project_title}</span>}
                             </div>
                             <span style={{ fontSize: 10, color: textMuted }}>{new Date(post.created_at).toLocaleDateString()}</span>
@@ -7651,7 +7651,7 @@ function CoLab() {
                       } catch {
                         showToast("Couldn't find your location.");
                       }
-                    }} style={{ ...btnG, padding: "10px 12px", color: text }}>📍</button>
+                    }} style={{ ...btnG, padding: "10px 12px", color: text }}>locate</button>
                   </div>
                 </div>
                 <div><label style={labelStyle}>BIO</label><textarea style={{ ...inputStyle, resize: "none" }} rows={4} value={profile?.bio || ""} onChange={e => setProfile({ ...profile, bio: e.target.value })} /></div>
@@ -7673,7 +7673,7 @@ function CoLab() {
                     {(profile?.skills || []).filter(s => !SKILLS.includes(s)).map(s => (
                       <button key={s} className="hb" onClick={() => setProfile({ ...profile, skills: profile.skills.filter(x => x !== s) })}
                         style={{ padding: "3px 10px", borderRadius: 3, fontSize: 10, cursor: "pointer", fontFamily: "inherit", background: text, color: bg, border: `1px solid ${text}` }}>
-                        {s} ✕
+                        {s} ×
                       </button>
                     ))}
                   </div>
@@ -7720,7 +7720,7 @@ function CoLab() {
                       ? <img src={newPortfolioItem.url} alt="" style={{ maxWidth: "100%", maxHeight: 160, borderRadius: 8, border: `1px solid ${border}` }} />
                       : <div style={{ fontSize: 11, color: textMuted, padding: "6px 10px", background: bg2, borderRadius: 6 }}>file: {newPortfolioItem.url.split("/").pop()}</div>
                     }
-                    <button onClick={() => setNewPortfolioItem({ ...newPortfolioItem, url: "" })} style={{ position: "absolute", top: 4, right: 4, background: bg, border: `1px solid ${border}`, borderRadius: "50%", width: 20, height: 20, cursor: "pointer", fontSize: 10, display: "flex", alignItems: "center", justifyContent: "center", color: text, fontFamily: "inherit" }}>✕</button>
+                    <button onClick={() => setNewPortfolioItem({ ...newPortfolioItem, url: "" })} style={{ position: "absolute", top: 4, right: 4, background: bg, border: `1px solid ${border}`, borderRadius: "50%", width: 20, height: 20, cursor: "pointer", fontSize: 10, display: "flex", alignItems: "center", justifyContent: "center", color: text, fontFamily: "inherit" }}>×</button>
                   </div>
                 )}
                 <div style={{ display: "flex", gap: 8 }}>
@@ -7777,7 +7777,7 @@ function CoLab() {
                     {(newProject.openRoles || []).map((role) => (
                       <span key={`selected-role-${role}`} style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 11, padding: "4px 10px", border: `1px solid ${border}`, borderRadius: 999, color: text }}>
                         <span>{role}</span>
-                        <button className="hb" onClick={() => toggleOpenRole(role)} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontSize: 11, fontFamily: "inherit", padding: 0 }}>✕</button>
+                        <button className="hb" onClick={() => toggleOpenRole(role)} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontSize: 11, fontFamily: "inherit", padding: 0 }}>×</button>
                       </span>
                     ))}
                   </div>
@@ -7815,7 +7815,7 @@ function CoLab() {
                     } catch {
                       showToast("Couldn't find your location.");
                     }
-                  }} style={{ ...btnG, padding: "10px 12px", color: text }}>📍</button>
+                  }} style={{ ...btnG, padding: "10px 12px", color: text }}>locate</button>
                 </div>
               </div>
               <div><label style={labelStyle}>GOALS / CHECKPOINTS (optional)</label><textarea style={{ ...inputStyle, resize: "none" }} rows={3} placeholder="What does done look like? List key milestones or deliverables..." value={newProject.goals} onChange={e => setNewProject({ ...newProject, goals: e.target.value })} /></div>
@@ -7915,7 +7915,7 @@ function CoLab() {
           <div onClick={e => e.stopPropagation()} style={{ background: bg, border: `1px solid ${border}`, borderRadius: 16, padding: "28px", width: "100%", maxWidth: 520 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
               <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px" }}>NEW THREAD · {COMMUNITY_SYMBOLS[activeCommunity.slug] || activeCommunity.emoji} {activeCommunity.name.toUpperCase()}</div>
-              <button onClick={() => setShowCreatePost(false)} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontSize: 16, fontFamily: "inherit" }}>✕</button>
+              <button onClick={() => setShowCreatePost(false)} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontSize: 16, fontFamily: "inherit" }}>×</button>
             </div>
             <input value={newThreadTitle} onChange={e => setNewThreadTitle(e.target.value)}
               placeholder="Thread title"
@@ -7952,7 +7952,7 @@ function CoLab() {
           <div onClick={e => e.stopPropagation()} style={{ background: bg, border: `1px solid ${border}`, borderRadius: 16, padding: "28px", width: "100%", maxWidth: 440 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
               <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px" }}>CREATE COMMUNITY</div>
-              <button onClick={() => setShowCreateCommunity(false)} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontSize: 16, fontFamily: "inherit" }}>✕</button>
+              <button onClick={() => setShowCreateCommunity(false)} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontSize: 16, fontFamily: "inherit" }}>×</button>
             </div>
             <div style={{ display: "flex", gap: 10, marginBottom: 12 }}>
               <input value={newCommunityEmoji} onChange={e => setNewCommunityEmoji(e.target.value)}
@@ -7997,21 +7997,21 @@ function CoLab() {
             <div style={{ fontSize: 22, fontWeight: 400, letterSpacing: "-1px", color: text, marginBottom: 16, lineHeight: 1.3 }}>Ready to go live?</div>
             <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 28 }}>
               <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
-                <span style={{ fontSize: 16, lineHeight: 1 }}>✓</span>
+                <span style={{ fontSize: 16, lineHeight: 1 }}>done</span>
                 <div>
                   <div style={{ fontSize: 13, color: text, marginBottom: 2 }}>Marks the project as complete</div>
                   <div style={{ fontSize: 11, color: textMuted, lineHeight: 1.5 }}>No more tasks will be added. The project status locks in as deployed.</div>
                 </div>
               </div>
               <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
-                <span style={{ fontSize: 16, lineHeight: 1 }}>✦</span>
+                <span style={{ fontSize: 16, lineHeight: 1 }}>·</span>
                 <div>
                   <div style={{ fontSize: 13, color: text, marginBottom: 2 }}>Shares a post with your network</div>
                   <div style={{ fontSize: 11, color: textMuted, lineHeight: 1.5 }}>You'll write a short note about what you built — visible to everyone on CoLab.</div>
                 </div>
               </div>
               <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
-                <span style={{ fontSize: 16, lineHeight: 1 }}>★</span>
+                <span style={{ fontSize: 16, lineHeight: 1 }}>·</span>
                 <div>
                   <div style={{ fontSize: 13, color: text, marginBottom: 2 }}>Unlocks team reviews</div>
                   <div style={{ fontSize: 11, color: textMuted, lineHeight: 1.5 }}>Your collaborators will be prompted to rate each other. Ratings build your reputation on CoLab.</div>
@@ -8062,7 +8062,7 @@ function CoLab() {
           <div onClick={e => e.stopPropagation()} style={{ background: bg, border: `1px solid ${border}`, borderRadius: 16, padding: "28px", width: "100%", maxWidth: 420 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
               <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px" }}>ACCOUNT SETTINGS</div>
-              <button onClick={() => setShowSettings(false)} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontSize: 16, fontFamily: "inherit" }}>✕</button>
+              <button onClick={() => setShowSettings(false)} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontSize: 16, fontFamily: "inherit" }}>×</button>
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
               <div>
