@@ -48,6 +48,7 @@ export function useAppDataBootstrap({
   setNotifications,
   setShowApplicationForm,
   setTeamReviews,
+  setMvpAwards,
   setCommunities,
   setJoinedCommunityIds,
   setCommunityVotes,
@@ -71,6 +72,7 @@ export function useAppDataBootstrap({
         mentionNotifs,
         notifs,
         reviewsData,
+        mvpData,
         communitiesData,
         myMembershipsData,
         myVotesData,
@@ -91,6 +93,7 @@ export function useAppDataBootstrap({
       setMentionNotifications(mentionNotifs || []);
       setNotifications((notifs || []).map(mapDbNotif));
       setTeamReviews(reviewsData || []);
+      setMvpAwards(mvpData || []);
       setCommunities(communitiesData || []);
       setJoinedCommunityIds((myMembershipsData || []).map(m => m.community_id));
       // votes: { postId: true }

@@ -16,14 +16,7 @@ alter table projects add column if not exists cover_image_url text;
 alter table tasks add column if not exists priority text default 'medium';
 alter table projects add column if not exists open_roles text[] default '{}';
 alter table applications add column if not exists role text;
-create table if not exists skill_vouches (
-  id uuid primary key default gen_random_uuid(),
-  voucher_id uuid references profiles(id),
-  vouchee_id uuid references profiles(id),
-  skill text,
-  created_at timestamptz default now(),
-  unique(voucher_id, vouchee_id, skill)
-);
+create table if not exists project_mvps (id uuid primary key default gen_random_uuid(), project_id uuid references projects(id), project_title text, voter_id uuid references profiles(id), mvp_user_id uuid references profiles(id), mvp_user_name text, created_at timestamptz default now(), unique(project_id, voter_id));
 */
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import LandingPage from "../../landing/LandingPage";
@@ -571,10 +564,12 @@ function TeamReviewModal({ project, authUser, applications, users, teamReviews, 
 
   const alreadyReviewed = teamReviews.some(r => r.project_id === project.id && r.reviewer_id === authUser?.id);
 
+  const [mvpPick, setMvpPick] = React.useState(null);
+
   const handleSubmit = async () => {
     setSubmitting(true);
     const reviews = teammates.map(t => ({ project_id: project.id, reviewer_id: authUser.id, reviewee_id: t.id, rating: ratings[t.id] || 0 }));
-    await onSubmit(reviews);
+    await onSubmit(reviews, mvpPick);
     setDone(true);
     setSubmitting(false);
   };
@@ -620,6 +615,20 @@ function TeamReviewModal({ project, authUser, applications, users, teamReviews, 
                     <GearRating userId={t.id} />
                   </div>
                 ))}
+              </div>
+            )}
+            {teammates.length > 0 && (
+              <div style={{ marginBottom: 20 }}>
+                <div style={{ fontSize: 10, color: textMuted, letterSpacing: "1.5px", marginBottom: 10 }}>PROJECT MVP</div>
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                  {teammates.map(t => (
+                    <button key={t.id} className="hb" onClick={() => setMvpPick(prev => prev === t.id ? null : t.id)}
+                      style={{ padding: "5px 14px", borderRadius: 4, fontSize: 11, cursor: "pointer", fontFamily: "inherit", background: mvpPick === t.id ? text : "none", color: mvpPick === t.id ? bg : textMuted, border: `1px solid ${mvpPick === t.id ? text : border}`, transition: "all 0.15s" }}>
+                      {mvpPick === t.id ? "· " : ""}{t.name}
+                    </button>
+                  ))}
+                </div>
+                <div style={{ fontSize: 10, color: textMuted, marginTop: 6, opacity: 0.7 }}>optional — nominate one standout teammate</div>
               </div>
             )}
             <div style={{ display: "flex", gap: 10 }}>
@@ -1218,6 +1227,7 @@ function CoLab() {
   const [hiddenFeedIds, setHiddenFeedIds] = useState(new Set());
   const [followingOnly, setFollowingOnly] = useState(false);
   const [teamReviews, setTeamReviews] = useState([]);
+  const [mvpAwards, setMvpAwards] = useState([]);
   const [showTeamReview, setShowTeamReview] = useState(null); // project to review
   // Communities
   const [communities, setCommunities] = useState([]);
@@ -1420,8 +1430,6 @@ function CoLab() {
   const [newTaskPriority, setNewTaskPriority] = useState("medium");
   const [coverUploading, setCoverUploading] = useState(false);
   const [skillsExpanded, setSkillsExpanded] = useState(false);
-  const [skillVouches, setSkillVouches] = useState([]);
-  const [myVouches, setMyVouches] = useState([]);
 
   const messagesEndRef = useRef(null);
   const dmEndRef = useRef(null);
@@ -1538,64 +1546,6 @@ function CoLab() {
       if (u) setViewingProfile(u);
     }
   };
-  const getSkillVouchCount = (userId, skill) => skillVouches.filter((entry) => entry.vouchee_id === userId && entry.skill === skill).length;
-  const hasVouchedForSkill = (userId, skill) => myVouches.some((entry) => entry.vouchee_id === userId && entry.skill === skill);
-  const handleSkillVouch = async (voucheeId, skill) => {
-    if (!authUser?.id || !voucheeId || !skill || authUser.id === voucheeId || hasVouchedForSkill(voucheeId, skill)) return;
-    const payload = { voucher_id: authUser.id, vouchee_id: voucheeId, skill };
-    const { data, error } = await supabase.from("skill_vouches").insert(payload).select().single();
-    if (error) {
-      showToast(error.code === "23505" ? "Already vouched." : "Couldn't save vouch.");
-      return;
-    }
-    const row = data || payload;
-    setSkillVouches((prev) => [...prev, row]);
-    setMyVouches((prev) => [...prev, row]);
-  };
-  const setViewingProfile = (user) => {
-    setViewingProfileState(user || null);
-  };
-  const setViewFullProfile = (user) => {
-    setViewFullProfileState(user || null);
-  };
-
-  useEffect(() => {
-    setProfileProjectsTab(PROFILE_PROJECTS_TABS.owned);
-  }, [viewFullProfile]);
-
-  useEffect(() => {
-    setShowCollaboratorsList(false);
-  }, [viewFullProfile?.id]);
-  useEffect(() => {
-    setSkillsExpanded(false);
-  }, [editProfile]);
-  useEffect(() => {
-    if (!openPostId) return undefined;
-    const timeoutId = setTimeout(() => setOpenPostId(null), 3000);
-    return () => clearTimeout(timeoutId);
-  }, [openPostId]);
-  useEffect(() => {
-    const voucheeId = viewFullProfile?.id || authUser?.id;
-    if (!voucheeId) {
-      setSkillVouches([]);
-      setMyVouches([]);
-      return undefined;
-    }
-    let cancelled = false;
-    const loadVouches = async () => {
-      const [{ data: received }, { data: mine }] = await Promise.all([
-        supabase.from("skill_vouches").select("*").eq("vouchee_id", voucheeId),
-        authUser?.id
-          ? supabase.from("skill_vouches").select("*").eq("voucher_id", authUser.id).eq("vouchee_id", voucheeId)
-          : Promise.resolve({ data: [] }),
-      ]);
-      if (cancelled) return;
-      setSkillVouches(received || []);
-      setMyVouches(mine || []);
-    };
-    loadVouches();
-    return () => { cancelled = true; };
-  }, [authUser?.id, viewFullProfile?.id]);
   const markRecentActivity = (postId) => {
     setRecentActivityByPost((prev) => ({ ...prev, [postId]: true }));
     setTimeout(() => {
@@ -2004,6 +1954,7 @@ function CoLab() {
     setNotifications,
     setShowApplicationForm,
     setTeamReviews,
+    setMvpAwards,
     setCommunities,
     setJoinedCommunityIds,
     setCommunityVotes,
@@ -7404,18 +7355,8 @@ function CoLab() {
                   <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginBottom: 8 }}>
                     {viewFullProfile.skills.map(s => {
                       const shared = (profile?.skills || []).includes(s);
-                      const count = getSkillVouchCount(viewFullProfile.id, s);
-                      const alreadyVouched = hasVouchedForSkill(viewFullProfile.id, s);
                       return (
-                        <span key={s} style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 11, padding: "3px 10px", border: `1px solid ${shared ? (dark ? "#ffffff40" : "#00000030") : border}`, borderRadius: 999, color: shared ? text : textMuted, fontWeight: shared ? 500 : 400 }}>
-                          <span>{s}</span>
-                          <span style={{ fontSize: 10, opacity: 0.7 }}>+{count}</span>
-                          {viewFullProfile.id !== authUser?.id && (
-                            <button className="hb" disabled={alreadyVouched} onClick={(e) => { e.stopPropagation(); handleSkillVouch(viewFullProfile.id, s); }} style={{ background: alreadyVouched ? text : "none", color: alreadyVouched ? bg : text, border: `1px solid ${alreadyVouched ? text : border}`, borderRadius: 999, padding: "1px 6px", fontSize: 9, cursor: alreadyVouched ? "default" : "pointer", fontFamily: "inherit", opacity: alreadyVouched ? 0.7 : 1 }}>
-                              {alreadyVouched ? "vouched" : "vouch"}
-                            </button>
-                          )}
-                        </span>
+                        <span key={s} style={{ fontSize: 11, padding: "3px 10px", border: `1px solid ${shared ? (dark ? "#ffffff40" : "#00000030") : border}`, borderRadius: 3, color: shared ? text : textMuted, fontWeight: shared ? 500 : 400 }}>{s}</span>
                       );
                     })}
                   </div>
@@ -7425,6 +7366,26 @@ function CoLab() {
                 </div>
             }
           </div>
+
+          {/* Trophy Case */}
+          {(() => {
+            const trophies = mvpAwards.filter(m => m.mvp_user_id === viewFullProfile.id);
+            if (trophies.length === 0) return null;
+            return (
+              <div style={{ marginBottom: 28, paddingBottom: 28, borderBottom: `1px solid ${border}` }}>
+                <div style={{ ...labelStyle, marginBottom: 12 }}>TROPHY CASE</div>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  {trophies.map((t, i) => (
+                    <div key={i} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, padding: "10px 14px", border: `1px solid ${border}`, borderRadius: 8, background: bg2, minWidth: 100 }}>
+                      <div style={{ fontSize: 22, lineHeight: 1 }}>·</div>
+                      <div style={{ fontSize: 10, color: text, fontWeight: 500, textAlign: "center", lineHeight: 1.3 }}>MVP</div>
+                      <div style={{ fontSize: 9, color: textMuted, textAlign: "center", lineHeight: 1.3, maxWidth: 90 }}>{t.project_title}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
 
           {/* Portfolio */}
           <div style={{ marginBottom: 28, paddingBottom: 28, borderBottom: `1px solid ${border}` }}>
@@ -7549,11 +7510,31 @@ function CoLab() {
                 {(profile?.skills || []).length === 0
                   ? <div style={{ fontSize: 12, color: textMuted }}>no skills. <button onClick={() => setEditProfile(true)} style={{ background: "none", border: "none", color: text, cursor: "pointer", fontFamily: "inherit", fontSize: 12, textDecoration: "underline" }}>add →</button></div>
                   : <div>
-                      <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginBottom: 8 }}>{(profile?.skills || []).map(s => <span key={s} style={{ fontSize: 11, padding: "3px 10px", border: `1px solid ${border}`, borderRadius: 3, color: textMuted }}>{s} · {getSkillVouchCount(authUser?.id, s)} vouches</span>)}</div>
+                      <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginBottom: 8 }}>{(profile?.skills || []).map(s => <span key={s} style={{ fontSize: 11, padding: "3px 10px", border: `1px solid ${border}`, borderRadius: 3, color: textMuted }}>{s}</span>)}</div>
                       <div style={{ fontSize: 11, color: textMuted }}>{forYou.length} matching project{forYou.length !== 1 ? "s" : ""} <button className="hb" onClick={() => { setAppScreen("explore"); setExploreTab("projects"); setProjectsSubTab("for-you"); }} style={{ background: "none", border: "none", color: text, cursor: "pointer", fontFamily: "inherit", fontSize: 11, textDecoration: "underline", marginLeft: 4 }}>view →</button></div>
                   </div>
                 }
               </div>
+
+                            {/* Trophy Case */}
+              {(() => {
+                const trophies = mvpAwards.filter(m => m.mvp_user_id === authUser?.id);
+                if (trophies.length === 0) return null;
+                return (
+                  <div style={{ marginBottom: 28, paddingBottom: 28, borderBottom: `1px solid ${border}` }}>
+                    <div style={{ ...labelStyle, marginBottom: 12 }}>TROPHY CASE</div>
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                      {trophies.map((t, i) => (
+                        <div key={i} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, padding: "10px 14px", border: `1px solid ${border}`, borderRadius: 8, background: bg2, minWidth: 100 }}>
+                          <div style={{ fontSize: 22, lineHeight: 1, color: text }}>·</div>
+                          <div style={{ fontSize: 10, color: text, fontWeight: 500, textAlign: "center", lineHeight: 1.3 }}>MVP</div>
+                          <div style={{ fontSize: 9, color: textMuted, textAlign: "center", lineHeight: 1.3, maxWidth: 90 }}>{t.project_title}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* Portfolio */}
               <div style={{ marginBottom: 28, paddingBottom: 28, borderBottom: `1px solid ${border}` }}>
@@ -7941,12 +7922,22 @@ function CoLab() {
           teamReviews={teamReviews}
           dark={dark} bg={bg} bg2={bg2} border={border} text={text} textMuted={textMuted} btnP={btnP} btnG={btnG}
           onClose={() => setShowTeamReview(null)}
-          onSubmit={async (reviews) => {
+          onSubmit={async (reviews, mvpPick) => {
             const { data } = await supabase.from("team_reviews").upsert(reviews, { onConflict: "project_id,reviewer_id,reviewee_id" }).select();
             if (data) setTeamReviews(prev => {
               const existing = prev.filter(r => !(r.project_id === showTeamReview.id && r.reviewer_id === authUser.id));
               return [...existing, ...data];
             });
+            if (mvpPick) {
+              const proj = projects.find(p => p.id === showTeamReview.id);
+              const mvpUser = users.find(u => u.id === mvpPick);
+              const payload = { project_id: showTeamReview.id, project_title: proj?.title || "", voter_id: authUser.id, mvp_user_id: mvpPick, mvp_user_name: mvpUser?.name || "" };
+              const { data: mvpRow } = await supabase.from("project_mvps").upsert(payload, { onConflict: "project_id,voter_id" }).select().single();
+              if (mvpRow) setMvpAwards(prev => {
+                const existing = prev.filter(m => !(m.project_id === showTeamReview.id && m.voter_id === authUser.id));
+                return [...existing, mvpRow];
+              });
+            }
           }}
         />
       )}
