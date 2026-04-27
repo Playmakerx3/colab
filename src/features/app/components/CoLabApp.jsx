@@ -4539,9 +4539,8 @@ const setViewingProfile = (user) => {
             {[["feed", "feed"], ["projects", "projects"]].map(([id, label]) => (
               <button key={id} onClick={() => setExploreTab(id)} style={{
                 background: "none", border: "none",
-                borderBottom: `1px solid ${border}`,
                 color: exploreTab === id ? text : textMuted,
-                padding: "10px 0", textAlign: "left",
+                padding: "6px 0", textAlign: "left",
                 fontSize: 12, cursor: "pointer", fontFamily: "inherit",
                 transition: "color 0.15s", whiteSpace: "nowrap",
                 fontWeight: exploreTab === id ? 500 : 400,
