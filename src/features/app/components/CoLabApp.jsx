@@ -16,6 +16,14 @@ alter table projects add column if not exists cover_image_url text;
 alter table tasks add column if not exists priority text default 'medium';
 alter table projects add column if not exists open_roles text[] default '{}';
 alter table applications add column if not exists role text;
+create table if not exists skill_vouches (
+  id uuid primary key default gen_random_uuid(),
+  voucher_id uuid references profiles(id),
+  vouchee_id uuid references profiles(id),
+  skill text,
+  created_at timestamptz default now(),
+  unique(voucher_id, vouchee_id, skill)
+);
 */
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import LandingPage from "../../landing/LandingPage";
@@ -130,6 +138,46 @@ const CAPACITY_BADGE_STYLES = {
     borderRadius: 20,
     padding: "2px 8px",
   },
+};
+const COMMON_ROLES = ["Designer", "Frontend Dev", "Backend Dev", "Full-Stack Dev", "Mobile Dev", "Product Manager", "Marketing", "Growth", "Data Scientist", "ML Engineer", "DevOps", "Legal", "Finance", "Operations", "Community", "Video Editor", "Copywriter", "3D Artist", "Animator", "Illustrator"];
+const PIXEL_FONT = {
+  A: ["01110", "10001", "10001", "11111", "10001", "10001", "10001"],
+  B: ["11110", "10001", "10001", "11110", "10001", "10001", "11110"],
+  C: ["01111", "10000", "10000", "10000", "10000", "10000", "01111"],
+  D: ["11110", "10001", "10001", "10001", "10001", "10001", "11110"],
+  E: ["11111", "10000", "10000", "11110", "10000", "10000", "11111"],
+  F: ["11111", "10000", "10000", "11110", "10000", "10000", "10000"],
+  G: ["01111", "10000", "10000", "10111", "10001", "10001", "01110"],
+  H: ["10001", "10001", "10001", "11111", "10001", "10001", "10001"],
+  I: ["11111", "00100", "00100", "00100", "00100", "00100", "11111"],
+  J: ["00001", "00001", "00001", "00001", "10001", "10001", "01110"],
+  K: ["10001", "10010", "10100", "11000", "10100", "10010", "10001"],
+  L: ["10000", "10000", "10000", "10000", "10000", "10000", "11111"],
+  M: ["10001", "11011", "10101", "10101", "10001", "10001", "10001"],
+  N: ["10001", "11001", "10101", "10011", "10001", "10001", "10001"],
+  O: ["01110", "10001", "10001", "10001", "10001", "10001", "01110"],
+  P: ["11110", "10001", "10001", "11110", "10000", "10000", "10000"],
+  Q: ["01110", "10001", "10001", "10001", "10101", "10010", "01101"],
+  R: ["11110", "10001", "10001", "11110", "10100", "10010", "10001"],
+  S: ["01111", "10000", "10000", "01110", "00001", "00001", "11110"],
+  T: ["11111", "00100", "00100", "00100", "00100", "00100", "00100"],
+  U: ["10001", "10001", "10001", "10001", "10001", "10001", "01110"],
+  V: ["10001", "10001", "10001", "10001", "10001", "01010", "00100"],
+  W: ["10001", "10001", "10001", "10101", "10101", "10101", "01010"],
+  X: ["10001", "10001", "01010", "00100", "01010", "10001", "10001"],
+  Y: ["10001", "10001", "01010", "00100", "00100", "00100", "00100"],
+  Z: ["11111", "00001", "00010", "00100", "01000", "10000", "11111"],
+  0: ["01110", "10001", "10011", "10101", "11001", "10001", "01110"],
+  1: ["00100", "01100", "00100", "00100", "00100", "00100", "01110"],
+  2: ["01110", "10001", "00001", "00010", "00100", "01000", "11111"],
+  3: ["11110", "00001", "00001", "01110", "00001", "00001", "11110"],
+  4: ["00010", "00110", "01010", "10010", "11111", "00010", "00010"],
+  5: ["11111", "10000", "10000", "11110", "00001", "00001", "11110"],
+  6: ["01110", "10000", "10000", "11110", "10001", "10001", "01110"],
+  7: ["11111", "00001", "00010", "00100", "01000", "01000", "01000"],
+  8: ["01110", "10001", "10001", "01110", "10001", "10001", "01110"],
+  9: ["01110", "10001", "10001", "01111", "00001", "00001", "01110"],
+  " ": ["00000", "00000", "00000", "00000", "00000", "00000", "00000"],
 };
 
 const getMediaType = (url = "") => {
@@ -596,7 +644,7 @@ function PostCard({ post, ctx }) {
     commentPulseIds, pendingCommentByPost, recentActivityByPost, justInsertedPostIds,
     markCommentPending, markRecentActivity, navigateToProject, postMenuOpenId, setPostMenuOpenId,
     openReportModal, editingFeedPostId, setEditingFeedPostId, editingFeedPostContent, setEditingFeedPostContent,
-    handleSaveFeedPostEdit, showToast,
+    handleSaveFeedPostEdit, showToast, openPostId, setOpenPostId,
   } = ctx;
   const isLiked = (postLikes.myLikes || []).includes(post.id);
   const isReposted = (postReposts.myReposts || []).includes(post.id);
@@ -614,7 +662,15 @@ function PostCard({ post, ctx }) {
     return isGoogleDriveUrl(linkedUrl || "") ? linkedUrl : null;
   }, [post.media_url, post.content]);
   const [localComment, setLocalComment] = React.useState("");
+  const cardRef = React.useRef(null);
   const mySkillSet = React.useMemo(() => new Set(profile?.skills || []), [profile]);
+  const isTargeted = openPostId === post.id;
+
+  React.useEffect(() => {
+    if (!isTargeted || !cardRef.current) return;
+    cardRef.current.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [isTargeted]);
+
   const copyPostLink = async () => {
     try {
       await navigator.clipboard.writeText(`https://collaborativelaboratories.com/post/${post.id}`);
@@ -668,11 +724,14 @@ function PostCard({ post, ctx }) {
 
   return (
     <div
+      ref={cardRef}
       style={{
         borderBottom: `1px solid ${border}`,
         padding: "24px 0",
-        transition: "background 0.15s, transform 0.25s ease, opacity 0.25s ease",
+        transition: "background 0.15s, transform 0.25s ease, opacity 0.25s ease, box-shadow 0.2s ease",
         animation: isFreshInsert ? "feedPostAppear 320ms ease-out" : "none",
+        background: isTargeted ? (dark ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.025)") : "transparent",
+        boxShadow: isTargeted ? `inset 0 0 0 1px ${text}` : "none",
       }}
     >
       {/* Header */}
@@ -831,7 +890,11 @@ function PostCard({ post, ctx }) {
         </button>
         <button
           className="hb"
-          onClick={() => { setExpandedComments(prev => ({ ...prev, [post.id]: !prev[post.id] })); if (!postComments[post.id]) loadComments(post.id); }}
+          onClick={() => {
+            setExpandedComments(prev => ({ ...prev, [post.id]: !prev[post.id] }));
+            if (!postComments[post.id]) loadComments(post.id);
+            if (isTargeted) setOpenPostId(null);
+          }}
           style={{
             background: "none",
             border: "none",
@@ -996,6 +1059,7 @@ function BannerEditor({ pixels, onSave, onClose, dark, bg, border, text, textMut
   const [drawing, setDrawing] = React.useState(false);
   const [drawMode, setDrawMode] = React.useState(1); // 1 = fill, 0 = erase
   const [activePreset, setActivePreset] = React.useState(null);
+  const [textStamp, setTextStamp] = React.useState("");
 
   const toggle = (i, mode) => {
     setGrid(prev => { const n = [...prev]; n[i] = mode; return n; });
@@ -1004,6 +1068,29 @@ function BannerEditor({ pixels, onSave, onClose, dark, bg, border, text, textMut
   const applyPreset = (name) => {
     setGrid([...PRESETS[name]]);
     setActivePreset(name);
+  };
+
+  const stampText = () => {
+    const normalized = textStamp.toUpperCase();
+    if (!normalized.trim()) return;
+    setGrid((prev) => {
+      const next = [...prev];
+      let colOffset = 0;
+      for (const char of normalized) {
+        const glyph = PIXEL_FONT[char] || PIXEL_FONT[" "];
+        glyph.forEach((rowBits, rowIdx) => {
+          [...rowBits].forEach((bit, colIdx) => {
+            const col = colOffset + colIdx;
+            const row = rowIdx + 1;
+            if (col >= COLS || row >= ROWS) return;
+            next[row * COLS + col] = bit === "1" ? 1 : 0;
+          });
+        });
+        colOffset += 6;
+        if (colOffset >= COLS) break;
+      }
+      return next;
+    });
   };
 
   return (
@@ -1040,6 +1127,25 @@ function BannerEditor({ pixels, onSave, onClose, dark, bg, border, text, textMut
           <button onClick={() => setDrawMode(1)} style={{ padding: "3px 10px", borderRadius: 4, fontSize: 11, cursor: "pointer", fontFamily: "inherit", background: drawMode === 1 ? text : "none", color: drawMode === 1 ? bg : textMuted, border: `1px solid ${drawMode === 1 ? text : border}` }}>draw</button>
           <button onClick={() => setDrawMode(0)} style={{ padding: "3px 10px", borderRadius: 4, fontSize: 11, cursor: "pointer", fontFamily: "inherit", background: drawMode === 0 ? text : "none", color: drawMode === 0 ? bg : textMuted, border: `1px solid ${drawMode === 0 ? text : border}` }}>erase</button>
           <button onClick={() => { setGrid(new Array(BANNER_PIXELS_COUNT).fill(0)); setActivePreset(null); }} style={{ padding: "3px 10px", borderRadius: 4, fontSize: 11, cursor: "pointer", fontFamily: "inherit", background: "none", color: textMuted, border: `1px solid ${border}`, marginLeft: "auto" }}>clear</button>
+        </div>
+
+        <div style={{ marginBottom: 14 }}>
+          <div style={{ fontSize: 10, color: textMuted, letterSpacing: "1.5px", marginBottom: 8 }}>TYPE TEXT</div>
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <input
+              value={textStamp}
+              onChange={(e) => setTextStamp(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  stampText();
+                }
+              }}
+              placeholder="type to pixel-stamp text..."
+              style={{ flex: 1, background: bg, border: `1px solid ${border}`, borderRadius: 8, padding: "9px 12px", color: text, fontSize: 12, fontFamily: "inherit" }}
+            />
+            <button onClick={stampText} style={{ background: text, color: bg, border: "none", borderRadius: 8, padding: "9px 12px", fontSize: 11, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap" }}>stamp</button>
+          </div>
         </div>
 
         {/* Grid */}
@@ -1138,17 +1244,19 @@ function CoLab() {
   const [communityPostPage, setCommunityPostPage] = useState(1);
   const [topCommunityPosts, setTopCommunityPosts] = useState([]);
   const [projectsSubTab, setProjectsSubTab] = useState("for-you");
-  const [networkTab, setNetworkTab] = useState("graph");
+  const [networkTab, setNetworkTab] = useState("discover");
   const [discoverSkillFilter, setDiscoverSkillFilter] = useState([]);
   const [discoverLocationFilter, setDiscoverLocationFilter] = useState("");
   const [discoverSmartMatch, setDiscoverSmartMatch] = useState(false);
   const [skillDepotSelected, setSkillDepotSelected] = useState(null); // null = grid, string = drill-in
   const [customSkillInput, setCustomSkillInput] = useState("");
+  const [customRoleInput, setCustomRoleInput] = useState("");
   const [activeProject, setActiveProject] = useState(null);
   const [viewingProfile, setViewingProfileState] = useState(null);
   const [viewFullProfile, setViewFullProfileState] = useState(null);
   const [profileProjectsTab, setProfileProjectsTab] = useState(PROFILE_PROJECTS_TABS.owned);
   const [projectTab, setProjectTab] = useState("tasks");
+  const [openPostId, setOpenPostId] = useState(null);
 
   // Auth
   const [authUser, setAuthUser] = useState(null);
@@ -1309,6 +1417,9 @@ function CoLab() {
   const [inviteTargetUser, setInviteTargetUser] = useState(null);
   const [newTaskPriority, setNewTaskPriority] = useState("medium");
   const [coverUploading, setCoverUploading] = useState(false);
+  const [skillsExpanded, setSkillsExpanded] = useState(false);
+  const [skillVouches, setSkillVouches] = useState([]);
+  const [myVouches, setMyVouches] = useState([]);
 
   const messagesEndRef = useRef(null);
   const dmEndRef = useRef(null);
@@ -1347,7 +1458,104 @@ function CoLab() {
     setter([...currentSkills, cleaned]);
     setCustomSkillInput("");
   };
-const setViewingProfile = (user) => {
+  const toggleOpenRole = (role) => {
+    const current = newProject.openRoles || [];
+    const nextRoles = current.includes(role)
+      ? current.filter((entry) => entry !== role)
+      : [...current, role];
+    setNewProject({ ...newProject, openRoles: nextRoles });
+  };
+  const addCustomOpenRole = () => {
+    const cleaned = customRoleInput.trim().replace(/\s+/g, " ").slice(0, 32);
+    if (!cleaned) return;
+    if ((newProject.openRoles || []).includes(cleaned)) { showToast("Role already added."); return; }
+    setNewProject({ ...newProject, openRoles: [...(newProject.openRoles || []), cleaned] });
+    setCustomRoleInput("");
+  };
+  const resolveCurrentLocationLabel = async () => {
+    if (typeof navigator === "undefined" || !navigator.geolocation) throw new Error("Geolocation unavailable");
+    const position = await new Promise((resolve, reject) => {
+      navigator.geolocation.getCurrentPosition(resolve, reject, { enableHighAccuracy: true, timeout: 10000 });
+    });
+    const { latitude, longitude } = position.coords;
+    const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`);
+    if (!response.ok) throw new Error("Reverse geocode failed");
+    const result = await response.json();
+    const city = result?.address?.city || result?.address?.town || result?.address?.village || result?.address?.state;
+    const country = result?.address?.country;
+    if (!city && !country) throw new Error("Location not found");
+    return [city, country].filter(Boolean).join(", ");
+  };
+  const focusFeedPost = async (postId) => {
+    if (!postId) return;
+    setAppScreen("explore");
+    setExploreTab("feed");
+    setFeedSort("for-you");
+    setFeedPage(10);
+    setOpenPostId(postId);
+    setExpandedComments((prev) => ({ ...prev, [postId]: true }));
+    await loadComments(postId);
+  };
+  const openProjectWorkspace = async (projectId, tab = "tasks") => {
+    if (!projectId) return;
+    const proj = projects.find((p) => p.id === projectId);
+    if (!proj) return;
+    setActiveProject(proj);
+    loadProjectData(proj.id);
+    setAppScreen("workspace");
+    setProjectTab(tab);
+    setShowNotifications(false);
+  };
+  const handleNotificationNavigation = async (n, key) => {
+    if (!n) return;
+    if (n.type === "follow" || key === "follows") {
+      const u = users.find((x) => x.id === (n.userId || n.entity_id || n.entityId));
+      if (u) setViewingProfile(u);
+      return;
+    }
+    if (String(n.type || "").includes("community")) {
+      setAppScreen("communities");
+      setShowNotifications(false);
+      return;
+    }
+    if (n.type === "application" || n.type === "application_status" || key === "applications") {
+      await openProjectWorkspace(n.project_id || n.projectId, "applicants");
+      return;
+    }
+    if (n.type === "like" || n.type === "comment" || String(n.type || "").includes("reply") || n.postId || n.post_id) {
+      await focusFeedPost(n.postId || n.post_id);
+      setShowNotifications(false);
+      return;
+    }
+    if (String(n.type || "").includes("community")) {
+      setAppScreen("communities");
+      setShowNotifications(false);
+      return;
+    }
+    if (n.project_id || n.projectId) {
+      await openProjectWorkspace(n.project_id || n.projectId, "tasks");
+      return;
+    }
+    if (n.entity_id || n.entityId) {
+      const u = users.find((x) => x.id === (n.entity_id || n.entityId));
+      if (u) setViewingProfile(u);
+    }
+  };
+  const getSkillVouchCount = (userId, skill) => skillVouches.filter((entry) => entry.vouchee_id === userId && entry.skill === skill).length;
+  const hasVouchedForSkill = (userId, skill) => myVouches.some((entry) => entry.vouchee_id === userId && entry.skill === skill);
+  const handleSkillVouch = async (voucheeId, skill) => {
+    if (!authUser?.id || !voucheeId || !skill || authUser.id === voucheeId || hasVouchedForSkill(voucheeId, skill)) return;
+    const payload = { voucher_id: authUser.id, vouchee_id: voucheeId, skill };
+    const { data, error } = await supabase.from("skill_vouches").insert(payload).select().single();
+    if (error) {
+      showToast(error.code === "23505" ? "Already vouched." : "Couldn't save vouch.");
+      return;
+    }
+    const row = data || payload;
+    setSkillVouches((prev) => [...prev, row]);
+    setMyVouches((prev) => [...prev, row]);
+  };
+  const setViewingProfile = (user) => {
     setViewingProfileState(user || null);
   };
   const setViewFullProfile = (user) => {
@@ -1361,6 +1569,36 @@ const setViewingProfile = (user) => {
   useEffect(() => {
     setShowCollaboratorsList(false);
   }, [viewFullProfile?.id]);
+  useEffect(() => {
+    setSkillsExpanded(false);
+  }, [editProfile]);
+  useEffect(() => {
+    if (!openPostId) return undefined;
+    const timeoutId = setTimeout(() => setOpenPostId(null), 3000);
+    return () => clearTimeout(timeoutId);
+  }, [openPostId]);
+  useEffect(() => {
+    const voucheeId = viewFullProfile?.id || authUser?.id;
+    if (!voucheeId) {
+      setSkillVouches([]);
+      setMyVouches([]);
+      return undefined;
+    }
+    let cancelled = false;
+    const loadVouches = async () => {
+      const [{ data: received }, { data: mine }] = await Promise.all([
+        supabase.from("skill_vouches").select("*").eq("vouchee_id", voucheeId),
+        authUser?.id
+          ? supabase.from("skill_vouches").select("*").eq("voucher_id", authUser.id).eq("vouchee_id", voucheeId)
+          : Promise.resolve({ data: [] }),
+      ]);
+      if (cancelled) return;
+      setSkillVouches(received || []);
+      setMyVouches(mine || []);
+    };
+    loadVouches();
+    return () => { cancelled = true; };
+  }, [authUser?.id, viewFullProfile?.id]);
   const markRecentActivity = (postId) => {
     setRecentActivityByPost((prev) => ({ ...prev, [postId]: true }));
     setTimeout(() => {
@@ -2100,7 +2338,17 @@ const setViewingProfile = (user) => {
   const [showFollowList, setShowFollowList] = useState(null); // "followers" | "following"
   const appliedProjectIds = applications.filter(a => a.applicant_id === authUser?.id && a.status !== "left").map(a => a.project_id);
   const browseBase = projects.filter(p => p.owner_id !== authUser?.id && !p.archived && !p.is_private);
-  const forYou = browseBase.map(p => ({ ...p, _s: getMatchScore(p) })).filter(p => p._s > 0).sort((a, b) => b._s - a._s);
+  const forYou = browseBase.map(p => ({ ...p, _s: getMatchScore(p) })).filter(p => {
+    if (p._s === 0) return false;
+    if (regionFilter) {
+      const pLoc = (p.location || "").toLowerCase();
+      const myCountry = (profile?.location || "").split(",").pop().trim().toLowerCase();
+      if (regionFilter === "local" || regionFilter === "city") { if (!(localRegion.length > 0 && pLoc.includes(localRegion))) return false; }
+      else if (regionFilter === "national") { if (!(pLoc.includes("us") || pLoc.includes("usa") || pLoc.includes("united states") || (myCountry && pLoc.split(",").pop().trim() === myCountry))) return false; }
+      else if (regionFilter === "international") { if (myCountry && pLoc.includes(myCountry)) return false; }
+    }
+    return true;
+  }).sort((a, b) => b._s - a._s);
   const normalizedSearch = search.trim().toLowerCase();
   const normalizedLocation = locationFilter.trim().toLowerCase();
   const localRegion = (profile?.location || "").split(",")[0].trim().toLowerCase();
@@ -2171,7 +2419,7 @@ const setViewingProfile = (user) => {
 
     const collaboratedProjectsById = new Map();
     applications
-      .filter((application) => application.applicant_id === profileUserId && application.status === "accepted")
+      .filter((application) => application.applicant_id === profileUserId && normalizeApplicationStatus(application.status) === "accepted")
       .forEach((application) => {
         const project = projects.find((candidate) => candidate.id === application.project_id);
         if (!project || project.owner_id === profileUserId || collaboratedProjectsById.has(project.id)) return;
@@ -2188,7 +2436,7 @@ const setViewingProfile = (user) => {
   };
   const getCapacityStatus = (userId) => {
     const hasActiveProjects = projects.some((project) => project.owner_id === userId && !project.archived);
-    const hasAcceptedApplications = applications.some((application) => application.applicant_id === userId && application.status === "accepted");
+    const hasAcceptedApplications = applications.some((application) => application.applicant_id === userId && normalizeApplicationStatus(application.status) === "accepted");
     return hasActiveProjects || hasAcceptedApplications ? "On Project" : "Free to Collab";
   };
   const viewedProfileProjects = useMemo(
@@ -2420,6 +2668,10 @@ const setViewingProfile = (user) => {
     if (!activeProject?.id) return;
     setProjectLastReadAt((prev) => (prev[activeProject.id] ? prev : { ...prev, [activeProject.id]: Date.now() }));
   }, [activeProject?.id]);
+  useEffect(() => {
+    if (showCreate) return;
+    setCustomRoleInput("");
+  }, [showCreate]);
 
   useEffect(() => {
     if (!activeProject?.id || projectTab !== "messages") return;
@@ -3316,11 +3568,11 @@ const setViewingProfile = (user) => {
           <p style={{ fontSize: 13, color: textMuted }}>Your collaborators, connections, and people worth meeting.</p>
         </div>
 
-        {/* Tabs: graph | discover */}
+        {/* Tabs: discover | graph */}
         <div style={{ borderBottom: `1px solid ${border}`, marginBottom: 28, display: "flex" }}>
           {[
-            { id: "graph", label: "people" },
             { id: "discover", label: "discover" },
+            { id: "graph", label: "people" },
             { id: "skills", label: "skills" },
           ].map(({ id, label }) => (
             <button key={id} onClick={() => setNetworkTab(id)} style={{ background: "none", border: "none", borderBottom: networkTab === id ? `1px solid ${text}` : "1px solid transparent", color: networkTab === id ? text : textMuted, padding: "8px 0", fontSize: 12, cursor: "pointer", fontFamily: "inherit", marginRight: 24, transition: "all 0.15s", display: "inline-flex", gap: 6, alignItems: "center", whiteSpace: "nowrap" }}>
@@ -4202,7 +4454,7 @@ const setViewingProfile = (user) => {
         {/* Nav items */}
         <div className="desktop-nav-items" style={{ display: "flex", gap: 0, alignItems: "center" }}>
           {navItems.map(({ id, label, badge }) => (
-            <button key={id} onClick={() => { setAppScreen(id); setActiveProject(null); setViewingProfile(null); setViewFullProfile(null); setShowNotifications(false); if (id === "explore") setExploreTab("feed"); }}
+            <button key={id} onClick={() => { setAppScreen(id); setActiveProject(null); setViewingProfile(null); setViewFullProfile(null); setShowNotifications(false); if (id === "explore") setExploreTab("feed"); if (id === "network") setNetworkTab("discover"); }}
               style={{ position: "relative", background: appScreen === id && !activeProject && !showNotifications ? bg3 : "none", color: appScreen === id && !activeProject && !showNotifications ? text : textMuted, border: "none", borderRadius: 6, padding: "5px 5px", fontSize: 11, cursor: "pointer", fontFamily: "inherit", transition: "all 0.15s", whiteSpace: "nowrap", flexShrink: 0 }}>
               {label}
               {badge > 0 && <span style={{ position: "absolute", top: 2, right: 2, width: 5, height: 5, borderRadius: "50%", background: text, border: `1px solid ${bg}` }} />}
@@ -4224,7 +4476,7 @@ const setViewingProfile = (user) => {
       </nav>
       <div className="mobile-tabbar" style={{ display: "none", position: "fixed", left: 0, right: 0, bottom: 0, zIndex: 220, background: bg, borderTop: `1px solid ${border}`, height: 56, alignItems: "center", justifyContent: "space-around", padding: "0 8px", paddingBottom: "env(safe-area-inset-bottom)" }}>
         {navItems.map(({ id, label, badge }) => (
-          <button key={`mobile-${id}`} onClick={() => { setAppScreen(id); setActiveProject(null); setViewingProfile(null); setViewFullProfile(null); setShowNotifications(false); if (id === "explore") setExploreTab("feed"); }}
+          <button key={`mobile-${id}`} onClick={() => { setAppScreen(id); setActiveProject(null); setViewingProfile(null); setViewFullProfile(null); setShowNotifications(false); if (id === "explore") setExploreTab("feed"); if (id === "network") setNetworkTab("discover"); }}
             style={{ position: "relative", background: "none", color: appScreen === id ? text : textMuted, border: "none", padding: "4px 6px", fontSize: 11, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap" }}>
             {label}
             {badge > 0 && <span style={{ position: "absolute", top: 2, right: 0, width: 5, height: 5, borderRadius: "50%", background: text, border: `1px solid ${bg}` }} />}
@@ -4248,11 +4500,7 @@ const setViewingProfile = (user) => {
               : <>
                 {mentionNotifications.map(n => (
                   <div key={n.id} style={{ padding: "14px 16px", borderBottom: `1px solid ${border}`, display: "flex", justifyContent: "space-between", gap: 8, cursor: n.project_id ? "pointer" : "default" }}
-                    onClick={() => {
-                      if (!n.project_id) return;
-                      const proj = projects.find(p => p.id === n.project_id);
-                      if (proj) { setActiveProject(proj); loadProjectData(proj.id); setAppScreen("workspace"); setProjectTab("tasks"); setShowNotifications(false); }
-                    }}>
+                    onClick={() => handleNotificationNavigation(n)}>
                     <div>
                       <div style={{ fontSize: 12, color: text, marginBottom: 2 }}>{n.from_name} mentioned you</div>
                       <div style={{ fontSize: 11, color: textMuted, fontStyle: "italic" }}>"{n.context}..."</div>
@@ -4279,8 +4527,7 @@ const setViewingProfile = (user) => {
                   <div style={{ marginBottom: n.type === "application" ? 10 : 0 }}>
                     {n.projectId && (
                       <button className="hb" onClick={() => {
-                        const proj = projects.find(p => p.id === n.projectId);
-                        if (proj) { setActiveProject(proj); loadProjectData(proj.id); setAppScreen("workspace"); setProjectTab("tasks"); setShowNotifications(false); }
+                        handleNotificationNavigation(n, n.type === "application" || n.type === "application_status" ? "applications" : undefined);
                       }} style={{ background: "none", border: "none", padding: 0, color: textMuted, cursor: "pointer", fontFamily: "inherit", fontSize: 11, textDecoration: "underline" }}>
                         {n.sub}
                       </button>
@@ -4288,10 +4535,10 @@ const setViewingProfile = (user) => {
                     {!n.projectId && n.userId && (
                       <button className="hb" onClick={() => { const u = users.find(x => x.id === n.userId); if (u) { setViewFullProfile(u); setShowNotifications(false); } }} style={{ background: "none", border: "none", padding: 0, color: textMuted, cursor: "pointer", fontFamily: "inherit", fontSize: 11, textDecoration: "underline" }}>{n.sub}</button>
                     )}
-                    {!n.projectId && !n.userId && n.postId && (
-                      <button className="hb" onClick={() => { setAppScreen("network"); setShowNotifications(false); }} style={{ background: "none", border: "none", padding: 0, color: textMuted, cursor: "pointer", fontFamily: "inherit", fontSize: 11, textDecoration: "underline" }}>{n.sub}</button>
+                    {!n.projectId && !n.userId && (n.postId || n.post_id) && (
+                      <button className="hb" onClick={() => { handleNotificationNavigation(n); }} style={{ background: "none", border: "none", padding: 0, color: textMuted, cursor: "pointer", fontFamily: "inherit", fontSize: 11, textDecoration: "underline" }}>{n.sub}</button>
                     )}
-                    {!n.projectId && !n.userId && !n.postId && <span style={{ fontSize: 11, color: textMuted }}>{n.sub}</span>}
+                    {!n.projectId && !n.userId && !(n.postId || n.post_id) && <span style={{ fontSize: 11, color: textMuted }}>{n.sub}</span>}
                     <span style={{ fontSize: 11, color: textMuted }}> · {n.time}</span>
                   </div>
                   {n.type === "invite" && (
@@ -4430,8 +4677,9 @@ const setViewingProfile = (user) => {
       {showProjectsFor && (() => {
         const isMe = showProjectsFor === authUser?.id;
         const subjectUser = isMe ? profile : users.find(u => u.id === showProjectsFor);
-        const subjectProjects = [...projects.filter(p => p.owner_id === showProjectsFor)].sort((a, b) => Number(b.featured) - Number(a.featured) || new Date(b.created_at) - new Date(a.created_at));
-        const collaboratedProjects = applications.filter(a => a.applicant_id === showProjectsFor && a.status === "accepted").map(a => projects.find(p => p.id === a.project_id)).filter(Boolean);
+        const subjectProjectGroups = getProfileProjects(showProjectsFor);
+        const subjectProjects = subjectProjectGroups.ownedProjects;
+        const collaboratedProjects = subjectProjectGroups.collaboratedProjects;
         return (
           <div onClick={() => setShowProjectsFor(null)} style={{ position: "fixed", inset: 0, background: dark ? "rgba(0,0,0,0.92)" : "rgba(200,200,200,0.88)", zIndex: 300, display: "flex", alignItems: "center", justifyContent: "center", backdropFilter: "blur(12px)", padding: 16 }}>
             <div onClick={e => e.stopPropagation()} style={{ background: bg, border: `1px solid ${border}`, borderRadius: 16, padding: "28px", width: "100%", maxWidth: 480, maxHeight: "80vh", overflowY: "auto" }}>
@@ -4473,7 +4721,10 @@ const setViewingProfile = (user) => {
                             onMouseEnter={e => e.currentTarget.style.opacity = "0.7"} onMouseLeave={e => e.currentTarget.style.opacity = "1"}>
                             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
                               <div style={{ fontSize: 13, color: text }}>{p.title}</div>
-                              <span style={{ fontSize: 10, border: `1px solid ${p.shipped ? "#22c55e66" : border}`, borderRadius: 3, padding: "1px 6px", color: p.shipped ? "#22c55e" : textMuted, flexShrink: 0 }}>{p.shipped ? "shipped" : "active"}</span>
+                              <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                                <span style={{ fontSize: 10, border: `1px solid ${border}`, borderRadius: 999, padding: "1px 6px", color: textMuted, flexShrink: 0 }}>collab</span>
+                                <span style={{ fontSize: 10, border: `1px solid ${p.shipped ? "#22c55e66" : border}`, borderRadius: 3, padding: "1px 6px", color: p.shipped ? "#22c55e" : textMuted, flexShrink: 0 }}>{p.shipped ? "shipped" : "active"}</span>
+                              </div>
                             </div>
                             {p.description && <div style={{ fontSize: 11, color: textMuted }}>{p.description.slice(0, 80)}{p.description.length > 80 ? "..." : ""}</div>}
                           </div>
@@ -4535,18 +4786,18 @@ const setViewingProfile = (user) => {
 
           {/* Top-level explore tabs: feed | projects */}
           <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px", marginBottom: 16 }}>{exploreTab === "projects" ? "OPEN PROJECTS" : "BUILDER FEED"}</div>
-          <div style={{ display: "flex", flexDirection: "column", marginBottom: 28 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 2, marginBottom: 28 }}>
             {[["feed", "feed"], ["projects", "projects"]].map(([id, label]) => (
-              <button key={id} onClick={() => setExploreTab(id)} style={{
-                background: "none", border: "none",
+              <div key={id} onClick={() => setExploreTab(id)} style={{
                 color: exploreTab === id ? text : textMuted,
-                padding: "6px 0", textAlign: "left",
+                padding: "3px 0",
                 fontSize: 12, cursor: "pointer", fontFamily: "inherit",
                 transition: "color 0.15s", whiteSpace: "nowrap",
                 fontWeight: exploreTab === id ? 500 : 400,
+                userSelect: "none",
               }}>
                 {label}
-              </button>
+              </div>
             ))}
           </div>
 
@@ -4558,13 +4809,18 @@ const setViewingProfile = (user) => {
               <div style={{ flex: 1, minWidth: 0 }}>
 
                 {/* Sub-tabs */}
-                <div style={{ display: "flex", borderBottom: `1px solid ${border}`, marginBottom: 24 }}>
+                <div style={{ display: "flex", borderBottom: `1px solid ${border}`, marginBottom: 16 }}>
                   {["for-you","all"].map(id => (
                     <button key={id} onClick={() => setProjectsSubTab(id)} style={{ background: "none", border: "none", borderBottom: projectsSubTab === id ? `1px solid ${text}` : "1px solid transparent", color: projectsSubTab === id ? text : textMuted, padding: "8px 16px 8px 0", fontSize: 11, cursor: "pointer", fontFamily: "inherit", marginRight: 8, transition: "all 0.15s", display: "inline-flex", gap: 6, alignItems: "center" }}>
                       {id === "for-you" ? "for you" : "all"}
                       {id === "for-you" && forYou.length > 0 && <span style={{ fontSize: 9, background: bg3, borderRadius: 10, padding: "1px 5px", color: textMuted }}>{forYou.length}</span>}
                     </button>
                   ))}
+                </div>
+
+                {/* Region filter — visible on both tabs */}
+                <div style={{ display: "flex", gap: 5, flexWrap: "wrap", alignItems: "center", marginBottom: 16 }}>
+                  {["local","city","national","international"].map(r => { const sel = regionFilter === r; return <button key={r} className="hb" onClick={() => setRegionFilter(sel ? null : r)} style={{ padding: "3px 10px", borderRadius: 3, fontSize: 10, cursor: "pointer", fontFamily: "inherit", background: sel ? text : "none", color: sel ? bg : textMuted, border: `1px solid ${sel ? text : border}`, transition: "all 0.15s" }}>{r}</button>; })}
                 </div>
 
                 {/* Filters — all sub-tab only */}
@@ -4581,10 +4837,6 @@ const setViewingProfile = (user) => {
                     <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
                       {["Design","Engineering","Marketing","Music","Video","Finance","AI/ML","Writing","Product"].map(s => { const sel = filterSkill === s; return <button key={s} className="hb" onClick={() => setFilterSkill(sel ? null : s)} style={{ padding: "3px 10px", borderRadius: 3, fontSize: 10, cursor: "pointer", fontFamily: "inherit", background: sel ? text : "none", color: sel ? bg : textMuted, border: `1px solid ${sel ? text : border}`, transition: "all 0.15s" }}>{s}</button>; })}
                       {(filterSkill || industryFilter || locationFilter || search || regionFilter) && <button className="hb" onClick={clearExploreFilters} style={{ padding: "3px 10px", borderRadius: 3, fontSize: 10, cursor: "pointer", fontFamily: "inherit", background: "none", color: textMuted, border: `1px solid ${border}` }}>clear</button>}
-                    </div>
-                    <div style={{ display: "flex", gap: 5, flexWrap: "wrap", alignItems: "center" }}>
-                      <span style={{ fontSize: 10, color: textMuted, letterSpacing: "1px" }}>REGION</span>
-                      {["local","city","national","international"].map(r => { const sel = regionFilter === r; return <button key={r} className="hb" onClick={() => setRegionFilter(sel ? null : r)} style={{ padding: "3px 10px", borderRadius: 3, fontSize: 10, cursor: "pointer", fontFamily: "inherit", background: sel ? text : "none", color: sel ? bg : textMuted, border: `1px solid ${sel ? text : border}`, transition: "all 0.15s" }}>{r}</button>; })}
                     </div>
                     {exploreFiltersClearedNotice && <div style={{ fontSize: 11, color: textMuted }}>Showing trending — filters cleared</div>}
                   </div>
@@ -4717,7 +4969,7 @@ const setViewingProfile = (user) => {
               recentActivityByPost, justInsertedPostIds, markCommentPending, markRecentActivity,
               navigateToProject, postMenuOpenId, setPostMenuOpenId, openReportModal,
               editingFeedPostId, setEditingFeedPostId, editingFeedPostContent, setEditingFeedPostContent,
-              handleSaveFeedPostEdit, showToast,
+              handleSaveFeedPostEdit, showToast, openPostId, setOpenPostId,
             };
             // ── Feed data prep ─────────────────────────────────────────────
             const mySkillSet = new Set(profile?.skills || []);
@@ -4868,15 +5120,13 @@ const setViewingProfile = (user) => {
                 )}
 
                 {/* Sort + following filter */}
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: `1px solid ${border}`, marginBottom: 24 }}>
-                  <div style={{ display: "flex" }}>
-                    {[["for-you", "for you"], ["following", "following"]].map(([val, label]) => (
-                      <button key={val} className="hb" onClick={() => { setFeedSort(val); setFeedPage(1); }}
-                        style={{ background: "none", border: "none", borderBottom: feedSort === val ? `1px solid ${text}` : "1px solid transparent", color: feedSort === val ? text : textMuted, padding: "8px 16px 8px 0", fontSize: 11, cursor: "pointer", fontFamily: "inherit", marginRight: 8, transition: "all 0.15s" }}>
-                        {label}
-                      </button>
-                    ))}
-                  </div>
+                <div style={{ display: "flex", borderBottom: `1px solid ${border}`, marginBottom: 16 }}>
+                  {[["for-you", "for you"], ["following", "following"]].map(([val, label]) => (
+                    <button key={val} className="hb" onClick={() => { setFeedSort(val); setFeedPage(1); }}
+                      style={{ background: "none", border: "none", borderBottom: feedSort === val ? `1px solid ${text}` : "1px solid transparent", color: feedSort === val ? text : textMuted, padding: "8px 16px 8px 0", fontSize: 11, cursor: "pointer", fontFamily: "inherit", marginRight: 8, transition: "all 0.15s", outline: "none" }}>
+                      {label}
+                    </button>
+                  ))}
                 </div>
 
                 {/* Region filter */}
@@ -5349,25 +5599,7 @@ const setViewingProfile = (user) => {
                           await supabase.from("mention_notifications").update({ read: true }).eq("id", n.id);
                           setMentionNotifications((prev) => prev.filter((item) => item.id !== n.id));
                         }
-                        if (n.type === "follow" || key === "follows") {
-                          const u = users.find((x) => x.id === (n.userId || n.entity_id || n.entityId));
-                          if (u) setViewingProfile(u);
-                          return;
-                        }
-                        if (String(n.type || "").includes("reply") || String(n.type || "").includes("community")) {
-                          setAppScreen("communities");
-                          return;
-                        }
-                        if (n.project_id || n.projectId) {
-                          const proj = projects.find((p) => p.id === (n.project_id || n.projectId));
-                          if (proj) { setActiveProject(proj); loadProjectData(proj.id); setAppScreen("workspace"); setProjectTab("tasks"); }
-                          return;
-                        }
-                        if (n.postId) { setAppScreen("network"); return; }
-                        if (n.entity_id || n.entityId) {
-                          const u = users.find((x) => x.id === (n.entity_id || n.entityId));
-                          if (u) setViewingProfile(u);
-                        }
+                        await handleNotificationNavigation(n, key);
                       }}
                       style={{ width: "100%", textAlign: "left", background: "none", border: "none", borderBottom: `1px solid ${border}`, padding: "12px 14px", cursor: "pointer", fontFamily: "inherit", display: "flex", justifyContent: "space-between", gap: 12 }}
                     >
@@ -7107,7 +7339,7 @@ const setViewingProfile = (user) => {
                   {viewFullProfile.location && <div style={{ fontSize: 11, color: textMuted, marginTop: 1 }}>{viewFullProfile.location}</div>}
                   <div style={{ fontSize: 10, color: text, marginTop: 4 }}>
                     <button className="hb" onClick={() => setShowProjectsFor(viewFullProfile.id)} style={{ background: "none", border: "none", color: text, cursor: "pointer", fontFamily: "inherit", fontSize: 10, padding: 0 }}>
-                      {projects.filter(p => p.owner_id === viewFullProfile.id).length + applications.filter(a => a.applicant_id === viewFullProfile.id && normalizeApplicationStatus(a.status) === "accepted").length} project{(projects.filter(p => p.owner_id === viewFullProfile.id).length + applications.filter(a => a.applicant_id === viewFullProfile.id && normalizeApplicationStatus(a.status) === "accepted").length) !== 1 ? "s" : ""}
+                      {viewedProfileProjects.ownedProjects.length + viewedProfileProjects.collaboratedProjects.length} project{(viewedProfileProjects.ownedProjects.length + viewedProfileProjects.collaboratedProjects.length) !== 1 ? "s" : ""}
                     </button>
                     {" · "}
                     <button className="hb" onClick={() => setShowCollaborators(viewFullProfile.id)} style={{ background: "none", border: "none", color: text, cursor: "pointer", fontFamily: "inherit", fontSize: 10, padding: 0 }}>
@@ -7136,7 +7368,19 @@ const setViewingProfile = (user) => {
                   <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginBottom: 8 }}>
                     {viewFullProfile.skills.map(s => {
                       const shared = (profile?.skills || []).includes(s);
-                      return <span key={s} style={{ fontSize: 11, padding: "3px 10px", border: `1px solid ${shared ? (dark ? "#ffffff40" : "#00000030") : border}`, borderRadius: 3, color: shared ? text : textMuted, fontWeight: shared ? 500 : 400 }}>{s}{shared ? " ★" : ""}</span>;
+                      const count = getSkillVouchCount(viewFullProfile.id, s);
+                      const alreadyVouched = hasVouchedForSkill(viewFullProfile.id, s);
+                      return (
+                        <span key={s} style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 11, padding: "3px 10px", border: `1px solid ${shared ? (dark ? "#ffffff40" : "#00000030") : border}`, borderRadius: 999, color: shared ? text : textMuted, fontWeight: shared ? 500 : 400 }}>
+                          <span>{s}{shared ? " ★" : ""}</span>
+                          <span style={{ fontSize: 10, opacity: 0.7 }}>+{count}</span>
+                          {viewFullProfile.id !== authUser?.id && (
+                            <button className="hb" disabled={alreadyVouched} onClick={(e) => { e.stopPropagation(); handleSkillVouch(viewFullProfile.id, s); }} style={{ background: alreadyVouched ? text : "none", color: alreadyVouched ? bg : text, border: `1px solid ${alreadyVouched ? text : border}`, borderRadius: 999, padding: "1px 6px", fontSize: 9, cursor: alreadyVouched ? "default" : "pointer", fontFamily: "inherit", opacity: alreadyVouched ? 0.7 : 1 }}>
+                              {alreadyVouched ? "vouched" : "vouch"}
+                            </button>
+                          )}
+                        </span>
+                      );
                     })}
                   </div>
                   {viewFullProfile.skills.filter(s => (profile?.skills || []).includes(s)).length > 0 &&
@@ -7155,9 +7399,9 @@ const setViewingProfile = (user) => {
           {/* Activity — applications they've sent */}
           <div style={{ marginBottom: 28, paddingBottom: 28, borderBottom: `1px solid ${border}` }}>
             <div style={{ ...labelStyle, marginBottom: 12 }}>ACTIVITY</div>
-            {applications.filter(a => a.applicant_id === viewFullProfile.id && a.status === "accepted").length === 0
+            {applications.filter(a => a.applicant_id === viewFullProfile.id && normalizeApplicationStatus(a.status) === "accepted").length === 0
               ? <div style={{ fontSize: 12, color: textMuted }}>no public activity.</div>
-              : applications.filter(a => a.applicant_id === viewFullProfile.id && a.status === "accepted").slice(0, 5).map(a => {
+              : applications.filter(a => a.applicant_id === viewFullProfile.id && normalizeApplicationStatus(a.status) === "accepted").slice(0, 5).map(a => {
                   const p = projects.find(proj => proj.id === a.project_id);
                   return p ? (
                     <div key={a.id} style={{ padding: "10px 14px", background: bg2, borderRadius: 8, border: `1px solid ${border}`, marginBottom: 8, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -7207,7 +7451,7 @@ const setViewingProfile = (user) => {
                       {profile?.location && <div style={{ fontSize: 11, color: textMuted, marginTop: 1 }}>{profile.location}</div>}
                       <div style={{ fontSize: 10, color: text, marginTop: 4 }}>
                         <button className="hb" onClick={() => setShowProjectsFor(authUser?.id)} style={{ background: "none", border: "none", color: text, cursor: "pointer", fontFamily: "inherit", fontSize: 10, padding: 0 }}>
-                          {myProjects.length} project{myProjects.length !== 1 ? "s" : ""}
+                          {myProfileProjects.ownedProjects.length + myProfileProjects.collaboratedProjects.length} project{(myProfileProjects.ownedProjects.length + myProfileProjects.collaboratedProjects.length) !== 1 ? "s" : ""}
                         </button>
                         {" · "}
                         <button className="hb" onClick={() => setShowCollaboratorsList(true)} style={{ background: "none", border: "none", color: text, cursor: "pointer", fontFamily: "inherit", fontSize: 10, padding: 0 }}>
@@ -7260,7 +7504,7 @@ const setViewingProfile = (user) => {
                   <div style={{ fontSize: 13, color: text, marginBottom: 12 }}>You haven’t built anything yet — start your first project or share what you're working on</div>
                   <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                     <button className="hb" onClick={openCreateProjectFlow} style={btnP}>Post a project</button>
-                    <button className="hb" onClick={() => { setAppScreen("network"); setNetworkTab("feed"); }} style={btnG}>Share an update</button>
+                    <button className="hb" onClick={() => { setAppScreen("explore"); setExploreTab("feed"); }} style={btnG}>Share an update</button>
                   </div>
                 </div>
               )}
@@ -7269,7 +7513,7 @@ const setViewingProfile = (user) => {
                 {(profile?.skills || []).length === 0
                   ? <div style={{ fontSize: 12, color: textMuted }}>no skills. <button onClick={() => setEditProfile(true)} style={{ background: "none", border: "none", color: text, cursor: "pointer", fontFamily: "inherit", fontSize: 12, textDecoration: "underline" }}>add →</button></div>
                   : <div>
-                      <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginBottom: 8 }}>{(profile?.skills || []).map(s => <span key={s} style={{ fontSize: 11, padding: "3px 10px", border: `1px solid ${border}`, borderRadius: 3, color: textMuted }}>{s}</span>)}</div>
+                      <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginBottom: 8 }}>{(profile?.skills || []).map(s => <span key={s} style={{ fontSize: 11, padding: "3px 10px", border: `1px solid ${border}`, borderRadius: 3, color: textMuted }}>{s} · {getSkillVouchCount(authUser?.id, s)} vouches</span>)}</div>
                       <div style={{ fontSize: 11, color: textMuted }}>★ {forYou.length} matching project{forYou.length !== 1 ? "s" : ""} <button className="hb" onClick={() => { setAppScreen("explore"); setExploreTab("projects"); setProjectsSubTab("for-you"); }} style={{ background: "none", border: "none", color: text, cursor: "pointer", fontFamily: "inherit", fontSize: 11, textDecoration: "underline", marginLeft: 4 }}>view →</button></div>
                   </div>
                 }
@@ -7402,13 +7646,35 @@ const setViewingProfile = (user) => {
                   </div>
                 </div>
                 <div><label style={labelStyle}>ROLE</label><input style={inputStyle} placeholder="Founder, Designer, Engineer..." value={profile?.role || ""} onChange={e => setProfile({ ...profile, role: e.target.value })} /></div>
-                <div><label style={labelStyle}>LOCATION</label><input style={inputStyle} placeholder="City, State or Country" value={profile?.location || ""} onChange={e => setProfile({ ...profile, location: e.target.value })} /></div>
+                <div>
+                  <label style={labelStyle}>LOCATION</label>
+                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                    <input style={inputStyle} placeholder="City, State or Country" value={profile?.location || ""} onChange={e => setProfile({ ...profile, location: e.target.value })} />
+                    <button className="hb" onClick={async () => {
+                      try {
+                        const location = await resolveCurrentLocationLabel();
+                        setProfile({ ...profile, location });
+                      } catch {
+                        showToast("Couldn't find your location.");
+                      }
+                    }} style={{ ...btnG, padding: "10px 12px", color: text }}>📍</button>
+                  </div>
+                </div>
                 <div><label style={labelStyle}>BIO</label><textarea style={{ ...inputStyle, resize: "none" }} rows={4} value={profile?.bio || ""} onChange={e => setProfile({ ...profile, bio: e.target.value })} /></div>
                 <div>
                   <label style={labelStyle}>SKILLS</label>
                   <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginBottom: 10 }}>
                     {/* Canonical skills */}
-                    {SKILLS.map(s => { const sel = (profile?.skills || []).includes(s); return <button key={s} className="hb" onClick={() => setProfile({ ...profile, skills: sel ? profile.skills.filter(x => x !== s) : [...(profile?.skills || []), s] })} style={{ padding: "3px 10px", borderRadius: 3, fontSize: 10, cursor: "pointer", fontFamily: "inherit", background: sel ? text : "none", color: sel ? bg : textMuted, border: `1px solid ${sel ? text : border}`, transition: "all 0.15s" }}>{s}</button>; })}
+                    {(() => {
+                      const selectedSkills = new Set(profile?.skills || []);
+                      const baseSkills = skillsExpanded ? SKILLS : SKILLS.slice(0, 20);
+                      const selectedOverflow = SKILLS.filter((skill) => selectedSkills.has(skill) && !baseSkills.includes(skill));
+                      const visibleSkills = [...baseSkills, ...selectedOverflow];
+                      return visibleSkills.map((s) => {
+                        const sel = (profile?.skills || []).includes(s);
+                        return <button key={s} className="hb" onClick={() => setProfile({ ...profile, skills: sel ? profile.skills.filter(x => x !== s) : [...(profile?.skills || []), s] })} style={{ padding: "3px 10px", borderRadius: 3, fontSize: 10, cursor: "pointer", fontFamily: "inherit", background: sel ? text : "none", color: sel ? bg : textMuted, border: `1px solid ${sel ? text : border}`, transition: "all 0.15s" }}>{s}</button>;
+                      });
+                    })()}
                     {/* Custom skills not in canonical list */}
                     {(profile?.skills || []).filter(s => !SKILLS.includes(s)).map(s => (
                       <button key={s} className="hb" onClick={() => setProfile({ ...profile, skills: profile.skills.filter(x => x !== s) })}
@@ -7417,6 +7683,9 @@ const setViewingProfile = (user) => {
                       </button>
                     ))}
                   </div>
+                  <button className="hb" onClick={() => setSkillsExpanded((prev) => !prev)} style={{ background: "none", border: "none", color: text, cursor: "pointer", fontFamily: "inherit", fontSize: 11, textDecoration: "underline", padding: 0, marginBottom: 10 }}>
+                    {skillsExpanded ? "show less ↑" : `show all (${SKILLS.length}) →`}
+                  </button>
                   {/* Add custom skill */}
                   <div style={{ display: "flex", gap: 6 }}>
                     <input
@@ -7507,9 +7776,54 @@ const setViewingProfile = (user) => {
                   {SKILLS.map(s => { const sel = newProject.skills.includes(s); return <button key={s} className="hb" onClick={() => setNewProject({ ...newProject, skills: sel ? newProject.skills.filter(x => x !== s) : [...newProject.skills, s] })} style={{ padding: "3px 10px", borderRadius: 3, fontSize: 10, cursor: "pointer", fontFamily: "inherit", background: sel ? text : "none", color: sel ? bg : textMuted, border: `1px solid ${sel ? text : border}`, transition: "all 0.15s" }}>{s}</button>; })}
                 </div>
               </div>
-              <div><label style={labelStyle}>OPEN ROLES</label><input style={inputStyle} placeholder="Designer, Backend Dev, Marketing" value={(newProject.openRoles || []).join(", ")} onChange={e => setNewProject({ ...newProject, openRoles: e.target.value.split(",").map((role) => role.trim()).filter(Boolean) })} /></div>
+              <div>
+                <label style={labelStyle}>OPEN ROLES</label>
+                {(newProject.openRoles || []).length > 0 && (
+                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
+                    {(newProject.openRoles || []).map((role) => (
+                      <span key={`selected-role-${role}`} style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 11, padding: "4px 10px", border: `1px solid ${border}`, borderRadius: 999, color: text }}>
+                        <span>{role}</span>
+                        <button className="hb" onClick={() => toggleOpenRole(role)} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontSize: 11, fontFamily: "inherit", padding: 0 }}>✕</button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+                <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginBottom: 10 }}>
+                  {COMMON_ROLES.map((role) => {
+                    const selected = (newProject.openRoles || []).includes(role);
+                    return (
+                      <button key={role} className="hb" onClick={() => toggleOpenRole(role)} style={{ padding: "3px 10px", borderRadius: 999, fontSize: 10, cursor: "pointer", fontFamily: "inherit", background: selected ? text : "none", color: selected ? bg : textMuted, border: `1px solid ${selected ? text : border}` }}>
+                        {role}
+                      </button>
+                    );
+                  })}
+                </div>
+                <div style={{ display: "flex", gap: 6 }}>
+                  <input
+                    value={customRoleInput}
+                    onChange={(e) => setCustomRoleInput(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addCustomOpenRole(); } }}
+                    placeholder="add a custom role..."
+                    style={{ ...inputStyle, flex: 1, fontSize: 11, padding: "7px 12px" }}
+                  />
+                  <button className="hb" onClick={addCustomOpenRole} style={{ ...btnG, fontSize: 11, padding: "7px 14px", whiteSpace: "nowrap" }}>+ add</button>
+                </div>
+              </div>
               <div><label style={labelStyle}>COLLABORATORS NEEDED</label><select style={inputStyle} value={newProject.maxCollaborators} onChange={e => setNewProject({ ...newProject, maxCollaborators: parseInt(e.target.value) })}>{[1,2,3,4,5,6,7,8,9,10].map(n => <option key={n} value={n}>{n}</option>)}</select></div>
-              <div><label style={labelStyle}>LOCATION (optional)</label><input style={inputStyle} placeholder="City, remote, or global" value={newProject.location} onChange={e => setNewProject({ ...newProject, location: e.target.value })} /></div>
+              <div>
+                <label style={labelStyle}>LOCATION (optional)</label>
+                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                  <input style={inputStyle} placeholder="City, remote, or global" value={newProject.location} onChange={e => setNewProject({ ...newProject, location: e.target.value })} />
+                  <button className="hb" onClick={async () => {
+                    try {
+                      const location = await resolveCurrentLocationLabel();
+                      setNewProject({ ...newProject, location });
+                    } catch {
+                      showToast("Couldn't find your location.");
+                    }
+                  }} style={{ ...btnG, padding: "10px 12px", color: text }}>📍</button>
+                </div>
+              </div>
               <div><label style={labelStyle}>GOALS / CHECKPOINTS (optional)</label><textarea style={{ ...inputStyle, resize: "none" }} rows={3} placeholder="What does done look like? List key milestones or deliverables..." value={newProject.goals} onChange={e => setNewProject({ ...newProject, goals: e.target.value })} /></div>
               <div><label style={labelStyle}>TIMELINE (optional)</label><input style={inputStyle} placeholder="e.g. 8 weeks, by end of Q2, 3 months..." value={newProject.timeline} onChange={e => setNewProject({ ...newProject, timeline: e.target.value })} /></div>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 0" }}>
