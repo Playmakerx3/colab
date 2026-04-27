@@ -3566,8 +3566,8 @@ function CoLab() {
         {/* Tabs: discover | graph */}
         <div style={{ borderBottom: `1px solid ${border}`, marginBottom: 28, display: "flex" }}>
           {[
-            { id: "discover", label: "people" },
             { id: "graph", label: "discover" },
+            { id: "discover", label: "people" },
             { id: "skills", label: "skills" },
           ].map(({ id, label }) => (
             <button key={id} onClick={() => setNetworkTab(id)} style={{ background: "none", border: "none", borderBottom: networkTab === id ? `1px solid ${text}` : "1px solid transparent", color: networkTab === id ? text : textMuted, padding: "8px 0", fontSize: 12, cursor: "pointer", fontFamily: "inherit", marginRight: 24, transition: "all 0.15s", display: "inline-flex", gap: 6, alignItems: "center", whiteSpace: "nowrap" }}>
