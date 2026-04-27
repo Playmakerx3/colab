@@ -4535,13 +4535,19 @@ const setViewingProfile = (user) => {
 
           {/* Top-level explore tabs: feed | projects */}
           <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px", marginBottom: 16 }}>{exploreTab === "projects" ? "OPEN PROJECTS" : "BUILDER FEED"}</div>
-          <div style={{ borderBottom: `1px solid ${border}`, marginBottom: 28, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <button onClick={() => setExploreTab("feed")} style={{ background: "none", border: "none", borderBottom: exploreTab === "feed" ? `1px solid ${text}` : "1px solid transparent", color: exploreTab === "feed" ? text : textMuted, padding: "8px 0", fontSize: 12, cursor: "pointer", fontFamily: "inherit", transition: "all 0.15s", display: "inline-flex", alignItems: "center", whiteSpace: "nowrap" }}>
-              feed
-            </button>
-            <button onClick={() => setExploreTab("projects")} style={{ background: "none", border: "none", borderBottom: exploreTab === "projects" ? `1px solid ${text}` : "1px solid transparent", color: exploreTab === "projects" ? text : textMuted, padding: "8px 0", fontSize: 12, cursor: "pointer", fontFamily: "inherit", transition: "all 0.15s", display: "inline-flex", alignItems: "center", whiteSpace: "nowrap" }}>
-              projects
-            </button>
+          <div style={{ borderBottom: `1px solid ${border}`, marginBottom: 28, display: "flex", gap: 0, alignItems: "center" }}>
+            {[["feed", "feed"], ["projects", "projects"]].map(([id, label]) => (
+              <button key={id} onClick={() => setExploreTab(id)} style={{
+                background: "none", border: "none",
+                borderBottom: exploreTab === id ? `1px solid ${text}` : "1px solid transparent",
+                color: exploreTab === id ? text : textMuted,
+                padding: "8px 0", marginRight: 24,
+                fontSize: 12, cursor: "pointer", fontFamily: "inherit",
+                transition: "all 0.15s", whiteSpace: "nowrap",
+              }}>
+                {label}
+              </button>
+            ))}
           </div>
 
           {/* PROJECTS TAB */}
