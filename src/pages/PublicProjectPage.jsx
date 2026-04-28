@@ -3,6 +3,7 @@ import { supabase } from "../supabase";
 import { initials } from "../utils/appHelpers";
 
 export default function PublicProjectPage({ projectId }) {
+  const ogImageUrl = "https://www.collaborativelaboratories.com/og-image.png";
   const [dark, setDark] = useState(true);
   const [project, setProject] = useState(null);
   const [owner, setOwner] = useState(null);
@@ -47,9 +48,11 @@ export default function PublicProjectPage({ projectId }) {
     setMeta("og:url", url);
     setMeta("og:type", "website");
     setMeta("og:site_name", "CoLab");
+    setMeta("og:image", ogImageUrl);
     setMeta("twitter:card", "summary", "name");
     setMeta("twitter:title", title, "name");
     setMeta("twitter:description", desc, "name");
+    setMeta("twitter:image", ogImageUrl, "name");
   }, [project]);
 
   useEffect(() => {

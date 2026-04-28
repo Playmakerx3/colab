@@ -30,6 +30,7 @@ const toHost = (url = "") => {
 };
 
 export default function PublicProfilePage({ username, userId }) {
+  const ogImageUrl = "https://www.collaborativelaboratories.com/og-image.png";
   const [dark, setDark] = useState(true);
   const [user, setUser] = useState(null);
   const [projects, setProjects] = useState([]);
@@ -84,9 +85,11 @@ export default function PublicProfilePage({ username, userId }) {
     setMeta("og:url", window.location.href);
     setMeta("og:type", "profile");
     setMeta("og:site_name", "CoLab");
+    setMeta("og:image", ogImageUrl);
     setMeta("twitter:card", "summary", "name");
     setMeta("twitter:title", title, "name");
     setMeta("twitter:description", desc, "name");
+    setMeta("twitter:image", ogImageUrl, "name");
   }, [user]);
 
   useEffect(() => {
@@ -428,7 +431,7 @@ export default function PublicProfilePage({ username, userId }) {
         <a href="/" style={{ display: "block", background: text, color: bg, border: "none", borderRadius: 8, padding: "14px", fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit", textDecoration: "none", textAlign: "center" }}>Connect on CoLab →</a>
 
         <div style={{ marginTop: 32, fontSize: 11, color: textMuted, lineHeight: 1.7, borderTop: `1px solid ${border}`, paddingTop: 24 }}>
-          <a href={`@${user.username}`} style={{ color: text, textDecoration: "none" }}>@{user.username}</a> is a builder on <a href="/" style={{ color: text, textDecoration: "underline" }}>CoLab</a> — find collaborators, ship together.
+          <a href={`/u/${user.username}`} style={{ color: text, textDecoration: "none" }}>@{user.username}</a> is a builder on <a href="/" style={{ color: text, textDecoration: "underline" }}>CoLab</a> — find collaborators, ship together.
         </div>
       </div>
 

@@ -64,7 +64,7 @@ export default function LandingPage({ dark, setDark, onLogin, onSignup, supabase
         { count: shippedCount },
       ] = await Promise.all([
         supabase.from("profiles").select("*", { count: "exact", head: true }),
-        supabase.from("projects").select("*", { count: "exact", head: true }),
+        supabase.from("projects").select("*", { count: "exact", head: true }).eq("shipped", false),
         supabase.from("projects").select("*", { count: "exact", head: true }).eq("shipped", true),
       ]);
       setLiveStats({

@@ -7125,7 +7125,7 @@ function CoLab() {
                 </div>
                 {applications.filter(a => a.project_id === activeProject.id && a.status === "accepted").map(a => (
                   <div key={a.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 0", borderBottom: `1px solid ${border}` }}>
-                    <Avatar initials={a.applicant_initials} size={36} dark={dark} />
+                    <Avatar initials={a.applicant_initials} src={users.find(u => u.id === a.applicant_id)?.avatar_url} size={36} dark={dark} />
                     <div style={{ flex: 1 }}>
                       <div style={{ fontSize: 13, color: text }}>{a.applicant_name}</div>
                       <div style={{ fontSize: 11, color: textMuted }}>{a.applicant_role}</div>
@@ -7286,19 +7286,24 @@ function CoLab() {
                 <div style={{ borderTop: `1px solid ${border}`, paddingTop: 20 }}>
                   <div style={{ fontSize: 10, color: textMuted, letterSpacing: "1px", marginBottom: 10 }}>OTHER INTEGRATIONS</div>
                   <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                    {PLUGINS.filter(p => p.id !== "github").map(plug => {
+                    {PLUGINS.filter(p => p.id !== "github" && (activeProject.plugins || []).includes(p.id)).map(plug => {
                       const connected = (activeProject.plugins || []).includes(plug.id);
                       return (
-                        <div key={plug.id} style={{ display: "flex", gap: 12, alignItems: "center", padding: "12px 16px", background: connected ? bg2 : "none", borderRadius: 8, border: `1px solid ${connected ? border : border}`, opacity: connected ? 1 : 0.5 }}>
+                        <div key={plug.id} style={{ display: "flex", gap: 12, alignItems: "center", padding: "12px 16px", background: bg2, borderRadius: 8, border: `1px solid ${border}` }}>
                           <span style={{ fontSize: 16, color: text, width: 20, textAlign: "center", flexShrink: 0 }}>{plug.icon}</span>
                           <div style={{ flex: 1 }}>
                             <div style={{ fontSize: 13, color: text }}>{plug.name}</div>
                             <div style={{ fontSize: 11, color: textMuted }}>{plug.desc}</div>
                           </div>
-                          <span style={{ fontSize: 10, color: textMuted }}>{connected ? "connected" : "coming soon"}</span>
+                          <span style={{ fontSize: 10, color: textMuted }}>connected</span>
                         </div>
                       );
                     })}
+                    {PLUGINS.filter(p => p.id !== "github" && (activeProject.plugins || []).includes(p.id)).length === 0 && (
+                      <div style={{ fontSize: 11, color: textMuted, padding: "2px 0" }}>
+                        more integrations coming soon.
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -7379,7 +7384,7 @@ function CoLab() {
                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                   {trophies.map((t, i) => (
                     <div key={i} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, padding: "10px 14px", border: `1px solid ${border}`, borderRadius: 8, background: bg2, minWidth: 100 }}>
-                      <div style={{ fontSize: 22, lineHeight: 1 }}>·</div>
+                      <div style={{ fontSize: 22, lineHeight: 1 }}>★</div>
                       <div style={{ fontSize: 10, color: text, fontWeight: 500, textAlign: "center", lineHeight: 1.3 }}>MVP</div>
                       <div style={{ fontSize: 9, color: textMuted, textAlign: "center", lineHeight: 1.3, maxWidth: 90 }}>{t.project_title}</div>
                     </div>
@@ -7528,7 +7533,7 @@ function CoLab() {
                     <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                       {trophies.map((t, i) => (
                         <div key={i} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, padding: "10px 14px", border: `1px solid ${border}`, borderRadius: 8, background: bg2, minWidth: 100 }}>
-                          <div style={{ fontSize: 22, lineHeight: 1, color: text }}>·</div>
+                          <div style={{ fontSize: 22, lineHeight: 1, color: text }}>★</div>
                           <div style={{ fontSize: 10, color: text, fontWeight: 500, textAlign: "center", lineHeight: 1.3 }}>MVP</div>
                           <div style={{ fontSize: 9, color: textMuted, textAlign: "center", lineHeight: 1.3, maxWidth: 90 }}>{t.project_title}</div>
                         </div>

@@ -1,0 +1,22 @@
+<svg width="1200" height="630" viewBox="0 0 1200 630" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1200" height="630" fill="#0A0A0A"/>
+  <rect x="48" y="48" width="1104" height="534" rx="24" fill="#111111" stroke="#242424" stroke-width="2"/>
+  <rect x="88" y="88" width="1024" height="454" rx="18" fill="#0D0D0D" stroke="#1E1E1E"/>
+  <rect x="128" y="128" width="944" height="24" rx="12" fill="#161616"/>
+  <rect x="128" y="178" width="172" height="172" rx="18" fill="#151515" stroke="#2A2A2A"/>
+  <path d="M176 214H252" stroke="#F5F5F5" stroke-width="10" stroke-linecap="round"/>
+  <path d="M176 250H232" stroke="#F5F5F5" stroke-width="10" stroke-linecap="round"/>
+  <path d="M176 286H264" stroke="#F5F5F5" stroke-width="10" stroke-linecap="round"/>
+  <rect x="328" y="178" width="312" height="18" rx="9" fill="#F5F5F5"/>
+  <rect x="328" y="214" width="226" height="12" rx="6" fill="#777777"/>
+  <rect x="328" y="252" width="386" height="12" rx="6" fill="#3A3A3A"/>
+  <rect x="328" y="278" width="354" height="12" rx="6" fill="#3A3A3A"/>
+  <rect x="328" y="304" width="284" height="12" rx="6" fill="#3A3A3A"/>
+  <rect x="128" y="394" width="188" height="108" rx="16" fill="#121212" stroke="#262626"/>
+  <rect x="336" y="394" width="188" height="108" rx="16" fill="#121212" stroke="#262626"/>
+  <rect x="544" y="394" width="188" height="108" rx="16" fill="#121212" stroke="#262626"/>
+  <rect x="752" y="394" width="320" height="108" rx="16" fill="#121212" stroke="#262626"/>
+  <text x="128" y="100" fill="#9A9A9A" font-family="'DM Mono', monospace" font-size="22" letter-spacing="4">[COLLABORATIVE LABORATORIES]</text>
+  <text x="328" y="356" fill="#F5F5F5" font-family="'DM Mono', monospace" font-size="64" letter-spacing="-2">SHIP TOGETHER.</text>
+  <text x="128" y="562" fill="#A0A0A0" font-family="'DM Mono', monospace" font-size="24" letter-spacing="1.5">Profiles. Projects. Communities. DMs. Workspaces.</text>
+</svg>
