@@ -1266,6 +1266,8 @@ function CoLab() {
   const [activeProject, setActiveProject] = useState(null);
   const [viewingProfile, setViewingProfileState] = useState(null);
   const [viewFullProfile, setViewFullProfileState] = useState(null);
+  const setViewingProfile = (user) => { setViewingProfileState(user || null); };
+  const setViewFullProfile = (user) => { setViewFullProfileState(user || null); };
   const [profileProjectsTab, setProfileProjectsTab] = useState(PROFILE_PROJECTS_TABS.owned);
   const [projectTab, setProjectTab] = useState("tasks");
   const [openPostId, setOpenPostId] = useState(null);
