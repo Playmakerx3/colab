@@ -1,10 +1,8 @@
+export const config = { runtime: "edge" };
+
 const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY;
 const OG_IMAGE = "https://www.collaborativelaboratories.com/og-image.png";
-
-export const config = {
-  matcher: ["/u/:username", "/p/:id", "/p/:id/shipped"],
-};
 
 function esc(str) {
   return (str || "")
@@ -14,24 +12,20 @@ function esc(str) {
     .replace(/>/g, "&gt;");
 }
 
-async function supabaseFetch(path) {
-  const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
-    headers: {
-      apikey: SUPABASE_ANON_KEY,
-      Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-    },
-  });
-  return res.json();
-}
+async function getOg(type, slug) {
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return null;
 
-async function getOg(pathname) {
-  const profileMatch = pathname.match(/^\/u\/([^/]+)$/);
-  const projectMatch = pathname.match(/^\/p\/([^/]+)/);
+  const headers = {
+    apikey: SUPABASE_ANON_KEY,
+    Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+  };
 
-  if (profileMatch) {
-    const data = await supabaseFetch(
-      `profiles?username=eq.${encodeURIComponent(profileMatch[1])}&select=name,bio,role&limit=1`
+  if (type === "profile") {
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/profiles?username=eq.${encodeURIComponent(slug)}&select=name,bio,role&limit=1`,
+      { headers }
     );
+    const data = await res.json();
     const u = data?.[0];
     if (!u) return null;
     return {
@@ -42,10 +36,12 @@ async function getOg(pathname) {
     };
   }
 
-  if (projectMatch) {
-    const data = await supabaseFetch(
-      `projects?id=eq.${encodeURIComponent(projectMatch[1])}&select=title,description&limit=1`
+  if (type === "project") {
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/projects?id=eq.${encodeURIComponent(slug)}&select=title,description&limit=1`,
+      { headers }
     );
+    const data = await res.json();
     const p = data?.[0];
     if (!p) return null;
     return {
@@ -65,7 +61,7 @@ function inject(html, og, pageUrl) {
   const u = esc(pageUrl);
   return html
     .replace(/<title>[^<]*<\/title>/, `<title>${t}</title>`)
-    .replace(/(<meta property="og:title"\s+content=")[^"]*(")/,       `$1${t}$2`)
+    .replace(/(<meta property="og:title"\s+content=")[^"]*(")/,        `$1${t}$2`)
     .replace(/(<meta property="og:description"\s+content=")[^"]*(")/,  `$1${d}$2`)
     .replace(/(<meta property="og:url"\s+content=")[^"]*(")/,          `$1${u}$2`)
     .replace(/(<meta name="twitter:title"\s+content=")[^"]*(")/,       `$1${t}$2`)
@@ -73,16 +69,25 @@ function inject(html, og, pageUrl) {
     .replace(/(<link rel="canonical"\s+href=")[^"]*(")/,               `$1${u}$2`);
 }
 
-export default async function middleware(request) {
+export default async function handler(request) {
   const url = new URL(request.url);
+  const type = url.searchParams.get("type");
+  const slug = url.searchParams.get("slug");
 
   try {
-    const og = await getOg(url.pathname);
-    if (!og) return; // fall through to normal routing
+    const og = await getOg(type, slug);
+    if (!og) {
+      // Fall through: serve plain index.html
+      const res = await fetch(`https://www.collaborativelaboratories.com/index.html`);
+      const html = await res.text();
+      return new Response(html, {
+        headers: { "content-type": "text/html;charset=UTF-8" },
+      });
+    }
 
-    const indexRes = await fetch(`${url.origin}/index.html`);
-    const html = await indexRes.text();
-    const modified = inject(html, og, url.href);
+    const res = await fetch(`https://www.collaborativelaboratories.com/index.html`);
+    const html = await res.text();
+    const modified = inject(html, og, url.searchParams.get("url") || "");
 
     return new Response(modified, {
       headers: {
@@ -90,7 +95,11 @@ export default async function middleware(request) {
         "cache-control": "public, s-maxage=60, stale-while-revalidate=300",
       },
     });
-  } catch {
-    return; // on any error, fall through — SPA handles it
+  } catch (e) {
+    const res = await fetch(`https://www.collaborativelaboratories.com/index.html`);
+    const html = await res.text();
+    return new Response(html, {
+      headers: { "content-type": "text/html;charset=UTF-8" },
+    });
   }
 }

@@ -1,3 +1,8 @@
 {
-  "rewrites": [{ "source": "/((?!.*\\.[a-zA-Z0-9]+$).*)", "destination": "/index.html" }]
+  "rewrites": [
+    { "source": "/u/:username", "destination": "/api/og?type=profile&slug=:username&url=https://www.collaborativelaboratories.com/u/:username" },
+    { "source": "/p/:id/shipped", "destination": "/api/og?type=project&slug=:id&url=https://www.collaborativelaboratories.com/p/:id/shipped" },
+    { "source": "/p/:id", "destination": "/api/og?type=project&slug=:id&url=https://www.collaborativelaboratories.com/p/:id" },
+    { "source": "/((?!.*\\.[a-zA-Z0-9]+$).*)", "destination": "/index.html" }
+  ]
 }
