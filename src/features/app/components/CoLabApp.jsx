@@ -1433,11 +1433,6 @@ function CoLab() {
   const [showCollaboratorsList, setShowCollaboratorsList] = useState(false);
   const [discoverSwipes, setDiscoverSwipes] = useState(null); // null=unloaded, Set=loaded
   const [discoverMatch, setDiscoverMatch] = useState(null); // matched user object
-  const [showGifPicker, setShowGifPicker] = useState(false);
-  const [gifSearchQuery, setGifSearchQuery] = useState("");
-  const [gifResults, setGifResults] = useState([]);
-  const [gifLoading, setGifLoading] = useState(false);
-  const [gifError, setGifError] = useState("");
   const [postMenuOpenId, setPostMenuOpenId] = useState(null);
   const [communityMenuOpenId, setCommunityMenuOpenId] = useState(null);
   const [reportModal, setReportModal] = useState(null); // { contentType, contentId, label }
@@ -1476,7 +1471,6 @@ function CoLab() {
   const btnG = { background: "none", color: textMuted, border: `1px solid ${border}`, borderRadius: 8, padding: "10px 20px", fontSize: 12, cursor: "pointer", fontFamily: "inherit" };
 
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(null), 3000); };
-  const tenorApiKey = import.meta.env.VITE_TENOR_API_KEY;
 
   // ── SKILL VALIDATION ──
   const BANNED_WORDS = ["fuck", "shit", "ass", "dick", "pussy", "bitch", "cunt", "cock", "whore", "slut", "nigga", "nigger", "faggot", "retard", "rape", "porn", "sex", "nude", "naked", "bastard", "damn", "hell", "crap", "piss", "jerk", "idiot", "stupid", "dumb", "loser"];
@@ -1582,35 +1576,6 @@ function CoLab() {
         return next;
       });
     }, 90000);
-  };
-  const appendDmDraft = (nextValue) => {
-    setDmInput((prev) => (prev?.trim() ? `${prev}\n${nextValue}` : nextValue));
-  };
-  const handleGifSearch = async (query = gifSearchQuery) => {
-    const trimmed = query.trim();
-    if (!trimmed) {
-      setGifResults([]);
-      setGifError("");
-      return;
-    }
-    if (!tenorApiKey) {
-      setGifResults([]);
-      setGifError("Missing VITE_TENOR_API_KEY.");
-      return;
-    }
-    setGifLoading(true);
-    setGifError("");
-    try {
-      const response = await fetch(`https://tenor.googleapis.com/v2/search?key=${encodeURIComponent(tenorApiKey)}&q=${encodeURIComponent(trimmed)}&limit=12&media_filter=gif`);
-      const payload = await response.json();
-      if (!response.ok) throw new Error(payload?.error?.message || "GIF search failed");
-      setGifResults((payload.results || []).filter((item) => item?.media_formats?.gif?.url));
-    } catch (error) {
-      setGifResults([]);
-      setGifError(error.message || "GIF search failed");
-    } finally {
-      setGifLoading(false);
-    }
   };
   const submitFeedback = async () => {
     if (!authUser?.id || !feedbackMessage.trim()) return;
@@ -6398,53 +6363,8 @@ function CoLab() {
                   <div ref={dmEndRef} />
                 </div>
                 {dmTypingUser && <div style={{ padding: "4px 20px 0", fontSize: 11, color: textMuted, fontStyle: "italic" }}>{dmTypingUser} is typing...</div>}
-                {showGifPicker && (
-                  <div style={{ padding: "14px 20px 0", borderTop: `1px solid ${border}` }}>
-                    <div style={{ background: bg2, border: `1px solid ${border}`, borderRadius: 12, padding: 12 }}>
-                      <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
-                        <input
-                          placeholder="search gifs..."
-                          value={gifSearchQuery}
-                          onChange={(e) => setGifSearchQuery(e.target.value)}
-                          onKeyDown={(e) => e.key === "Enter" && handleGifSearch()}
-                          style={{ ...inputStyle, fontSize: 12, flex: 1 }}
-                        />
-                        <button onClick={() => handleGifSearch()} style={{ ...btnG, padding: "9px 12px", fontSize: 11 }}>search</button>
-                        <button onClick={() => { setShowGifPicker(false); setGifError(""); }} style={{ ...btnG, padding: "9px 12px", fontSize: 11 }}>close</button>
-                      </div>
-                      {gifError && <div style={{ fontSize: 11, color: "#ef4444", marginBottom: 8 }}>{gifError}</div>}
-                      {gifLoading ? (
-                        <div style={{ fontSize: 11, color: textMuted }}>loading gifs...</div>
-                      ) : gifResults.length > 0 ? (
-                        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 8 }}>
-                          {gifResults.map((gif) => (
-                            <button
-                              key={gif.id}
-                              onClick={() => {
-                                const url = gif.media_formats?.gif?.url;
-                                if (!url) return;
-                                appendDmDraft(url);
-                                setShowGifPicker(false);
-                                setGifSearchQuery("");
-                                setGifResults([]);
-                              }}
-                              style={{ background: "none", border: `1px solid ${border}`, borderRadius: 10, padding: 0, overflow: "hidden", cursor: "pointer" }}
-                            >
-                              <img src={gif.media_formats.tinygif?.url || gif.media_formats.gif?.url} alt={gif.content_description || "GIF"} style={{ width: "100%", height: 100, objectFit: "cover", display: "block" }} />
-                            </button>
-                          ))}
-                        </div>
-                      ) : (
-                        <div style={{ fontSize: 11, color: textMuted }}>Search Tenor and pick a GIF to drop its URL into the message.</div>
-                      )}
-                    </div>
-                  </div>
-                )}
-                <div style={{ padding: "14px 20px", borderTop: showGifPicker ? "none" : `1px solid ${border}`, display: "flex", gap: 10 }}>
+                <div style={{ padding: "14px 20px", borderTop: `1px solid ${border}`, display: "flex", gap: 10 }}>
                   <input placeholder="message..." value={dmInput} onChange={e => setDmInput(e.target.value)} onKeyDown={e => e.key === "Enter" && handleSendDm()} style={{ ...inputStyle, fontSize: 13 }} autoFocus={window.innerWidth > 768} />
-                  <button className="hb" onClick={() => setShowGifPicker((prev) => !prev)} style={{ ...btnG, padding: "10px 12px", flexShrink: 0 }}>
-                    GIF
-                  </button>
                   <label style={{ ...btnG, padding: "10px 12px", cursor: "pointer", flexShrink: 0 }}>
                     + file
                     <input type="file" multiple style={{ display: "none" }} onChange={(e) => addDmAttachments(Array.from(e.target.files || []), activeDmThread.id)} />
