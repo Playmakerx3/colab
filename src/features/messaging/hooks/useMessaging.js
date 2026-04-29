@@ -202,9 +202,10 @@ export function useMessaging({
     }
   };
 
-  const handleSendDm = async () => {
-    if (!dmInput.trim() || !activeDmThread) return;
-    const text = dmInput;
+  const handleSendDm = async (overrideText) => {
+    const draft = typeof overrideText === "string" ? overrideText : dmInput;
+    if (!draft.trim() || !activeDmThread) return;
+    const text = draft;
     const threadId = activeDmThread.id;
     const optimisticId = `temp-dm-${Date.now()}`;
     const optimistic = {
@@ -219,7 +220,7 @@ export function useMessaging({
       optimistic: true,
     };
     const canScroll = shouldAutoScroll(dmEndRef);
-    setDmInput("");
+    if (typeof overrideText !== "string") setDmInput("");
     setDmMessages((prev) => ({ ...prev, [threadId]: upsertMessage(prev[threadId] || [], optimistic) }));
 
     const { data } = await createDmMessage({

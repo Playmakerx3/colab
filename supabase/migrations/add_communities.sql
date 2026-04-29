@@ -94,7 +94,7 @@ insert into communities (name, slug, description, emoji, category, is_public) va
   ('Writing',      'writing',      'Content, copywriting, journalism, and long-form storytelling',             '✎',  'Creative',  true),
   ('Marketing',    'marketing',    'Growth, community building, branding strategy, and distribution',          '↑',  'Business',  true),
   ('Research',     'research',     'Science, data, academic work, and discovery',                              '⊙',  'Research',  true),
-  ('Making',       'making',       'Hardware, fabrication, 3D printing, and hands-on creation',                '✦',  'Making',    true),
+  ('Makers',       'makers',       'Hardware, fabrication, 3D printing, and hands-on creation',                '✦',  'Makers',    true),
   ('Photography',  'photography',  'Cameras, editing, visual storytelling, and photo projects',                '◉',  'Creative',  true),
   ('Gaming',       'gaming',       'Game dev, design, culture, and playing together',                          '⊕',  'Tech',      true),
   ('Education',    'education',    'Teaching, learning, EdTech, and sharing knowledge',                        '≡',  'Research',  true),
@@ -115,7 +115,8 @@ update communities set emoji = '▶'  where slug = 'film-video';
 update communities set emoji = '✎'  where slug = 'writing';
 update communities set emoji = '↑'  where slug = 'marketing';
 update communities set emoji = '⊙'  where slug = 'research';
-update communities set emoji = '✦'  where slug = 'making';
+update communities set name = 'Makers', slug = 'makers', category = 'Makers', emoji = '✦' where slug = 'making';
+update communities set emoji = '✦'  where slug = 'makers';
 update communities set emoji = '◉'  where slug = 'photography';
 update communities set emoji = '⊕'  where slug = 'gaming';
 update communities set emoji = '≡'  where slug = 'education';

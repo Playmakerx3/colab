@@ -70,6 +70,16 @@ alter table project_docs enable row level security;
 create policy "Docs readable by all" on project_docs for select using (true);
 create policy "Authenticated users can write docs" on project_docs for insert with check (auth.uid() = updated_by);
 create policy "Authenticated users can update docs" on project_docs for update using (true);
+
+create table if not exists feedback (
+  id uuid default gen_random_uuid() primary key,
+  user_id uuid references profiles(id),
+  type text,
+  message text not null,
+  created_at timestamptz default now()
+);
+alter table feedback enable row level security;
+create policy "Users can submit feedback" on feedback for insert with check (auth.uid() = user_id);
 */
 
 const COMMUNITY_SYMBOLS = {
@@ -81,7 +91,7 @@ const COMMUNITY_SYMBOLS = {
   'writing':      '✎',
   'marketing':    '↑',
   'research':     '⊙',
-  'making':       '✦',
+  'makers':       '✦',
   'photography':  '◉',
   'gaming':       '⊕',
   'education':    '≡',
@@ -97,6 +107,9 @@ const isFreshTimestamp = (timestamp, windowMs = 120000) => {
   if (!timestamp) return false;
   return Date.now() - new Date(timestamp).getTime() < windowMs;
 };
+
+const normalizeCommunitySlug = (slug = "") => (slug === "making" ? "makers" : slug);
+const getCommunityDisplayName = (name = "") => (String(name).toLowerCase() === "making" ? "Makers" : name);
 
 
 const normalizeApplicationStatus = (status) => {
@@ -1260,6 +1273,7 @@ function CoLab() {
   const [discoverSkillFilter, setDiscoverSkillFilter] = useState([]);
   const [discoverLocationFilter, setDiscoverLocationFilter] = useState("");
   const [discoverSmartMatch, setDiscoverSmartMatch] = useState(false);
+  const [discoverMode, setDiscoverMode] = useState("people");
   const [skillDepotSelected, setSkillDepotSelected] = useState(null); // null = grid, string = drill-in
   const [customSkillInput, setCustomSkillInput] = useState("");
   const [customRoleInput, setCustomRoleInput] = useState("");
@@ -1419,6 +1433,11 @@ function CoLab() {
   const [showCollaboratorsList, setShowCollaboratorsList] = useState(false);
   const [discoverSwipes, setDiscoverSwipes] = useState(null); // null=unloaded, Set=loaded
   const [discoverMatch, setDiscoverMatch] = useState(null); // matched user object
+  const [showGifPicker, setShowGifPicker] = useState(false);
+  const [gifSearchQuery, setGifSearchQuery] = useState("");
+  const [gifResults, setGifResults] = useState([]);
+  const [gifLoading, setGifLoading] = useState(false);
+  const [gifError, setGifError] = useState("");
   const [postMenuOpenId, setPostMenuOpenId] = useState(null);
   const [communityMenuOpenId, setCommunityMenuOpenId] = useState(null);
   const [reportModal, setReportModal] = useState(null); // { contentType, contentId, label }
@@ -1432,6 +1451,10 @@ function CoLab() {
   const [newTaskPriority, setNewTaskPriority] = useState("medium");
   const [coverUploading, setCoverUploading] = useState(false);
   const [skillsExpanded, setSkillsExpanded] = useState(false);
+  const [showFeedbackModal, setShowFeedbackModal] = useState(false);
+  const [feedbackType, setFeedbackType] = useState("Bug report");
+  const [feedbackMessage, setFeedbackMessage] = useState("");
+  const [feedbackSubmitting, setFeedbackSubmitting] = useState(false);
 
   const messagesEndRef = useRef(null);
   const dmEndRef = useRef(null);
@@ -1453,6 +1476,7 @@ function CoLab() {
   const btnG = { background: "none", color: textMuted, border: `1px solid ${border}`, borderRadius: 8, padding: "10px 20px", fontSize: 12, cursor: "pointer", fontFamily: "inherit" };
 
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(null), 3000); };
+  const tenorApiKey = import.meta.env.VITE_TENOR_API_KEY;
 
   // ── SKILL VALIDATION ──
   const BANNED_WORDS = ["fuck", "shit", "ass", "dick", "pussy", "bitch", "cunt", "cock", "whore", "slut", "nigga", "nigger", "faggot", "retard", "rape", "porn", "sex", "nude", "naked", "bastard", "damn", "hell", "crap", "piss", "jerk", "idiot", "stupid", "dumb", "loser"];
@@ -1558,6 +1582,53 @@ function CoLab() {
         return next;
       });
     }, 90000);
+  };
+  const appendDmDraft = (nextValue) => {
+    setDmInput((prev) => (prev?.trim() ? `${prev}\n${nextValue}` : nextValue));
+  };
+  const handleGifSearch = async (query = gifSearchQuery) => {
+    const trimmed = query.trim();
+    if (!trimmed) {
+      setGifResults([]);
+      setGifError("");
+      return;
+    }
+    if (!tenorApiKey) {
+      setGifResults([]);
+      setGifError("Missing VITE_TENOR_API_KEY.");
+      return;
+    }
+    setGifLoading(true);
+    setGifError("");
+    try {
+      const response = await fetch(`https://tenor.googleapis.com/v2/search?key=${encodeURIComponent(tenorApiKey)}&q=${encodeURIComponent(trimmed)}&limit=12&media_filter=gif`);
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload?.error?.message || "GIF search failed");
+      setGifResults((payload.results || []).filter((item) => item?.media_formats?.gif?.url));
+    } catch (error) {
+      setGifResults([]);
+      setGifError(error.message || "GIF search failed");
+    } finally {
+      setGifLoading(false);
+    }
+  };
+  const submitFeedback = async () => {
+    if (!authUser?.id || !feedbackMessage.trim()) return;
+    setFeedbackSubmitting(true);
+    const { error } = await supabase.from("feedback").insert({
+      user_id: authUser.id,
+      type: feedbackType,
+      message: feedbackMessage.trim(),
+    });
+    setFeedbackSubmitting(false);
+    if (error) {
+      showToast(`Feedback failed: ${error.message}`);
+      return;
+    }
+    setFeedbackMessage("");
+    setFeedbackType("Bug report");
+    setShowFeedbackModal(false);
+    showToast("Feedback sent.");
   };
   const markCommentPending = (postId, delta) => {
     setPendingCommentByPost((prev) => {
@@ -1722,6 +1793,32 @@ function CoLab() {
       u.name?.trim()
     );
   }, [users, discoverSwipes, authUser, following, applications, projects]);
+  const workspaceOwnedProjects = useMemo(
+    () => projects.filter((project) => project.owner_id === authUser?.id && !project.archived),
+    [projects, authUser?.id]
+  );
+  const workspaceAcceptedApplications = useMemo(
+    () => applications.filter((application) => application.applicant_id === authUser?.id && normalizeApplicationStatus(application.status) === "accepted"),
+    [applications, authUser?.id]
+  );
+  const workspaceCollaborations = useMemo(
+    () => workspaceAcceptedApplications
+      .map((application) => projects.find((project) => project.id === application.project_id && !project.archived))
+      .filter(Boolean),
+    [workspaceAcceptedApplications, projects]
+  );
+  const workspaceProjectHubItems = useMemo(() => {
+    const seen = new Set();
+    return [...workspaceOwnedProjects, ...workspaceCollaborations].filter((project) => {
+      if (seen.has(project.id)) return false;
+      seen.add(project.id);
+      return true;
+    });
+  }, [workspaceOwnedProjects, workspaceCollaborations]);
+  const workspaceOpenApplications = useMemo(
+    () => applications.filter((application) => application.applicant_id === authUser?.id && ["pending", "invited"].includes(normalizeApplicationStatus(application.status))),
+    [applications, authUser?.id]
+  );
 
   const updateTaskOptimistic = async (taskId, updates) => {
     const previousTask = tasks.find((task) => task.id === taskId);
@@ -1982,7 +2079,7 @@ function CoLab() {
   }, [activeProject?.id]);
 
   useEffect(() => {
-    if (networkTab !== "discover" || discoverSwipes !== null || !authUser?.id) return;
+    if ((networkTab !== "discover" && networkTab !== "match") || discoverSwipes !== null || !authUser?.id) return;
     supabase.from("swipes").select("swiped_id").eq("swiper_id", authUser.id)
       .then(({ data }) => setDiscoverSwipes(new Set((data || []).map(s => s.swiped_id))));
   }, [networkTab, discoverSwipes, authUser?.id]);
@@ -3534,6 +3631,7 @@ function CoLab() {
           {[
             { id: "graph", label: "discover" },
             { id: "discover", label: "people" },
+            { id: "match", label: "match" },
             { id: "skills", label: "skills" },
           ].map(({ id, label }) => (
             <button key={id} onClick={() => setNetworkTab(id)} style={{ background: "none", border: "none", borderBottom: networkTab === id ? `1px solid ${text}` : "1px solid transparent", color: networkTab === id ? text : textMuted, padding: "8px 0", fontSize: 12, cursor: "pointer", fontFamily: "inherit", marginRight: 24, transition: "all 0.15s", display: "inline-flex", gap: 6, alignItems: "center", whiteSpace: "nowrap" }}>
@@ -3707,68 +3805,54 @@ function CoLab() {
                   </div>
                   <button
                     onClick={() => {
-                      setDiscoverSmartMatch(v => !v);
-                      setDiscoverSkillFilter([]);
-                      setDiscoverLocationFilter("");
+                      setDiscoverSmartMatch(true);
+                      setDiscoverMode("match");
+                      setNetworkTab("match");
                     }}
                     style={{
                       padding: "9px 16px", borderRadius: 8, fontSize: 12, cursor: "pointer", transition: "all 0.15s", whiteSpace: "nowrap",
-                      background: discoverSmartMatch ? text : "none",
-                      color: discoverSmartMatch ? bg : text,
-                      border: `1px solid ${discoverSmartMatch ? text : border}`,
+                      background: "none",
+                      color: text,
+                      border: `1px solid ${border}`,
                     }}
                   >
-                    {discoverSmartMatch ? "smart match on" : "find my match"}
+                    find my match
                   </button>
                 </div>
               </div>
 
-              {/* Smart match banner */}
-              {discoverSmartMatch && (
-                <div style={{ background: dark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.04)", border: `1px solid ${border}`, borderRadius: 10, padding: "12px 16px", marginBottom: 20, fontSize: 12, color: textMuted, lineHeight: 1.6 }}>
-                  {mySkills.length > 0
-                    ? <>Sorted by shared skills with you — <span style={{ color: text }}>{mySkills.slice(0, 3).join(", ")}{mySkills.length > 3 ? ` +${mySkills.length - 3} more` : ""}</span>.</>
-                    : "Add skills to your profile to get better matches."}
+              <div style={{ marginBottom: 20 }}>
+                <div style={{ marginBottom: 12 }}>
+                  <input
+                    value={discoverLocationFilter}
+                    onChange={e => setDiscoverLocationFilter(e.target.value)}
+                    placeholder="filter by location..."
+                    style={{ width: "100%", background: bg2, border: `1px solid ${border}`, borderRadius: 8, padding: "9px 14px", fontSize: 12, color: text, outline: "none", fontFamily: "inherit" }}
+                    list="discover-locations"
+                  />
+                  <datalist id="discover-locations">
+                    {allLocations.map(l => <option key={l} value={l} />)}
+                  </datalist>
                 </div>
-              )}
-
-              {/* Filters */}
-              {!discoverSmartMatch && (
-                <div style={{ marginBottom: 20 }}>
-                  {/* Location filter */}
-                  <div style={{ marginBottom: 12 }}>
-                    <input
-                      value={discoverLocationFilter}
-                      onChange={e => setDiscoverLocationFilter(e.target.value)}
-                      placeholder="filter by location..."
-                      style={{ width: "100%", background: bg2, border: `1px solid ${border}`, borderRadius: 8, padding: "9px 14px", fontSize: 12, color: text, outline: "none", fontFamily: "inherit" }}
-                      list="discover-locations"
-                    />
-                    <datalist id="discover-locations">
-                      {allLocations.map(l => <option key={l} value={l} />)}
-                    </datalist>
-                  </div>
-                  {/* Skill chips */}
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                    {popularSkills.map(s => {
-                      const active = discoverSkillFilter.includes(s);
-                      return (
-                        <button key={s} onClick={() => setDiscoverSkillFilter(prev => active ? prev.filter(x => x !== s) : [...prev, s])}
-                          style={{ fontSize: 10, padding: "4px 11px", borderRadius: 999, cursor: "pointer", transition: "all 0.15s", fontFamily: "inherit",
-                            background: active ? text : "none", color: active ? bg : textMuted, border: `1px solid ${active ? text : border}` }}>
-                          {s}
-                        </button>
-                      );
-                    })}
-                    {(discoverSkillFilter.length > 0 || discoverLocationFilter) && (
-                      <button onClick={() => { setDiscoverSkillFilter([]); setDiscoverLocationFilter(""); }}
-                        style={{ fontSize: 10, padding: "4px 11px", borderRadius: 999, cursor: "pointer", fontFamily: "inherit", background: "none", color: textMuted, border: `1px solid ${border}`, opacity: 0.6 }}>
-                        clear
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                  {popularSkills.map(s => {
+                    const active = discoverSkillFilter.includes(s);
+                    return (
+                      <button key={s} onClick={() => setDiscoverSkillFilter(prev => active ? prev.filter(x => x !== s) : [...prev, s])}
+                        style={{ fontSize: 10, padding: "4px 11px", borderRadius: 999, cursor: "pointer", transition: "all 0.15s", fontFamily: "inherit",
+                          background: active ? text : "none", color: active ? bg : textMuted, border: `1px solid ${active ? text : border}` }}>
+                        {s}
                       </button>
-                    )}
-                  </div>
+                    );
+                  })}
+                  {(discoverSkillFilter.length > 0 || discoverLocationFilter) && (
+                    <button onClick={() => { setDiscoverSkillFilter([]); setDiscoverLocationFilter(""); }}
+                      style={{ fontSize: 10, padding: "4px 11px", borderRadius: 999, cursor: "pointer", fontFamily: "inherit", background: "none", color: textMuted, border: `1px solid ${border}`, opacity: 0.6 }}>
+                      clear
+                    </button>
+                  )}
                 </div>
-              )}
+              </div>
 
               {/* Results count */}
               <div style={{ fontSize: 10, color: textMuted, letterSpacing: "1px", marginBottom: 14 }}>
@@ -3803,7 +3887,7 @@ function CoLab() {
                               </div>
                             </button>
                           </div>
-                          {discoverSmartMatch && sharedSkills.length > 0 && (
+                          {sharedSkills.length > 0 && (
                             <div style={{ fontSize: 10, color: text, border: `1px solid ${border}`, borderRadius: 999, padding: "2px 8px", whiteSpace: "nowrap", flexShrink: 0 }}>
                               {sharedSkills.length} match
                             </div>
@@ -3821,7 +3905,7 @@ function CoLab() {
                         {(u.skills || []).length > 0 && (
                           <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
                             {(u.skills || []).slice(0, 4).map(s => (
-                              <span key={s} style={{ fontSize: 10, padding: "2px 9px", borderRadius: 999, border: `1px solid ${sharedSkills.includes(s) && discoverSmartMatch ? text : border}`, color: sharedSkills.includes(s) && discoverSmartMatch ? text : textMuted }}>
+                              <span key={s} style={{ fontSize: 10, padding: "2px 9px", borderRadius: 999, border: `1px solid ${sharedSkills.includes(s) ? text : border}`, color: sharedSkills.includes(s) ? text : textMuted }}>
                                 {s}
                               </span>
                             ))}
@@ -3848,6 +3932,109 @@ function CoLab() {
                       </div>
                     );
                   })}
+                </div>
+              )}
+            </div>
+          );
+        })()}
+
+        {networkTab === "match" && (() => {
+          const matchUser = discoverQueue[0];
+          const sharedSkills = matchUser ? (matchUser.skills || []).filter((skill) => (profile?.skills || []).includes(skill)) : [];
+          return (
+            <div>
+              <div style={{ marginBottom: 24 }}>
+                <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px", marginBottom: 8 }}>MATCH</div>
+                <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+                  <div>
+                    <h2 style={{ fontSize: "clamp(22px, 3.5vw, 36px)", fontWeight: 400, lineHeight: 1.05, letterSpacing: "-1.5px", color: text, marginBottom: 4 }}>Find my match.</h2>
+                    <p style={{ fontSize: 12, color: textMuted, lineHeight: 1.7 }}>
+                      {discoverQueue.length > 0
+                        ? `${discoverQueue.length} potential collaborators left in your stack.`
+                        : "You've seen everyone in your stack for now."}
+                    </p>
+                  </div>
+                  <button onClick={() => { setDiscoverMode("people"); setNetworkTab("discover"); }} style={{ ...btnG, padding: "8px 14px", fontSize: 11 }}>
+                    browse directory
+                  </button>
+                </div>
+              </div>
+              {discoverSwipes === null ? (
+                <div style={{ fontSize: 12, color: textMuted, padding: "32px 0" }}>loading...</div>
+              ) : !matchUser ? (
+                <div style={{ background: bg2, border: `1px solid ${border}`, borderRadius: 18, padding: "36px 24px", textAlign: "center", maxWidth: 520 }}>
+                  <div style={{ fontSize: 15, color: text, marginBottom: 8 }}>you've seen everyone for now.</div>
+                  <div style={{ fontSize: 12, color: textMuted, lineHeight: 1.7, marginBottom: 16 }}>
+                    Check back after more builders join, or browse the people directory to reconnect manually.
+                  </div>
+                  <button onClick={() => { setDiscoverMode("people"); setNetworkTab("discover"); }} style={{ ...btnP, padding: "10px 16px", fontSize: 11 }}>
+                    back to people
+                  </button>
+                </div>
+              ) : (
+                <div style={{ maxWidth: 520, margin: "0 auto" }}>
+                  <div style={{ position: "relative", paddingTop: 24, marginBottom: 18 }}>
+                    <div style={{ position: "absolute", inset: "0 18px auto", height: "100%", borderRadius: 24, border: `1px solid ${border}`, background: bg2, opacity: 0.35, transform: "translateY(12px)" }} />
+                    <div style={{ position: "absolute", inset: "0 9px auto", height: "100%", borderRadius: 24, border: `1px solid ${border}`, background: bg2, opacity: 0.6, transform: "translateY(6px)" }} />
+                    <button
+                      onClick={() => setViewFullProfile(matchUser)}
+                      style={{ position: "relative", width: "100%", background: bg2, border: `1px solid ${border}`, borderRadius: 24, padding: 24, textAlign: "left", fontFamily: "inherit", cursor: "pointer" }}
+                    >
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 14, marginBottom: 18 }}>
+                        <div style={{ display: "flex", gap: 14, alignItems: "center", minWidth: 0 }}>
+                          <Avatar initials={initials(matchUser.name)} src={matchUser.avatar_url} size={64} dark={dark} />
+                          <div style={{ minWidth: 0 }}>
+                            <div style={{ fontSize: 22, color: text, letterSpacing: "-0.8px", marginBottom: 4 }}>{matchUser.name}</div>
+                            <div style={{ fontSize: 12, color: textMuted }}>{matchUser.role || "Builder"}{matchUser.location ? ` · ${matchUser.location}` : ""}</div>
+                          </div>
+                        </div>
+                        {sharedSkills.length > 0 && (
+                          <div style={{ fontSize: 10, color: text, border: `1px solid ${text}`, borderRadius: 999, padding: "4px 9px", whiteSpace: "nowrap" }}>
+                            {sharedSkills.length} shared
+                          </div>
+                        )}
+                      </div>
+                      {discoverSmartMatch && (
+                        <div style={{ background: dark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.04)", border: `1px solid ${border}`, borderRadius: 12, padding: "10px 12px", marginBottom: 16, fontSize: 11, color: textMuted, lineHeight: 1.6 }}>
+                          {sharedSkills.length > 0
+                            ? <>Sorted by shared skills with you: <span style={{ color: text }}>{sharedSkills.slice(0, 3).join(", ")}{sharedSkills.length > 3 ? ` +${sharedSkills.length - 3} more` : ""}</span>.</>
+                            : "Add skills to your profile to improve match quality."}
+                        </div>
+                      )}
+                      {matchUser.bio && (
+                        <div style={{ fontSize: 12, color: textMuted, lineHeight: 1.8, marginBottom: 16 }}>
+                          {matchUser.bio.length > 180 ? `${matchUser.bio.slice(0, 177)}...` : matchUser.bio}
+                        </div>
+                      )}
+                      {(matchUser.skills || []).length > 0 && (
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 14 }}>
+                          {(matchUser.skills || []).slice(0, 8).map((skill) => {
+                            const isShared = sharedSkills.includes(skill);
+                            return (
+                              <span key={skill} style={{ fontSize: 10, padding: "3px 10px", borderRadius: 999, border: `1px solid ${isShared ? text : border}`, color: isShared ? text : textMuted }}>
+                                {isShared ? `shared · ${skill}` : skill}
+                              </span>
+                            );
+                          })}
+                        </div>
+                      )}
+                      <div style={{ fontSize: 11, color: textMuted }}>tap card to view full profile</div>
+                    </button>
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handleSwipe("pass", matchUser); }}
+                      style={{ ...btnG, padding: "14px 16px", fontSize: 12, color: text, borderRadius: 12 }}
+                    >
+                      ✕ pass
+                    </button>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handleSwipe("like", matchUser); }}
+                      style={{ ...btnP, padding: "14px 16px", fontSize: 12, borderRadius: 12 }}
+                    >
+                      ✓ connect
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
@@ -4576,6 +4763,40 @@ function CoLab() {
         </div>
       )}
       {showBannerEditor && <BannerEditor pixels={bannerPixels} onSave={saveBanner} onClose={() => setShowBannerEditor(false)} dark={dark} bg={bg} border={border} text={text} textMuted={textMuted} />}
+      <button onClick={() => setShowFeedbackModal(true)} style={{ position: "fixed", right: 24, bottom: 24, zIndex: 210, background: bg2, color: text, border: `1px solid ${border}`, borderRadius: 999, padding: "8px 12px", fontSize: 11, cursor: "pointer", fontFamily: "inherit", boxShadow: dark ? "0 12px 28px rgba(0,0,0,0.35)" : "0 12px 28px rgba(0,0,0,0.12)" }}>
+        feedback ↗
+      </button>
+      {showFeedbackModal && (
+        <div onClick={() => !feedbackSubmitting && setShowFeedbackModal(false)} style={{ position: "fixed", inset: 0, background: dark ? "rgba(0,0,0,0.88)" : "rgba(220,220,220,0.82)", backdropFilter: "blur(10px)", zIndex: 260, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+          <div onClick={(e) => e.stopPropagation()} style={{ background: bg, border: `1px solid ${border}`, borderRadius: 16, padding: 24, width: "100%", maxWidth: 460 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }}>
+              <div>
+                <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px", marginBottom: 6 }}>BETA FEEDBACK</div>
+                <div style={{ fontSize: 18, color: text, letterSpacing: "-0.5px" }}>Send feedback</div>
+              </div>
+              <button onClick={() => setShowFeedbackModal(false)} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontFamily: "inherit", fontSize: 16 }}>×</button>
+            </div>
+            <div style={{ marginBottom: 14 }}>
+              <label style={labelStyle}>Type</label>
+              <select value={feedbackType} onChange={(e) => setFeedbackType(e.target.value)} style={inputStyle}>
+                <option>Bug report</option>
+                <option>Feature request</option>
+                <option>General feedback</option>
+              </select>
+            </div>
+            <div style={{ marginBottom: 18 }}>
+              <label style={labelStyle}>Description</label>
+              <textarea value={feedbackMessage} onChange={(e) => setFeedbackMessage(e.target.value)} rows={6} placeholder="What happened, what you expected, or what you want to see." style={{ ...inputStyle, resize: "vertical", lineHeight: 1.6 }} />
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
+              <div style={{ fontSize: 11, color: textMuted }}>Stored in the `feedback` table with your user id.</div>
+              <button onClick={submitFeedback} disabled={feedbackSubmitting || !feedbackMessage.trim()} style={{ ...btnP, opacity: feedbackSubmitting || !feedbackMessage.trim() ? 0.6 : 1, cursor: feedbackSubmitting || !feedbackMessage.trim() ? "default" : "pointer" }}>
+                {feedbackSubmitting ? "sending..." : "submit"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* MATCH MODAL */}
       {discoverMatch && (
@@ -5000,8 +5221,8 @@ function CoLab() {
               ...cp,
               _type: "community_post",
               id: `cp-${cp.id}`,
-              _communityName: cp.communities?.name || "",
-              _communityEmoji: COMMUNITY_SYMBOLS[cp.communities?.slug] || cp.communities?.emoji || "◈",
+              _communityName: getCommunityDisplayName(cp.communities?.name || ""),
+              _communityEmoji: COMMUNITY_SYMBOLS[normalizeCommunitySlug(cp.communities?.slug)] || cp.communities?.emoji || "◈",
               _communityId: cp.community_id,
               _originalId: cp.id,
             }));
@@ -5772,8 +5993,8 @@ function CoLab() {
               style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 12px", borderRadius: 6, cursor: "pointer", background: isActive ? bg3 : "none", transition: "background 0.1s" }}
               onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = bg2; }}
               onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = "none"; }}>
-              <span style={{ fontSize: 13, flexShrink: 0, color: isActive ? text : textMuted, fontFamily: "inherit", lineHeight: 1 }}>{COMMUNITY_SYMBOLS[c.slug] || c.emoji}</span>
-              <span style={{ flex: 1, fontSize: 12, color: isActive ? text : textMuted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.name}</span>
+              <span style={{ fontSize: 13, flexShrink: 0, color: isActive ? text : textMuted, fontFamily: "inherit", lineHeight: 1 }}>{COMMUNITY_SYMBOLS[normalizeCommunitySlug(c.slug)] || c.emoji}</span>
+              <span style={{ flex: 1, fontSize: 12, color: isActive ? text : textMuted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{getCommunityDisplayName(c.name)}</span>
               <button className="hb" onClick={e => { e.stopPropagation(); isJoined ? handleLeave(c.id) : handleJoin(c.id); }}
                 style={{ fontSize: 10, padding: "3px 9px", borderRadius: 6, border: `1px solid ${border}`, background: "none", color: isJoined ? text : textMuted, cursor: "pointer", fontFamily: "inherit", flexShrink: 0, letterSpacing: "0.2px" }}>
                 {isJoined ? "joined" : "+ join"}
@@ -5835,9 +6056,9 @@ function CoLab() {
                   ) : (
                     <div style={{ display: "flex", flexDirection: "column" }}>
                       {allTrendingCommunityPosts.map((post) => {
-                        const commName = post.communities?.name || "";
+                        const commName = getCommunityDisplayName(post.communities?.name || "");
                         const commSlug = post.communities?.slug || "";
-                        const commEmoji = COMMUNITY_SYMBOLS[commSlug] || post.communities?.emoji || "◈";
+                        const commEmoji = COMMUNITY_SYMBOLS[normalizeCommunitySlug(commSlug)] || post.communities?.emoji || "◈";
                         const comm = communities.find(x => x.id === post.community_id);
                         return (
                           <div key={post.id}
@@ -5868,7 +6089,7 @@ function CoLab() {
                   <button className="hb community-drawer-toggle" onClick={() => setShowCommunityDrawer(true)} style={{ background: "none", border: `1px solid ${border}`, borderRadius: 8, padding: "6px 10px", fontSize: 11, cursor: "pointer", color: textMuted, fontFamily: "inherit", marginBottom: 12 }}>communities</button>
                   <button className="hb" onClick={() => setActiveThread(null)}
                     style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontFamily: "inherit", fontSize: 12, marginBottom: 24, padding: 0, display: "flex", alignItems: "center", gap: 6 }}>
-                    ← back to {activeCommunity.name}
+                    ← back to {getCommunityDisplayName(activeCommunity.name)}
                   </button>
                   <div style={{ display: "flex", gap: 16, alignItems: "flex-start", marginBottom: 24 }}>
                     {/* Vote */}
@@ -5970,8 +6191,8 @@ function CoLab() {
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24, flexWrap: "wrap", gap: 12 }}>
                     <div>
                       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
-                        <span style={{ fontSize: 18, color: text, fontFamily: "inherit", lineHeight: 1 }}>{COMMUNITY_SYMBOLS[activeCommunity.slug] || activeCommunity.emoji}</span>
-                        <div style={{ fontSize: 22, fontWeight: 400, letterSpacing: "-0.5px", color: text }}>{activeCommunity.name}</div>
+                        <span style={{ fontSize: 18, color: text, fontFamily: "inherit", lineHeight: 1 }}>{COMMUNITY_SYMBOLS[normalizeCommunitySlug(activeCommunity.slug)] || activeCommunity.emoji}</span>
+                        <div style={{ fontSize: 22, fontWeight: 400, letterSpacing: "-0.5px", color: text }}>{getCommunityDisplayName(activeCommunity.name)}</div>
                       </div>
                       {activeCommunity.description && <div style={{ fontSize: 12, color: textMuted, maxWidth: 480, lineHeight: 1.6 }}>{activeCommunity.description}</div>}
                     </div>
@@ -6177,8 +6398,53 @@ function CoLab() {
                   <div ref={dmEndRef} />
                 </div>
                 {dmTypingUser && <div style={{ padding: "4px 20px 0", fontSize: 11, color: textMuted, fontStyle: "italic" }}>{dmTypingUser} is typing...</div>}
-                <div style={{ padding: "14px 20px", borderTop: `1px solid ${border}`, display: "flex", gap: 10 }}>
+                {showGifPicker && (
+                  <div style={{ padding: "14px 20px 0", borderTop: `1px solid ${border}` }}>
+                    <div style={{ background: bg2, border: `1px solid ${border}`, borderRadius: 12, padding: 12 }}>
+                      <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
+                        <input
+                          placeholder="search gifs..."
+                          value={gifSearchQuery}
+                          onChange={(e) => setGifSearchQuery(e.target.value)}
+                          onKeyDown={(e) => e.key === "Enter" && handleGifSearch()}
+                          style={{ ...inputStyle, fontSize: 12, flex: 1 }}
+                        />
+                        <button onClick={() => handleGifSearch()} style={{ ...btnG, padding: "9px 12px", fontSize: 11 }}>search</button>
+                        <button onClick={() => { setShowGifPicker(false); setGifError(""); }} style={{ ...btnG, padding: "9px 12px", fontSize: 11 }}>close</button>
+                      </div>
+                      {gifError && <div style={{ fontSize: 11, color: "#ef4444", marginBottom: 8 }}>{gifError}</div>}
+                      {gifLoading ? (
+                        <div style={{ fontSize: 11, color: textMuted }}>loading gifs...</div>
+                      ) : gifResults.length > 0 ? (
+                        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 8 }}>
+                          {gifResults.map((gif) => (
+                            <button
+                              key={gif.id}
+                              onClick={() => {
+                                const url = gif.media_formats?.gif?.url;
+                                if (!url) return;
+                                appendDmDraft(url);
+                                setShowGifPicker(false);
+                                setGifSearchQuery("");
+                                setGifResults([]);
+                              }}
+                              style={{ background: "none", border: `1px solid ${border}`, borderRadius: 10, padding: 0, overflow: "hidden", cursor: "pointer" }}
+                            >
+                              <img src={gif.media_formats.tinygif?.url || gif.media_formats.gif?.url} alt={gif.content_description || "GIF"} style={{ width: "100%", height: 100, objectFit: "cover", display: "block" }} />
+                            </button>
+                          ))}
+                        </div>
+                      ) : (
+                        <div style={{ fontSize: 11, color: textMuted }}>Search Tenor and pick a GIF to drop its URL into the message.</div>
+                      )}
+                    </div>
+                  </div>
+                )}
+                <div style={{ padding: "14px 20px", borderTop: showGifPicker ? "none" : `1px solid ${border}`, display: "flex", gap: 10 }}>
                   <input placeholder="message..." value={dmInput} onChange={e => setDmInput(e.target.value)} onKeyDown={e => e.key === "Enter" && handleSendDm()} style={{ ...inputStyle, fontSize: 13 }} autoFocus={window.innerWidth > 768} />
+                  <button className="hb" onClick={() => setShowGifPicker((prev) => !prev)} style={{ ...btnG, padding: "10px 12px", flexShrink: 0 }}>
+                    GIF
+                  </button>
                   <label style={{ ...btnG, padding: "10px 12px", cursor: "pointer", flexShrink: 0 }}>
                     + file
                     <input type="file" multiple style={{ display: "none" }} onChange={(e) => addDmAttachments(Array.from(e.target.files || []), activeDmThread.id)} />
@@ -6243,165 +6509,99 @@ function CoLab() {
             <button className="hb" onClick={openCreateProjectFlow} style={btnP}>+ new project</button>
           </div>
 
-          {/* Stats */}
           <div style={{ display: "flex", gap: 24, marginBottom: 36 }}>
-            <span style={{ fontSize: 13, color: textMuted }}><span style={{ color: text, fontWeight: 500 }}>{myProjects.length}</span> projects</span>
-            <span style={{ fontSize: 13, color: textMuted }}><span style={{ color: text, fontWeight: 500 }}>{appliedProjectIds.length}</span> applied to</span>
+            <span style={{ fontSize: 13, color: textMuted }}><span style={{ color: text, fontWeight: 500 }}>{workspaceProjectHubItems.length}</span> active workspaces</span>
+            <span style={{ fontSize: 13, color: textMuted }}><span style={{ color: text, fontWeight: 500 }}>{workspaceOpenApplications.length}</span> open applications</span>
+            <span style={{ fontSize: 13, color: textMuted }}><span style={{ color: text, fontWeight: 500 }}>{workspaceCollaborations.length}</span> active collaborations</span>
           </div>
-
-          {/* Two col: my projects + applications */}
-          {(() => {
-            const collaboratingProjects = applications
-              .filter(a => a.applicant_id === authUser?.id && normalizeApplicationStatus(a.status) === "accepted")
-              .map(a => projects.find(p => p.id === a.project_id))
-              .filter(Boolean);
-            return (
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24, marginBottom: 36 }}>
-            {/* My projects */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 28, maxWidth: 980 }}>
             <div>
-              <div style={{ fontSize: 10, color: textMuted, letterSpacing: "1.5px", marginBottom: 14 }}>MY PROJECTS</div>
-              {loading ? <Spinner dark={dark} /> : myProjects.length === 0
-                ? <div style={{ background: bg2, border: `1px solid ${border}`, borderRadius: 10, padding: "14px 16px" }}>
-                    <div style={{ fontSize: 12, color: text, marginBottom: 6 }}>No projects yet.</div>
-                    <div style={{ fontSize: 11, color: textMuted, lineHeight: 1.6, marginBottom: 10 }}>Start by creating your first project or browse open projects to collaborate.</div>
-                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                      <button className="hb" onClick={openCreateProjectFlow} style={{ ...btnP, padding: "8px 12px", fontSize: 11 }}>Create your first project</button>
-                      <button className="hb" onClick={openJoinProjectFlow} style={{ ...btnG, padding: "8px 12px", fontSize: 11 }}>Find collaborators / join a project</button>
-                    </div>
+              <div style={{ fontSize: 10, color: textMuted, letterSpacing: "1.5px", marginBottom: 14 }}>YOUR PROJECTS</div>
+              {loading ? <Spinner dark={dark} /> : workspaceProjectHubItems.length === 0 ? (
+                <div style={{ background: bg2, border: `1px solid ${border}`, borderRadius: 12, padding: "16px 18px" }}>
+                  <div style={{ fontSize: 12, color: text, marginBottom: 6 }}>No workspaces yet.</div>
+                  <div style={{ fontSize: 11, color: textMuted, lineHeight: 1.7, marginBottom: 12 }}>Create a project or join one to turn this tab into your working hub.</div>
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    <button className="hb" onClick={openCreateProjectFlow} style={{ ...btnP, padding: "8px 12px", fontSize: 11 }}>Create project</button>
+                    <button className="hb" onClick={openJoinProjectFlow} style={{ ...btnG, padding: "8px 12px", fontSize: 11 }}>Browse projects</button>
                   </div>
-                : <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
-                    {myProjects.map((p,i) => {
-                      const pendingApps = applications.filter(a => a.project_id === p.id && a.status === "pending").length;
-                      const health = projectHealthById[p.id] || { status: PROJECT_HEALTH.STALLED, reason: "No project signals" };
-                      return (
-                        <div key={p.id} style={{ background: bg2, borderRadius: i === 0 && myProjects.length === 1 ? 8 : i === 0 ? "8px 8px 0 0" : i === myProjects.length - 1 ? "0 0 8px 8px" : 0, border: `1px solid ${border}`, borderBottom: i < myProjects.length - 1 ? "none" : `1px solid ${border}`, padding: "12px 16px", cursor: "pointer", transition: "opacity 0.15s" }}
-                          onMouseEnter={e => e.currentTarget.style.opacity = "0.8"} onMouseLeave={e => e.currentTarget.style.opacity = "1"}
-                          onClick={() => { setActiveProject(p); loadProjectData(p.id); setProjectTab("tasks"); }}>
-                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8, gap: 8 }}>
-                            <div style={{ minWidth: 0 }}>
-                              <div style={{ fontSize: 13, color: text, letterSpacing: "-0.3px", marginBottom: 2 }}>{p.title}</div>
-                              <div style={{ fontSize: 11, color: textMuted }}>{p.category}{pendingApps > 0 ? ` · ${pendingApps} pending` : ""}</div>
-                            </div>
-                            <span style={{ fontSize: 10, padding: "2px 8px", borderRadius: 999, border: `1px solid ${border}`, color: health.status === PROJECT_HEALTH.ACTIVE ? "#22c55e" : health.status === PROJECT_HEALTH.AT_RISK ? "#f59e0b" : "#ef4444" }}>
-                              {health.status}
-                            </span>
-                            <div style={{ display: "flex", gap: 4, alignItems: "center", flexShrink: 0 }}>
-                              {pendingApps > 0 && <button className="hb" onClick={e => { e.stopPropagation(); openReviewApplicants(p); }} style={{ fontSize: 10, padding: "2px 8px", border: `1px solid ${border}`, borderRadius: 4, background: "none", color: text, cursor: "pointer", fontFamily: "inherit" }}>review</button>}
-                              {!p.shipped && <button className="hb" onClick={e => { e.stopPropagation(); handleArchiveProject(p.id); }} style={{ fontSize: 10, padding: "2px 8px", border: "none", borderRadius: 4, background: "none", color: textMuted, cursor: "pointer", fontFamily: "inherit", opacity: 0.5 }} title="Archive project">archive</button>}
-                            </div>
-                          </div>
-                          {/* Task-based progress */}
-                          {(() => {
-                            const projTasks = projectTasksById[p.id] || [];
-                            const done = projTasks.filter(t => t.done).length;
-                            const prog = projTasks.length > 0 ? Math.round((done / projTasks.length) * 100) : (p.progress || 0);
-                            return (
-                              <div>
-                                <ProgressBar value={prog} dark={dark} />
-                                <div style={{ fontSize: 10, color: textMuted, marginTop: 4 }}>
-                                  {projTasks.length > 0 ? `${done}/${projTasks.length} tasks · ${prog}%` : `${prog}%`}
-                                </div>
-                              </div>
-                            );
-                          })()}
-                        </div>
-                      );
-                    })}
-                  </div>
-              }
-            {projects.filter(p => p.owner_id === authUser?.id && p.archived).length > 0 && (
-              <div style={{ marginTop: 20 }}>
-                <div style={{ fontSize: 10, color: textMuted, letterSpacing: "1.5px", marginBottom: 10 }}>ARCHIVED</div>
-                {projects.filter(p => p.owner_id === authUser?.id && p.archived).map(p => (
-                  <div key={p.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 14px", background: bg2, border: `1px solid ${border}`, borderRadius: 6, marginBottom: 4, opacity: 0.6 }}>
-                    <div style={{ fontSize: 12, color: text }}>{p.title}</div>
-                    <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-                      <button className="hb" onClick={() => handleUnarchiveProject(p.id)}
-                        style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontFamily: "inherit", fontSize: 10 }}>restore</button>
-                      <button className="hb" onClick={() => handleDeleteArchivedProject(p.id)}
-                        style={{ background: "none", border: "none", color: "#ef4444", cursor: "pointer", fontFamily: "inherit", fontSize: 10 }}>delete</button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-            {/* Collaborating on */}
-            {collaboratingProjects.length > 0 && (
-              <div style={{ marginTop: 28 }}>
-                <div style={{ fontSize: 10, color: textMuted, letterSpacing: "1.5px", marginBottom: 14 }}>COLLABORATING ON</div>
-                <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
-                  {collaboratingProjects.map((p, i, arr) => (
-                    <div key={p.id}
-                      style={{ background: bg2, borderRadius: i === 0 && arr.length === 1 ? 8 : i === 0 ? "8px 8px 0 0" : i === arr.length - 1 ? "0 0 8px 8px" : 0, border: `1px solid ${border}`, borderBottom: i < arr.length - 1 ? "none" : `1px solid ${border}`, padding: "12px 16px", cursor: "pointer", transition: "opacity 0.15s" }}
-                      onMouseEnter={e => e.currentTarget.style.opacity = "0.8"}
-                      onMouseLeave={e => e.currentTarget.style.opacity = "1"}
-                      onClick={() => { setActiveProject(p); loadProjectData(p.id); setProjectTab("tasks"); }}>
-                      <div style={{ fontSize: 13, color: text, letterSpacing: "-0.3px", marginBottom: 2 }}>{p.title}</div>
-                      <div style={{ fontSize: 11, color: textMuted }}>{p.owner_name} · {p.category}</div>
-                    </div>
-                  ))}
                 </div>
-              </div>
-            )}
-            </div>
-
-            {/* Applications + recent activity */}
-            <div>
-              <div style={{ fontSize: 10, color: textMuted, letterSpacing: "1.5px", marginBottom: 14 }}>APPLICATIONS</div>
-              <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 12 }}>
-                {Object.entries(applicationStatusStyles).map(([statusKey, config]) => {
-                  const count = applications.filter((application) => application.applicant_id === authUser?.id && normalizeApplicationStatus(application.status) === statusKey).length;
-                  return (
-                    <span key={statusKey} style={{ fontSize: 10, color: config.color, border: `1px solid ${config.color}66`, borderRadius: 999, padding: "2px 8px" }}>
-                      {config.label}: {count}
-                    </span>
-                  );
-                })}
-              </div>
-              {(() => {
-                const pendingOrRejectedProjects = projects.filter(p => {
-                  if (!appliedProjectIds.includes(p.id)) return false;
-                  const myApp = applications.find(a => a.project_id === p.id && a.applicant_id === authUser?.id);
-                  return normalizeApplicationStatus(myApp?.status) !== "accepted";
-                });
-                return pendingOrRejectedProjects.length === 0
-                  ? <div style={{ fontSize: 12, color: textMuted, marginBottom: 24 }}>no pending applications.</div>
-                  : <div style={{ display: "flex", flexDirection: "column", gap: 1, marginBottom: 24 }}>
-                      {pendingOrRejectedProjects.map((p,i,arr) => {
-                        const myApp = applications.find(a => a.project_id === p.id && a.applicant_id === authUser?.id);
-                        return (
-                          <div key={p.id} style={{ background: bg2, borderRadius: i === 0 && arr.length === 1 ? 8 : i === 0 ? "8px 8px 0 0" : i === arr.length - 1 ? "0 0 8px 8px" : 0, border: `1px solid ${border}`, borderBottom: i < arr.length - 1 ? "none" : `1px solid ${border}`, padding: "10px 16px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
-                            <div style={{ minWidth: 0 }}><div style={{ fontSize: 12, color: text, marginBottom: 1 }}>{p.title}</div><div style={{ fontSize: 10, color: textMuted }}>{p.owner_name}</div></div>
-                            <div style={{ display: "flex", gap: 6, alignItems: "center", flexShrink: 0 }}>
-                              <span style={{ fontSize: 10, color: textMuted, border: `1px solid ${border}`, borderRadius: 3, padding: "1px 6px" }}>{normalizeApplicationStatus(myApp?.status || "pending")}</span>
-                              {normalizeApplicationStatus(myApp?.status) === "rejected" && <button className="hb" onClick={() => handleRemoveDeniedApp(myApp.id)} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontSize: 10, fontFamily: "inherit" }}>×</button>}
-                            </div>
+              ) : (
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 12 }}>
+                  {workspaceProjectHubItems.map((project) => {
+                    const pendingApps = applications.filter((application) => application.project_id === project.id && application.status === "pending").length;
+                    const health = projectHealthById[project.id] || { status: PROJECT_HEALTH.STALLED };
+                    const isOwned = project.owner_id === authUser?.id;
+                    const projectTasks = projectTasksById[project.id] || [];
+                    const doneCount = projectTasks.filter((task) => task.done).length;
+                    const progress = projectTasks.length > 0 ? Math.round((doneCount / projectTasks.length) * 100) : (project.progress || 0);
+                    return (
+                      <button key={project.id} onClick={() => { setActiveProject(project); loadProjectData(project.id); setProjectTab("tasks"); }} style={{ background: bg2, border: `1px solid ${border}`, borderRadius: 14, padding: "16px", textAlign: "left", cursor: "pointer", fontFamily: "inherit" }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "flex-start", marginBottom: 10 }}>
+                          <div style={{ minWidth: 0 }}>
+                            <div style={{ fontSize: 14, color: text, marginBottom: 4 }}>{project.title}</div>
+                            <div style={{ fontSize: 11, color: textMuted }}>{isOwned ? "owner" : "collaborator"} · {project.category}</div>
                           </div>
-                        );
-                      })}
-                    </div>;
-              })()}
-
-              {/* Pending notifications — project-relevant only */}
-              {notifications.filter(n => n.type !== "follow").length > 0 && (
-                <div>
-                  <div style={{ fontSize: 10, color: textMuted, letterSpacing: "1.5px", marginBottom: 14 }}>NEEDS ATTENTION</div>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                    {notifications.filter(n => n.type !== "follow").slice(0, 3).map(n => (
-                      <div key={n.id} style={{ background: bg2, border: `1px solid ${border}`, borderRadius: 8, padding: "10px 14px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
-                        <div style={{ minWidth: 0 }}>
-                          <div style={{ fontSize: 12, color: text, marginBottom: 1 }}>{n.text}</div>
-                          <div style={{ fontSize: 10, color: textMuted }}>{n.sub}</div>
+                          <span style={{ fontSize: 10, padding: "3px 8px", borderRadius: 999, border: `1px solid ${border}`, color: health.status === PROJECT_HEALTH.ACTIVE ? "#22c55e" : health.status === PROJECT_HEALTH.AT_RISK ? "#f59e0b" : "#ef4444" }}>
+                            {health.status}
+                          </span>
                         </div>
-                        <button className="hb" onClick={() => { setShowNotifications(true); setAppScreen("workspace"); }} style={{ fontSize: 10, padding: "2px 8px", border: `1px solid ${border}`, borderRadius: 3, background: "none", color: text, cursor: "pointer", fontFamily: "inherit", flexShrink: 0 }}>review</button>
+                        <div style={{ marginBottom: 8 }}>
+                          <ProgressBar value={progress} dark={dark} />
+                        </div>
+                        <div style={{ fontSize: 10, color: textMuted }}>
+                          {projectTasks.length > 0 ? `${doneCount}/${projectTasks.length} tasks` : `${progress}% complete`}
+                          {isOwned && pendingApps > 0 ? ` · ${pendingApps} pending` : ""}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+            <div>
+              <div style={{ fontSize: 10, color: textMuted, letterSpacing: "1.5px", marginBottom: 14 }}>OPEN APPLICATIONS</div>
+              {workspaceOpenApplications.length === 0 ? (
+                <div style={{ fontSize: 12, color: textMuted }}>No pending or invited applications.</div>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
+                  {workspaceOpenApplications.map((application, index, arr) => {
+                    const project = projects.find((item) => item.id === application.project_id);
+                    const status = normalizeApplicationStatus(application.status);
+                    if (!project) return null;
+                    return (
+                      <div key={application.id} style={{ background: bg2, borderRadius: index === 0 && arr.length === 1 ? 10 : index === 0 ? "10px 10px 0 0" : index === arr.length - 1 ? "0 0 10px 10px" : 0, border: `1px solid ${border}`, borderBottom: index < arr.length - 1 ? "none" : `1px solid ${border}`, padding: "12px 16px", display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center" }}>
+                        <button onClick={() => { setActiveProject(project); loadProjectData(project.id); setProjectTab("team"); }} style={{ background: "none", border: "none", padding: 0, textAlign: "left", cursor: "pointer", fontFamily: "inherit", minWidth: 0 }}>
+                          <div style={{ fontSize: 12, color: text, marginBottom: 2 }}>{project.title}</div>
+                          <div style={{ fontSize: 10, color: textMuted }}>{project.owner_name || "Unknown owner"}</div>
+                        </button>
+                        <div style={{ display: "flex", gap: 8, alignItems: "center", flexShrink: 0 }}>
+                          <span style={{ fontSize: 10, color: applicationStatusStyles[status]?.color || textMuted, border: `1px solid ${(applicationStatusStyles[status]?.color || border)}66`, borderRadius: 999, padding: "2px 8px" }}>
+                            {applicationStatusStyles[status]?.label || status}
+                          </span>
+                        </div>
                       </div>
-                    ))}
-                  </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+            <div>
+              <div style={{ fontSize: 10, color: textMuted, letterSpacing: "1.5px", marginBottom: 14 }}>APPLIED TO</div>
+              {workspaceCollaborations.length === 0 ? (
+                <div style={{ fontSize: 12, color: textMuted }}>No accepted collaborations yet.</div>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
+                  {workspaceCollaborations.map((project, index, arr) => (
+                    <button key={project.id} onClick={() => { setActiveProject(project); loadProjectData(project.id); setProjectTab("tasks"); }} style={{ background: bg2, borderRadius: index === 0 && arr.length === 1 ? 10 : index === 0 ? "10px 10px 0 0" : index === arr.length - 1 ? "0 0 10px 10px" : 0, border: `1px solid ${border}`, borderBottom: index < arr.length - 1 ? "none" : `1px solid ${border}`, padding: "12px 16px", textAlign: "left", cursor: "pointer", fontFamily: "inherit" }}>
+                      <div style={{ fontSize: 12, color: text, marginBottom: 2 }}>{project.title}</div>
+                      <div style={{ fontSize: 10, color: textMuted }}>{project.owner_name || "Unknown owner"} · active collaboration</div>
+                    </button>
+                  ))}
                 </div>
               )}
             </div>
           </div>
-          ); })()}
         </div>
       )}
 
@@ -7954,7 +8154,7 @@ function CoLab() {
         <div onClick={() => setShowCreatePost(false)} style={{ position: "fixed", inset: 0, background: dark ? "rgba(0,0,0,0.92)" : "rgba(200,200,200,0.88)", zIndex: 300, display: "flex", alignItems: "center", justifyContent: "center", backdropFilter: "blur(12px)", padding: 16 }}>
           <div onClick={e => e.stopPropagation()} style={{ background: bg, border: `1px solid ${border}`, borderRadius: 16, padding: "28px", width: "100%", maxWidth: 520 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-              <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px" }}>NEW THREAD · {COMMUNITY_SYMBOLS[activeCommunity.slug] || activeCommunity.emoji} {activeCommunity.name.toUpperCase()}</div>
+              <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px" }}>NEW THREAD · {COMMUNITY_SYMBOLS[normalizeCommunitySlug(activeCommunity.slug)] || activeCommunity.emoji} {getCommunityDisplayName(activeCommunity.name).toUpperCase()}</div>
               <button onClick={() => setShowCreatePost(false)} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontSize: 16, fontFamily: "inherit" }}>×</button>
             </div>
             <input value={newThreadTitle} onChange={e => setNewThreadTitle(e.target.value)}

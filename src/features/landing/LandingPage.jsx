@@ -42,6 +42,7 @@ export default function LandingPage({ dark, setDark, onLogin, onSignup, supabase
     .card-h:hover { border-color: ${text} !important; }
     @media (max-width: 640px) {
       .hero-h1 { font-size: 44px !important; letter-spacing: -2px !important; }
+      .hero-grid { grid-template-columns: 1fr !important; }
       .stat-grid { flex-direction: column !important; }
       .stat-item { border-right: none !important; border-bottom: 1px solid ${border} !important; padding: 16px 20px !important; }
       .how-grid { grid-template-columns: 1fr !important; }
@@ -55,6 +56,11 @@ export default function LandingPage({ dark, setDark, onLogin, onSignup, supabase
   const [liveStats, setLiveStats] = useState({ builders: 0, projects: 0, shipped: 0 });
   const [displayStats, setDisplayStats] = useState({ builders: 0, projects: 0, shipped: 0 });
   const [statsLoaded, setStatsLoaded] = useState(false);
+  const heroPreviewCards = [
+    { eyebrow: "PROFILE", title: "Ari Patel", subtitle: "Product designer · Brooklyn", tags: ["Brand systems", "Figma", "Motion"] },
+    { eyebrow: "PROJECT", title: "Pocket Studio", subtitle: "Looking for frontend + growth", tags: ["2 roles open", "MVP in progress"] },
+    { eyebrow: "MATCH", title: "Shared skills detected", subtitle: "3 creators overlap with your toolkit", tags: ["Design", "Frontend", "Storytelling"] },
+  ];
 
   useEffect(() => {
     (async () => {
@@ -178,74 +184,119 @@ export default function LandingPage({ dark, setDark, onLogin, onSignup, supabase
         className="pad fu"
         style={{ padding: "80px 40px 64px", borderBottom: `1px solid ${border}` }}
       >
-        <div
-          style={{ fontSize: 10, color: textMuted, letterSpacing: "3px", marginBottom: 20 }}
-        >
-          THE COLLABORATIVE WORKSPACE
-        </div>
-        <h1
-          className="hero-h1"
-          style={{
-            fontSize: "clamp(52px, 9vw, 96px)",
-            fontWeight: 400,
-            lineHeight: 0.92,
-            letterSpacing: "-4px",
-            marginBottom: 28,
-            color: text,
-          }}
-        >
-          Don't just
-          <br />
-          connect.
-          <br />
-          <span style={{ color: textMuted }}>Build together.</span>
-        </h1>
-        <p
-          style={{
-            fontSize: 14,
-            color: textMuted,
-            maxWidth: 500,
-            lineHeight: 1.85,
-            marginBottom: 36,
-          }}
-        >
-          CoLab is where founders, creatives, engineers, and makers find each other and actually
-          get work done — in one place.
-        </p>
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-          <button
-            className="hb"
-            onClick={onSignup}
-            style={{
-              background: text,
-              color: bg,
-              border: "none",
-              borderRadius: 8,
-              padding: "13px 28px",
-              fontSize: 13,
-              fontWeight: 500,
-              cursor: "pointer",
-              fontFamily: "inherit",
-            }}
-          >
-            Start building →
-          </button>
-          <button
-            className="hb"
-            onClick={onLogin}
-            style={{
-              background: "none",
-              color: textMuted,
-              border: `1px solid ${border}`,
-              borderRadius: 8,
-              padding: "13px 28px",
-              fontSize: 13,
-              cursor: "pointer",
-              fontFamily: "inherit",
-            }}
-          >
-            Log in
-          </button>
+        <div className="hero-grid" style={{ display: "grid", gridTemplateColumns: "minmax(0, 1.05fr) minmax(320px, 0.95fr)", gap: 32, alignItems: "center" }}>
+          <div>
+            <div
+              style={{ fontSize: 10, color: textMuted, letterSpacing: "3px", marginBottom: 20 }}
+            >
+              THE COLLABORATIVE WORKSPACE
+            </div>
+            <h1
+              className="hero-h1"
+              style={{
+                fontSize: "clamp(52px, 9vw, 96px)",
+                fontWeight: 400,
+                lineHeight: 0.92,
+                letterSpacing: "-4px",
+                marginBottom: 28,
+                color: text,
+              }}
+            >
+              Don't just
+              <br />
+              connect.
+              <br />
+              <span style={{ color: textMuted }}>Build together.</span>
+            </h1>
+            <p
+              style={{
+                fontSize: 14,
+                color: textMuted,
+                maxWidth: 500,
+                lineHeight: 1.85,
+                marginBottom: 36,
+              }}
+            >
+              CoLab is where founders, creatives, engineers, and makers find each other and actually
+              get work done in one place.
+            </p>
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+              <button
+                className="hb"
+                onClick={onSignup}
+                style={{
+                  background: text,
+                  color: bg,
+                  border: "none",
+                  borderRadius: 8,
+                  padding: "13px 28px",
+                  fontSize: 13,
+                  fontWeight: 500,
+                  cursor: "pointer",
+                  fontFamily: "inherit",
+                }}
+              >
+                Start building →
+              </button>
+              <button
+                className="hb"
+                onClick={onLogin}
+                style={{
+                  background: "none",
+                  color: textMuted,
+                  border: `1px solid ${border}`,
+                  borderRadius: 8,
+                  padding: "13px 28px",
+                  fontSize: 13,
+                  cursor: "pointer",
+                  fontFamily: "inherit",
+                }}
+              >
+                Log in
+              </button>
+            </div>
+          </div>
+          <div style={{ position: "relative", minHeight: 360, display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <div style={{ position: "absolute", inset: "10% 12% auto 12%", height: 220, borderRadius: 28, background: dark ? "linear-gradient(135deg, rgba(255,255,255,0.08), rgba(255,255,255,0.01))" : "linear-gradient(135deg, rgba(0,0,0,0.06), rgba(0,0,0,0.02))", filter: "blur(4px)" }} />
+            <div style={{ position: "relative", width: "100%", maxWidth: 420 }}>
+              {heroPreviewCards.map((card, index) => (
+                <div
+                  key={card.title}
+                  style={{
+                    position: "relative",
+                    marginLeft: index === 1 ? 28 : index === 2 ? 8 : 0,
+                    marginTop: index === 0 ? 0 : -28,
+                    background: bg2,
+                    border: `1px solid ${border}`,
+                    borderRadius: 18,
+                    padding: "18px 18px 16px",
+                    boxShadow: dark ? "0 18px 40px rgba(0,0,0,0.28)" : "0 18px 40px rgba(0,0,0,0.08)",
+                  }}
+                >
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+                    <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px" }}>{card.eyebrow}</div>
+                    <div style={{ width: 52, height: 8, borderRadius: 999, background: dark ? "#1d1d1d" : "#e8e8e8" }} />
+                  </div>
+                  <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 14 }}>
+                    <div style={{ width: 44, height: 44, borderRadius: 14, background: dark ? "#1a1a1a" : "#ececec", border: `1px solid ${border}` }} />
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 14, color: text, marginBottom: 5 }}>{card.title}</div>
+                      <div style={{ width: "72%", height: 8, borderRadius: 999, background: dark ? "#191919" : "#ebebeb", marginBottom: 6 }} />
+                      <div style={{ width: "52%", height: 8, borderRadius: 999, background: dark ? "#151515" : "#efefef" }} />
+                    </div>
+                  </div>
+                  <div style={{ fontSize: 11, color: textMuted, marginBottom: 14 }}>{card.subtitle}</div>
+                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                    {card.tags.map((tag) => (
+                      <span key={tag} style={{ fontSize: 10, color: textMuted, border: `1px solid ${border}`, borderRadius: 999, padding: "3px 9px" }}>
+                        {tag}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       </div>
 
