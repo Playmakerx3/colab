@@ -1465,10 +1465,10 @@ function CoLab() {
   const textMuted = dark ? "#555555" : "#aaaaaa";
   const textSub = dark ? "#2a2a2a" : "#d0d0d0";
 
-  const inputStyle = { background: bg2, border: `1px solid ${border}`, borderRadius: 8, padding: "10px 14px", color: text, fontSize: 13, width: "100%", fontFamily: "inherit", outline: "none" };
+  const inputStyle = { background: bg2, border: `1px solid ${border}`, borderRadius: 12, padding: "10px 14px", color: text, fontSize: 13, width: "100%", fontFamily: "inherit", outline: "none" };
   const labelStyle = { fontSize: 10, fontWeight: 500, color: textMuted, display: "block", marginBottom: 6, letterSpacing: "0.8px" };
-  const btnP = { background: text, color: bg, border: "none", borderRadius: 8, padding: "10px 20px", fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" };
-  const btnG = { background: "none", color: textMuted, border: `1px solid ${border}`, borderRadius: 8, padding: "10px 20px", fontSize: 12, cursor: "pointer", fontFamily: "inherit" };
+  const btnP = { background: text, color: bg, border: "none", borderRadius: 999, padding: "10px 20px", fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" };
+  const btnG = { background: "none", color: textMuted, border: `1px solid ${border}`, borderRadius: 999, padding: "10px 20px", fontSize: 12, cursor: "pointer", fontFamily: "inherit" };
 
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(null), 3000); };
 
@@ -1917,6 +1917,8 @@ function CoLab() {
     @keyframes spin { to { transform: rotate(360deg); } }
     .hb:hover { opacity: 0.7; cursor: pointer; }
     .card-h:hover { border-color: ${text} !important; }
+    .p-card:hover, .proj-card:hover { transform: translateY(-2px); box-shadow: 0 6px 24px rgba(0,0,0,${dark ? "0.36" : "0.09"}) !important; transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease !important; }
+    .p-card, .proj-card { transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease; }
     .task-row:hover .tdel { opacity: 1 !important; }
     @media (min-width: 641px) {
       .feed-image-desktop {
@@ -3597,14 +3599,14 @@ function CoLab() {
         </div>
 
         {/* Tabs: discover | graph */}
-        <div style={{ borderBottom: `1px solid ${border}`, marginBottom: 28, display: "flex" }}>
+        <div style={{ marginBottom: 28, display: "flex", gap: 6, flexWrap: "wrap" }}>
           {[
             { id: "graph", label: "discover" },
             { id: "discover", label: "people" },
             { id: "match", label: "match" },
             { id: "skills", label: "skills" },
           ].map(({ id, label }) => (
-            <button key={id} onClick={() => setNetworkTab(id)} style={{ background: "none", border: "none", borderBottom: networkTab === id ? `1px solid ${text}` : "1px solid transparent", color: networkTab === id ? text : textMuted, padding: "8px 0", fontSize: 12, cursor: "pointer", fontFamily: "inherit", marginRight: 24, transition: "all 0.15s", display: "inline-flex", gap: 6, alignItems: "center", whiteSpace: "nowrap" }}>
+            <button key={id} onClick={() => setNetworkTab(id)} style={{ background: networkTab === id ? text : "none", color: networkTab === id ? bg : textMuted, border: `1px solid ${networkTab === id ? text : border}`, borderRadius: 999, padding: "5px 16px", fontSize: 11, cursor: "pointer", fontFamily: "inherit", transition: "all 0.15s", display: "inline-flex", gap: 6, alignItems: "center", whiteSpace: "nowrap" }}>
               {label}
             </button>
           ))}
@@ -3843,7 +3845,7 @@ function CoLab() {
                     const sharedSkills = mySkills.length > 0 ? (u.skills || []).filter(s => mySkills.includes(s)) : [];
                     const isFollowing = following.includes(u.id);
                     return (
-                      <div key={u.id} style={{ background: bg2, border: `1px solid ${border}`, borderRadius: 12, padding: 20, display: "flex", flexDirection: "column", gap: 12 }}>
+                      <div key={u.id} className="p-card" style={{ background: bg2, border: `1px solid ${border}`, borderRadius: 16, padding: 20, display: "flex", flexDirection: "column", gap: 12 }}>
                         {/* Top row */}
                         <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
                           <button onClick={() => setViewingProfile(u)} style={{ background: "none", border: "none", cursor: "pointer", padding: 0, flexShrink: 0 }}>
@@ -3889,13 +3891,13 @@ function CoLab() {
                             onClick={() => {
                               if (!isFollowing) { handleFollow(u.id); handleSwipe("like", u); }
                             }}
-                            style={{ flex: 1, padding: "7px 0", fontSize: 11, borderRadius: 7, cursor: isFollowing ? "default" : "pointer", fontFamily: "inherit", transition: "all 0.15s",
+                            style={{ flex: 1, padding: "7px 0", fontSize: 11, borderRadius: 999, cursor: isFollowing ? "default" : "pointer", fontFamily: "inherit", transition: "all 0.15s",
                               background: isFollowing ? "none" : text, color: isFollowing ? textMuted : bg, border: `1px solid ${isFollowing ? border : text}` }}>
                             {isFollowing ? "following" : "follow"}
                           </button>
                           <button
                             onClick={() => setViewingProfile(u)}
-                            style={{ flex: 1, padding: "7px 0", fontSize: 11, borderRadius: 7, cursor: "pointer", fontFamily: "inherit", background: "none", color: text, border: `1px solid ${border}`, transition: "all 0.15s" }}>
+                            style={{ flex: 1, padding: "7px 0", fontSize: 11, borderRadius: 999, cursor: "pointer", fontFamily: "inherit", background: "none", color: text, border: `1px solid ${border}`, transition: "all 0.15s" }}>
                             view profile
                           </button>
                         </div>
@@ -4454,7 +4456,7 @@ function CoLab() {
               value={globalSearch}
               onChange={e => { setGlobalSearch(e.target.value); setShowGlobalSearch(e.target.value.length > 0); }}
               onBlur={() => setTimeout(() => setShowGlobalSearch(false), 150)}
-              style={{ ...inputStyle, fontSize: 11, padding: "5px 10px", borderRadius: 6 }}
+              style={{ ...inputStyle, fontSize: 11, padding: "5px 10px" }}
             />
           </div>
           {/* Mobile: tap to expand */}
@@ -4938,18 +4940,18 @@ function CoLab() {
 
           {/* Top-level explore tabs: feed | projects */}
           <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px", marginBottom: 16 }}>{exploreTab === "projects" ? "OPEN PROJECTS" : "BUILDER FEED"}</div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 2, marginBottom: 28 }}>
+          <div style={{ display: "flex", gap: 6, marginBottom: 28, flexWrap: "wrap" }}>
             {[["feed", "feed"], ["projects", "projects"]].map(([id, label]) => (
-              <div key={id} onClick={() => setExploreTab(id)} style={{
-                color: exploreTab === id ? text : textMuted,
-                padding: "3px 0",
-                fontSize: 12, cursor: "pointer", fontFamily: "inherit",
-                transition: "color 0.15s", whiteSpace: "nowrap",
-                fontWeight: exploreTab === id ? 500 : 400,
-                userSelect: "none",
+              <button key={id} onClick={() => setExploreTab(id)} style={{
+                background: exploreTab === id ? text : "none",
+                color: exploreTab === id ? bg : textMuted,
+                border: `1px solid ${exploreTab === id ? text : border}`,
+                borderRadius: 999, padding: "5px 16px",
+                fontSize: 11, cursor: "pointer", fontFamily: "inherit",
+                transition: "all 0.15s", whiteSpace: "nowrap",
               }}>
                 {label}
-              </div>
+              </button>
             ))}
           </div>
 
@@ -4961,11 +4963,11 @@ function CoLab() {
               <div style={{ flex: 1, minWidth: 0 }}>
 
                 {/* Sub-tabs */}
-                <div style={{ display: "flex", borderBottom: `1px solid ${border}`, marginBottom: 16 }}>
+                <div style={{ display: "flex", gap: 6, marginBottom: 16 }}>
                   {["for-you","all"].map(id => (
-                    <button key={id} onClick={() => setProjectsSubTab(id)} style={{ background: "none", border: "none", borderBottom: projectsSubTab === id ? `1px solid ${text}` : "1px solid transparent", color: projectsSubTab === id ? text : textMuted, padding: "8px 16px 8px 0", fontSize: 11, cursor: "pointer", fontFamily: "inherit", marginRight: 8, transition: "all 0.15s", display: "inline-flex", gap: 6, alignItems: "center" }}>
+                    <button key={id} onClick={() => setProjectsSubTab(id)} style={{ background: projectsSubTab === id ? text : "none", color: projectsSubTab === id ? bg : textMuted, border: `1px solid ${projectsSubTab === id ? text : border}`, borderRadius: 999, padding: "5px 16px", fontSize: 11, cursor: "pointer", fontFamily: "inherit", transition: "all 0.15s", display: "inline-flex", gap: 6, alignItems: "center" }}>
                       {id === "for-you" ? "for you" : "all"}
-                      {id === "for-you" && forYou.length > 0 && <span style={{ fontSize: 9, background: bg3, borderRadius: 10, padding: "1px 5px", color: textMuted }}>{forYou.length}</span>}
+                      {id === "for-you" && forYou.length > 0 && <span style={{ fontSize: 9, background: projectsSubTab === id ? "rgba(0,0,0,0.2)" : bg3, borderRadius: 10, padding: "1px 5px", color: projectsSubTab === id ? bg : textMuted }}>{forYou.length}</span>}
                     </button>
                   ))}
                 </div>
@@ -6255,7 +6257,7 @@ function CoLab() {
           <div className="msgs-left" style={{ width: 260, flexShrink: 0, borderRight: `1px solid ${border}`, overflowY: "auto", display: "flex", flexDirection: "column" }}>
             <div style={{ padding: "18px 20px 12px", borderBottom: `1px solid ${border}`, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
               <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px" }}>MESSAGES</div>
-              <button className="hb" onClick={() => { setShowNewDm(true); setNewDmSearch(""); }} style={{ background: "none", border: `1px solid ${border}`, borderRadius: 5, width: 22, height: 22, cursor: "pointer", fontSize: 14, color: textMuted, fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center", lineHeight: 1 }}>+</button>
+              <button className="hb" onClick={() => { setShowNewDm(true); setNewDmSearch(""); }} style={{ background: "none", border: `1px solid ${border}`, borderRadius: 999, width: 22, height: 22, cursor: "pointer", fontSize: 14, color: textMuted, fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center", lineHeight: 1 }}>+</button>
             </div>
             {dmThreads.length > 0 && (
               <div style={{ padding: "8px 12px", borderBottom: `1px solid ${border}` }}>
@@ -6321,8 +6323,8 @@ function CoLab() {
                     <div style={{ fontSize: 14, color: text, fontWeight: 500 }}>{activeDmThread.otherUser?.name}</div>
                     <div style={{ fontSize: 11, color: textMuted }}>{activeDmThread.otherUser?.role}</div>
                   </div>
-                  <button className="hb" onClick={() => setViewingProfile(activeDmThread.otherUser)} style={{ background: "none", border: `1px solid ${border}`, borderRadius: 6, padding: "5px 10px", fontSize: 11, cursor: "pointer", color: textMuted, fontFamily: "inherit" }}>profile</button>
-                  <button className="hb" onClick={() => { if (window.confirm("Delete this entire conversation? This cannot be undone.")) handleDeleteThread(activeDmThread.id); }} style={{ background: "none", border: `1px solid ${border}`, borderRadius: 6, padding: "5px 10px", fontSize: 11, cursor: "pointer", color: textMuted, fontFamily: "inherit" }}>delete chat</button>
+                  <button className="hb" onClick={() => setViewingProfile(activeDmThread.otherUser)} style={{ background: "none", border: `1px solid ${border}`, borderRadius: 999, padding: "5px 12px", fontSize: 11, cursor: "pointer", color: textMuted, fontFamily: "inherit" }}>profile</button>
+                  <button className="hb" onClick={() => { if (window.confirm("Delete this entire conversation? This cannot be undone.")) handleDeleteThread(activeDmThread.id); }} style={{ background: "none", border: `1px solid ${border}`, borderRadius: 999, padding: "5px 12px", fontSize: 11, cursor: "pointer", color: textMuted, fontFamily: "inherit" }}>delete chat</button>
                 </div>
                 <div style={{ flex: 1, overflowY: "auto", padding: "20px", display: "flex", flexDirection: "column", gap: 14 }}>
                   {(dmMessages[activeDmThread.id] || []).length === 0
