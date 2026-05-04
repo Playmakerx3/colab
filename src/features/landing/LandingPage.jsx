@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 
 export default function LandingPage({ dark, setDark, onLogin, onSignup, supabase }) {
   const bg = dark ? "#0a0a0a" : "#f4f4f6";
-  const bg2 = dark ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.62)";
+  const bg2 = dark ? "rgba(28,28,32,0.85)" : "rgba(255,255,255,0.68)";
   const text = dark ? "#ffffff" : "#000000";
   const textMuted = dark ? "#666666" : "#999999";
   const border = dark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.07)";

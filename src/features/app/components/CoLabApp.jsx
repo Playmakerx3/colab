@@ -1458,8 +1458,8 @@ function CoLab() {
   const composerWrapRef = useRef(null);
 
   const bg = dark ? "#0a0a0a" : "#f4f4f6";
-  const bg2 = dark ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.62)";
-  const bg3 = dark ? "rgba(255,255,255,0.08)" : "rgba(255,255,255,0.88)";
+  const bg2 = dark ? "rgba(28,28,32,0.85)" : "rgba(255,255,255,0.68)";
+  const bg3 = dark ? "rgba(38,38,44,0.9)" : "rgba(255,255,255,0.92)";
   const border = dark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.07)";
   const text = dark ? "#ffffff" : "#000000";
   const textMuted = dark ? "#555555" : "#aaaaaa";
