@@ -1465,10 +1465,10 @@ function CoLab() {
   const textMuted = dark ? "#555555" : "#aaaaaa";
   const textSub = dark ? "#2a2a2a" : "#d0d0d0";
 
-  const inputStyle = { background: bg2, border: `1px solid ${border}`, borderRadius: 12, padding: "10px 14px", color: text, fontSize: 13, width: "100%", fontFamily: "inherit", outline: "none" };
+  const inputStyle = { background: bg2, border: `1px solid ${border}`, borderRadius: 8, padding: "10px 14px", color: text, fontSize: 13, width: "100%", fontFamily: "inherit", outline: "none" };
   const labelStyle = { fontSize: 10, fontWeight: 500, color: textMuted, display: "block", marginBottom: 6, letterSpacing: "0.8px" };
-  const btnP = { background: text, color: bg, border: "none", borderRadius: 20, padding: "10px 20px", fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" };
-  const btnG = { background: "none", color: textMuted, border: `1px solid ${border}`, borderRadius: 20, padding: "10px 20px", fontSize: 12, cursor: "pointer", fontFamily: "inherit" };
+  const btnP = { background: text, color: bg, border: "none", borderRadius: 8, padding: "10px 20px", fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" };
+  const btnG = { background: "none", color: textMuted, border: `1px solid ${border}`, borderRadius: 8, padding: "10px 20px", fontSize: 12, cursor: "pointer", fontFamily: "inherit" };
 
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(null), 3000); };
 
@@ -3599,14 +3599,14 @@ function CoLab() {
         </div>
 
         {/* Tabs: discover | graph */}
-        <div style={{ marginBottom: 28, display: "flex", gap: 6, flexWrap: "wrap" }}>
+        <div style={{ borderBottom: `1px solid ${border}`, marginBottom: 28, display: "flex" }}>
           {[
             { id: "graph", label: "discover" },
             { id: "discover", label: "people" },
             { id: "match", label: "match" },
             { id: "skills", label: "skills" },
           ].map(({ id, label }) => (
-            <button key={id} onClick={() => setNetworkTab(id)} style={{ background: networkTab === id ? text : "none", color: networkTab === id ? bg : textMuted, border: `1px solid ${networkTab === id ? text : border}`, borderRadius: 8, padding: "5px 14px", fontSize: 11, cursor: "pointer", fontFamily: "inherit", transition: "all 0.15s", display: "inline-flex", gap: 6, alignItems: "center", whiteSpace: "nowrap" }}>
+            <button key={id} onClick={() => setNetworkTab(id)} style={{ background: "none", border: "none", borderBottom: networkTab === id ? `1px solid ${text}` : "1px solid transparent", color: networkTab === id ? text : textMuted, padding: "8px 0", fontSize: 12, cursor: "pointer", fontFamily: "inherit", marginRight: 24, transition: "all 0.15s", display: "inline-flex", gap: 6, alignItems: "center", whiteSpace: "nowrap" }}>
               {label}
             </button>
           ))}
@@ -3891,13 +3891,13 @@ function CoLab() {
                             onClick={() => {
                               if (!isFollowing) { handleFollow(u.id); handleSwipe("like", u); }
                             }}
-                            style={{ flex: 1, padding: "7px 0", fontSize: 11, borderRadius: 20, cursor: isFollowing ? "default" : "pointer", fontFamily: "inherit", transition: "all 0.15s",
+                            style={{ flex: 1, padding: "7px 0", fontSize: 11, borderRadius: 7, cursor: isFollowing ? "default" : "pointer", fontFamily: "inherit", transition: "all 0.15s",
                               background: isFollowing ? "none" : text, color: isFollowing ? textMuted : bg, border: `1px solid ${isFollowing ? border : text}` }}>
                             {isFollowing ? "following" : "follow"}
                           </button>
                           <button
                             onClick={() => setViewingProfile(u)}
-                            style={{ flex: 1, padding: "7px 0", fontSize: 11, borderRadius: 20, cursor: "pointer", fontFamily: "inherit", background: "none", color: text, border: `1px solid ${border}`, transition: "all 0.15s" }}>
+                            style={{ flex: 1, padding: "7px 0", fontSize: 11, borderRadius: 7, cursor: "pointer", fontFamily: "inherit", background: "none", color: text, border: `1px solid ${border}`, transition: "all 0.15s" }}>
                             view profile
                           </button>
                         </div>
@@ -4206,72 +4206,75 @@ function CoLab() {
 
   // ── AUTH ──
   if (screen === "auth") return (
-    <div style={{ minHeight: "100vh", width: "100%", background: bg, color: text, fontFamily: "'DM Mono', monospace", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "24px 16px" }}>
+    <div style={{ minHeight: "100vh", width: "100%", background: "#080808", color: "#fff", fontFamily: "'DM Mono', monospace", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "24px 16px" }}>
       <style>{CSS}</style>
-      <div style={{ width: "100%", maxWidth: 400 }}>
-        <button onClick={() => setScreen("landing")} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontFamily: "inherit", fontSize: 12, marginBottom: 32 }}>← back</button>
-        <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px", marginBottom: 14 }}>{authSubMode === "signup" ? "CREATE ACCOUNT" : authSubMode === "forgot" ? "RESET PASSWORD" : "WELCOME BACK"}</div>
-        <h2 style={{ fontSize: 26, fontWeight: 400, letterSpacing: "-1px", marginBottom: 28, color: text }}>
-          {authSubMode === "signup" ? "Join CoLab." : authSubMode === "forgot" ? "Reset your password." : "Log in."}
+      <div style={{ width: "100%", maxWidth: 420 }}>
+        <button onClick={() => setScreen("landing")} style={{ background: "none", border: "none", color: "rgba(255,255,255,0.35)", cursor: "pointer", fontFamily: "inherit", fontSize: 12, marginBottom: 40 }}>← back</button>
+        <div style={{ fontSize: 10, color: "rgba(255,255,255,0.35)", letterSpacing: "3px", marginBottom: 16 }}>{authSubMode === "signup" ? "CREATE ACCOUNT" : authSubMode === "forgot" ? "RESET PASSWORD" : "WELCOME BACK"}</div>
+        <h2 style={{ fontSize: "clamp(32px, 6vw, 48px)", fontWeight: 400, letterSpacing: "-2px", lineHeight: 1, marginBottom: 36, color: "#fff" }}>
+          {authSubMode === "signup" ? "Join CoLab." : authSubMode === "forgot" ? "Reset your\npassword." : "Log in."}
         </h2>
-        {authSubMode === "forgot" ? (
-          resetSent ? (
-            <div style={{ fontSize: 13, color: textMuted, lineHeight: 1.7 }}>
-              Check your email for a reset link.
-              <div style={{ marginTop: 20 }}>
-                <button onClick={() => { setAuthSubMode("login"); setResetSent(false); setAuthError(""); }} style={{ background: "none", border: "none", color: text, cursor: "pointer", fontFamily: "inherit", fontSize: 12, textDecoration: "underline" }}>← back to login</button>
+        {(() => {
+          const authInput = { background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, padding: "12px 14px", color: "#fff", fontSize: 13, width: "100%", fontFamily: "inherit", outline: "none" };
+          const authLabel = { fontSize: 10, color: "rgba(255,255,255,0.35)", display: "block", marginBottom: 6, letterSpacing: "1.5px" };
+          const authBtnP = { background: "#fff", color: "#080808", border: "none", borderRadius: 8, padding: "13px", fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: "inherit", width: "100%" };
+          return authSubMode === "forgot" ? (
+            resetSent ? (
+              <div style={{ fontSize: 13, color: "rgba(255,255,255,0.4)", lineHeight: 1.7 }}>
+                Check your email for a reset link.
+                <div style={{ marginTop: 20 }}>
+                  <button onClick={() => { setAuthSubMode("login"); setResetSent(false); setAuthError(""); }} style={{ background: "none", border: "none", color: "#fff", cursor: "pointer", fontFamily: "inherit", fontSize: 12, textDecoration: "underline" }}>← back to login</button>
+                </div>
               </div>
-            </div>
+            ) : (
+              <div>
+                <div style={{ marginBottom: 20 }}>
+                  <label style={authLabel}>EMAIL</label>
+                  <input style={authInput} type="email" placeholder="you@example.com" value={authEmail} onChange={e => setAuthEmail(e.target.value)} />
+                </div>
+                {authError && <div style={{ fontSize: 12, color: "#ef4444", marginBottom: 14 }}>{authError}</div>}
+                <button className="hb" onClick={handlePasswordReset} style={{ ...authBtnP, marginBottom: 16 }}>Send reset link →</button>
+                <button onClick={() => { setAuthSubMode("login"); setAuthError(""); }} style={{ background: "none", border: "none", color: "rgba(255,255,255,0.35)", cursor: "pointer", fontFamily: "inherit", fontSize: 12 }}>← back to login</button>
+              </div>
+            )
           ) : (
             <div>
-              <div style={{ marginBottom: 20 }}>
-                <label style={labelStyle}>EMAIL</label>
-                <input style={inputStyle} type="email" placeholder="you@example.com" value={authEmail} onChange={e => setAuthEmail(e.target.value)} />
+              <div style={{ display: "flex", flexDirection: "column", gap: 14, marginBottom: 24 }}>
+                <div><label style={authLabel}>EMAIL</label><input style={authInput} type="email" placeholder="you@example.com" value={authEmail} onChange={e => setAuthEmail(e.target.value)} onKeyDown={e => e.key === "Enter" && (authSubMode === "signup" ? handleSignUp() : handleLogin())} /></div>
+                <div><label style={authLabel}>PASSWORD</label><input style={authInput} type="password" placeholder="••••••••" value={authPassword} onChange={e => setAuthPassword(e.target.value)} onKeyDown={e => e.key === "Enter" && (authSubMode === "signup" ? handleSignUp() : handleLogin())} /></div>
               </div>
+              {authSubMode === "signup" && (
+                <div style={{ display: "flex", alignItems: "flex-start", gap: 10, marginBottom: 20 }}>
+                  <input type="checkbox" id="terms-agree" checked={agreedToTerms} onChange={e => setAgreedToTerms(e.target.checked)}
+                    style={{ marginTop: 2, flexShrink: 0, cursor: "pointer", accentColor: "#fff" }} />
+                  <label htmlFor="terms-agree" style={{ fontSize: 11, color: "rgba(255,255,255,0.35)", lineHeight: 1.6, cursor: "pointer" }}>
+                    I have read and agree to CoLab's{" "}
+                    <button onClick={() => setShowLegalModal(true)} style={{ background: "none", border: "none", color: "#fff", cursor: "pointer", fontFamily: "inherit", fontSize: 11, textDecoration: "underline", padding: 0 }}>
+                      Legal Notice & Terms
+                    </button>
+                    {" "}(<a href="/terms" target="_blank" rel="noreferrer" style={{ color: "#fff" }}>Terms</a> · <a href="/privacy" target="_blank" rel="noreferrer" style={{ color: "#fff" }}>Privacy</a>)
+                  </label>
+                </div>
+              )}
               {authError && <div style={{ fontSize: 12, color: "#ef4444", marginBottom: 14 }}>{authError}</div>}
-              <button className="hb" onClick={handlePasswordReset} style={{ ...btnP, width: "100%", padding: "13px", marginBottom: 16 }}>Send reset link →</button>
-              <button onClick={() => { setAuthSubMode("login"); setAuthError(""); }} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontFamily: "inherit", fontSize: 12 }}>← back to login</button>
-            </div>
-          )
-        ) : (
-          <div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 20 }}>
-              <div><label style={labelStyle}>EMAIL</label><input style={inputStyle} type="email" placeholder="you@example.com" value={authEmail} onChange={e => setAuthEmail(e.target.value)} onKeyDown={e => e.key === "Enter" && (authSubMode === "signup" ? handleSignUp() : handleLogin())} /></div>
-              <div><label style={labelStyle}>PASSWORD</label><input style={inputStyle} type="password" placeholder="••••••••" value={authPassword} onChange={e => setAuthPassword(e.target.value)} onKeyDown={e => e.key === "Enter" && (authSubMode === "signup" ? handleSignUp() : handleLogin())} /></div>
-            </div>
-            {authSubMode === "signup" && (
-              <div style={{ display: "flex", alignItems: "flex-start", gap: 10, marginBottom: 18 }}>
-                <input type="checkbox" id="terms-agree" checked={agreedToTerms} onChange={e => setAgreedToTerms(e.target.checked)}
-                  style={{ marginTop: 2, flexShrink: 0, cursor: "pointer", accentColor: text }} />
-                <label htmlFor="terms-agree" style={{ fontSize: 11, color: textMuted, lineHeight: 1.6, cursor: "pointer" }}>
-                  I have read and agree to CoLab's{" "}
-                  <button onClick={() => setShowLegalModal(true)} style={{ background: "none", border: "none", color: text, cursor: "pointer", fontFamily: "inherit", fontSize: 11, textDecoration: "underline", padding: 0 }}>
-                    Legal Notice & Terms
-                  </button>
-                  {" "}(<a href="/terms" target="_blank" rel="noreferrer" style={{ color: text }}>Terms</a> · <a href="/privacy" target="_blank" rel="noreferrer" style={{ color: text }}>Privacy</a>)
-                </label>
-              </div>
-            )}
-            {authError && <div style={{ fontSize: 12, color: "#ef4444", marginBottom: 14 }}>{authError}</div>}
-            <button className="hb" onClick={authSubMode === "signup" ? handleSignUp : handleLogin}
-              style={{ ...btnP, width: "100%", padding: "13px", marginBottom: 16, opacity: authSubMode === "signup" && !agreedToTerms ? 0.5 : 1 }}>
-              {authSubMode === "signup" ? "Create account →" : "Log in →"}
-            </button>
-            {authSubMode === "login" && (
-              <button onClick={() => { setAuthSubMode("forgot"); setAuthError(""); setResetSent(false); }} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontFamily: "inherit", fontSize: 11, textDecoration: "underline", marginBottom: 16, padding: 0 }}>
-                Forgot password?
+              <button className="hb" onClick={authSubMode === "signup" ? handleSignUp : handleLogin}
+                style={{ ...authBtnP, marginBottom: 16, opacity: authSubMode === "signup" && !agreedToTerms ? 0.45 : 1 }}>
+                {authSubMode === "signup" ? "Create account →" : "Log in →"}
               </button>
-            )}
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <div style={{ fontSize: 12, color: textMuted }}>
+              {authSubMode === "login" && (
+                <button onClick={() => { setAuthSubMode("forgot"); setAuthError(""); setResetSent(false); }} style={{ background: "none", border: "none", color: "rgba(255,255,255,0.35)", cursor: "pointer", fontFamily: "inherit", fontSize: 11, textDecoration: "underline", marginBottom: 16, padding: 0, display: "block" }}>
+                  Forgot password?
+                </button>
+              )}
+              <div style={{ fontSize: 12, color: "rgba(255,255,255,0.35)", marginTop: 4 }}>
                 {authSubMode === "signup" ? "Already have an account?" : "Don't have an account?"}
-                <button onClick={() => { setAuthSubMode(authSubMode === "signup" ? "login" : "signup"); setAuthError(""); setResetSent(false); setAgreedToTerms(false); }} style={{ background: "none", border: "none", color: text, cursor: "pointer", fontFamily: "inherit", fontSize: 12, textDecoration: "underline", marginLeft: 6 }}>
+                <button onClick={() => { setAuthSubMode(authSubMode === "signup" ? "login" : "signup"); setAuthError(""); setResetSent(false); setAgreedToTerms(false); }} style={{ background: "none", border: "none", color: "#fff", cursor: "pointer", fontFamily: "inherit", fontSize: 12, textDecoration: "underline", marginLeft: 6 }}>
                   {authSubMode === "signup" ? "Log in" : "Sign up"}
                 </button>
               </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
       </div>
 
       {/* Legal Notice Modal */}
@@ -4940,19 +4943,18 @@ function CoLab() {
 
           {/* Top-level explore tabs: feed | projects */}
           <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px", marginBottom: 16 }}>{exploreTab === "projects" ? "OPEN PROJECTS" : "BUILDER FEED"}</div>
-          <div style={{ display: "flex", gap: 6, marginBottom: 28, flexWrap: "wrap" }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 2, marginBottom: 28 }}>
             {[["feed", "feed"], ["projects", "projects"]].map(([id, label]) => (
-              <button key={id} onClick={() => setExploreTab(id)} style={{
-                background: exploreTab === id ? text : "none",
-                color: exploreTab === id ? bg : textMuted,
-                border: `1px solid ${exploreTab === id ? text : border}`,
-                borderRadius: 8, padding: "5px 14px",
-                fontSize: 11, cursor: "pointer", fontFamily: "inherit",
-                transition: "all 0.15s", whiteSpace: "nowrap",
+              <div key={id} onClick={() => setExploreTab(id)} style={{
+                color: exploreTab === id ? text : textMuted,
+                padding: "3px 0",
+                fontSize: 12, cursor: "pointer", fontFamily: "inherit",
+                transition: "color 0.15s", whiteSpace: "nowrap",
                 fontWeight: exploreTab === id ? 500 : 400,
+                userSelect: "none",
               }}>
                 {label}
-              </button>
+              </div>
             ))}
           </div>
 
@@ -4964,11 +4966,11 @@ function CoLab() {
               <div style={{ flex: 1, minWidth: 0 }}>
 
                 {/* Sub-tabs */}
-                <div style={{ display: "flex", gap: 6, marginBottom: 16 }}>
+                <div style={{ display: "flex", borderBottom: `1px solid ${border}`, marginBottom: 16 }}>
                   {["for-you","all"].map(id => (
-                    <button key={id} onClick={() => setProjectsSubTab(id)} style={{ background: projectsSubTab === id ? text : "none", color: projectsSubTab === id ? bg : textMuted, border: `1px solid ${projectsSubTab === id ? text : border}`, borderRadius: 8, padding: "5px 14px", fontSize: 11, cursor: "pointer", fontFamily: "inherit", transition: "all 0.15s", display: "inline-flex", gap: 6, alignItems: "center" }}>
+                    <button key={id} onClick={() => setProjectsSubTab(id)} style={{ background: "none", border: "none", borderBottom: projectsSubTab === id ? `1px solid ${text}` : "1px solid transparent", color: projectsSubTab === id ? text : textMuted, padding: "8px 16px 8px 0", fontSize: 11, cursor: "pointer", fontFamily: "inherit", marginRight: 8, transition: "all 0.15s", display: "inline-flex", gap: 6, alignItems: "center" }}>
                       {id === "for-you" ? "for you" : "all"}
-                      {id === "for-you" && forYou.length > 0 && <span style={{ fontSize: 9, background: projectsSubTab === id ? "rgba(0,0,0,0.18)" : bg3, borderRadius: 6, padding: "1px 5px", color: projectsSubTab === id ? bg : textMuted }}>{forYou.length}</span>}
+                      {id === "for-you" && forYou.length > 0 && <span style={{ fontSize: 9, background: bg3, borderRadius: 10, padding: "1px 5px", color: textMuted }}>{forYou.length}</span>}
                     </button>
                   ))}
                 </div>
@@ -6258,7 +6260,7 @@ function CoLab() {
           <div className="msgs-left" style={{ width: 260, flexShrink: 0, borderRight: `1px solid ${border}`, overflowY: "auto", display: "flex", flexDirection: "column" }}>
             <div style={{ padding: "18px 20px 12px", borderBottom: `1px solid ${border}`, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
               <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px" }}>MESSAGES</div>
-              <button className="hb" onClick={() => { setShowNewDm(true); setNewDmSearch(""); }} style={{ background: "none", border: `1px solid ${border}`, borderRadius: 8, width: 22, height: 22, cursor: "pointer", fontSize: 14, color: textMuted, fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center", lineHeight: 1 }}>+</button>
+              <button className="hb" onClick={() => { setShowNewDm(true); setNewDmSearch(""); }} style={{ background: "none", border: `1px solid ${border}`, borderRadius: 5, width: 22, height: 22, cursor: "pointer", fontSize: 14, color: textMuted, fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center", lineHeight: 1 }}>+</button>
             </div>
             {dmThreads.length > 0 && (
               <div style={{ padding: "8px 12px", borderBottom: `1px solid ${border}` }}>
@@ -6324,8 +6326,8 @@ function CoLab() {
                     <div style={{ fontSize: 14, color: text, fontWeight: 500 }}>{activeDmThread.otherUser?.name}</div>
                     <div style={{ fontSize: 11, color: textMuted }}>{activeDmThread.otherUser?.role}</div>
                   </div>
-                  <button className="hb" onClick={() => setViewingProfile(activeDmThread.otherUser)} style={{ background: "none", border: `1px solid ${border}`, borderRadius: 20, padding: "5px 12px", fontSize: 11, cursor: "pointer", color: textMuted, fontFamily: "inherit" }}>profile</button>
-                  <button className="hb" onClick={() => { if (window.confirm("Delete this entire conversation? This cannot be undone.")) handleDeleteThread(activeDmThread.id); }} style={{ background: "none", border: `1px solid ${border}`, borderRadius: 20, padding: "5px 12px", fontSize: 11, cursor: "pointer", color: textMuted, fontFamily: "inherit" }}>delete chat</button>
+                  <button className="hb" onClick={() => setViewingProfile(activeDmThread.otherUser)} style={{ background: "none", border: `1px solid ${border}`, borderRadius: 6, padding: "5px 10px", fontSize: 11, cursor: "pointer", color: textMuted, fontFamily: "inherit" }}>profile</button>
+                  <button className="hb" onClick={() => { if (window.confirm("Delete this entire conversation? This cannot be undone.")) handleDeleteThread(activeDmThread.id); }} style={{ background: "none", border: `1px solid ${border}`, borderRadius: 6, padding: "5px 10px", fontSize: 11, cursor: "pointer", color: textMuted, fontFamily: "inherit" }}>delete chat</button>
                 </div>
                 <div style={{ flex: 1, overflowY: "auto", padding: "20px", display: "flex", flexDirection: "column", gap: 14 }}>
                   {(dmMessages[activeDmThread.id] || []).length === 0
@@ -6462,7 +6464,7 @@ function CoLab() {
                     const doneCount = projectTasks.filter((task) => task.done).length;
                     const progress = projectTasks.length > 0 ? Math.round((doneCount / projectTasks.length) * 100) : (project.progress || 0);
                     return (
-                      <button key={project.id} onClick={() => { setActiveProject(project); loadProjectData(project.id); setProjectTab("tasks"); }} style={{ background: bg2, border: `1px solid ${border}`, borderRadius: 14, padding: "16px", textAlign: "left", cursor: "pointer", fontFamily: "inherit" }}>
+                      <button key={project.id} className="proj-card" onClick={() => { setActiveProject(project); loadProjectData(project.id); setProjectTab("tasks"); }} style={{ background: bg2, border: `1px solid ${border}`, borderRadius: 14, padding: "16px", textAlign: "left", cursor: "pointer", fontFamily: "inherit" }}>
                         <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "flex-start", marginBottom: 10 }}>
                           <div style={{ minWidth: 0 }}>
                             <div style={{ fontSize: 14, color: text, marginBottom: 4 }}>{project.title}</div>
