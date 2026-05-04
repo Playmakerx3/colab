@@ -32,9 +32,6 @@ export default function LandingPage({ dark, setDark, onLogin, onSignup, supabase
       -webkit-backdrop-filter: blur(20px) saturate(150%);
       box-shadow: inset 0 1px 0 rgba(255,255,255,0.09), 0 8px 40px rgba(0,0,0,0.36), 0 1px 0 rgba(255,255,255,0.04);
     }
-    .pill-btn {
-      border-radius: 999px !important;
-    }
     .lp-hero-h1 {
       font-size: clamp(58px, 9.5vw, 128px);
       font-weight: 400;
@@ -105,13 +102,13 @@ export default function LandingPage({ dark, setDark, onLogin, onSignup, supabase
         <div className="pad" style={{ padding: "0 48px", height: 54, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <div style={{ fontSize: 14, fontWeight: 500, letterSpacing: "-0.5px", color: heroText }}>[CoLab]</div>
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            <button className="hb" onClick={() => setDark(!dark)} style={{ background: "none", border: `1px solid ${heroBorder}`, borderRadius: 999, padding: "5px 12px", fontSize: 11, color: heroMuted, cursor: "pointer", fontFamily: "inherit" }}>
+            <button className="hb" onClick={() => setDark(!dark)} style={{ background: "none", border: `1px solid ${heroBorder}`, borderRadius: 8, padding: "5px 12px", fontSize: 11, color: heroMuted, cursor: "pointer", fontFamily: "inherit" }}>
               {dark ? "☀" : "☾"}
             </button>
-            <button className="hb pill-btn" onClick={onLogin} style={{ background: "none", color: heroMuted, border: `1px solid ${heroBorder}`, borderRadius: 999, padding: "8px 18px", fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>
+            <button className="hb" onClick={onLogin} style={{ background: "none", color: heroMuted, border: `1px solid ${heroBorder}`, borderRadius: 8, padding: "8px 18px", fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>
               Log in
             </button>
-            <button className="hb pill-btn" onClick={onSignup} style={{ background: heroText, color: heroBg, border: "none", borderRadius: 999, padding: "8px 18px", fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}>
+            <button className="hb" onClick={onSignup} style={{ background: heroText, color: heroBg, border: "none", borderRadius: 8, padding: "8px 18px", fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}>
               Get started
             </button>
           </div>
@@ -136,10 +133,10 @@ export default function LandingPage({ dark, setDark, onLogin, onSignup, supabase
               CoLab is where founders, creatives, engineers, and makers find each other — and actually ship together.
             </p>
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-              <button className="hb pill-btn" onClick={onSignup} style={{ background: heroText, color: heroBg, border: "none", borderRadius: 999, padding: "14px 32px", fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}>
+              <button className="hb" onClick={onSignup} style={{ background: heroText, color: heroBg, border: "none", borderRadius: 8, padding: "14px 32px", fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}>
                 Start building →
               </button>
-              <button className="hb pill-btn" onClick={onLogin} style={{ background: "none", color: heroMuted, border: `1px solid ${heroBorder}`, borderRadius: 999, padding: "14px 32px", fontSize: 13, cursor: "pointer", fontFamily: "inherit" }}>
+              <button className="hb" onClick={onLogin} style={{ background: "none", color: heroMuted, border: `1px solid ${heroBorder}`, borderRadius: 8, padding: "14px 32px", fontSize: 13, cursor: "pointer", fontFamily: "inherit" }}>
                 Log in
               </button>
             </div>
@@ -242,7 +239,7 @@ export default function LandingPage({ dark, setDark, onLogin, onSignup, supabase
           {liveStats.builders > 0 ? `Join ${liveStats.builders} builders` : "Join builders"} already collaborating
           {liveStats.shipped > 0 ? ` — ${liveStats.shipped} projects shipped.` : " on CoLab."}
         </p>
-        <button className="hb pill-btn" onClick={onSignup} style={{ background: heroText, color: heroBg, border: "none", borderRadius: 999, padding: "16px 48px", fontSize: 14, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}>
+        <button className="hb" onClick={onSignup} style={{ background: heroText, color: heroBg, border: "none", borderRadius: 8, padding: "16px 48px", fontSize: 14, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}>
           Create your profile →
         </button>
       </div>
