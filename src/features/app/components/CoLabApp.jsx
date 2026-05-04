@@ -6426,11 +6426,8 @@ function CoLab() {
       {!viewFullProfile && appScreen === "workspace" && !activeProject && (
         <div className="pad fu" style={{ width: "100%", padding: "28px 32px", maxWidth: 1080, margin: "0 auto" }}>
           {showFirstTimeGuide && renderFirstTimeGuide()}
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 32, flexWrap: "wrap", gap: 14 }}>
-            <div>
-              <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px", marginBottom: 8 }}>WORKSPACE</div>
-              <h2 style={{ fontSize: "clamp(20px, 4vw, 26px)", fontWeight: 400, letterSpacing: "-1.5px", color: text }}>{profile?.name ? `${profile.name.split(" ")[0]}'s workspace.` : "Your workspace."}</h2>
-            </div>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 28 }}>
+            <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px" }}>WORKSPACE</div>
             <button className="hb" onClick={openCreateProjectFlow} style={btnP}>+ new project</button>
           </div>
 
