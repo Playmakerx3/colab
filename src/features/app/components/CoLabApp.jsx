@@ -7606,19 +7606,6 @@ function CoLab() {
                           <span style={{ color: text, fontWeight: 500 }}>{following.length}</span> following
                         </button>
                       </div>
-                      {profile?.username && (
-                        <div style={{ marginTop: 10 }}>
-                          <button className="hb" onClick={() => {
-                            navigator.clipboard.writeText(`https://collaborativelaboratories.com/u/${profile.username}`).then(() => {
-                              setProfileLinkCopied(true);
-                              setTimeout(() => setProfileLinkCopied(false), 2000);
-                            }).catch(() => {});
-                          }} style={{ background: "none", border: `1px solid ${border}`, borderRadius: 6, padding: "3px 8px", color: textMuted, cursor: "pointer", fontFamily: "inherit", fontSize: 10 }}>
-                            copy profile link
-                          </button>
-                          {profileLinkCopied && <span style={{ marginLeft: 8, fontSize: 10, color: textMuted }}>copied!</span>}
-                        </div>
-                      )}
                     </div>
                   </div>
                 </div>
@@ -7713,16 +7700,16 @@ function CoLab() {
 
               {/* Activity */}
               <div style={{ marginBottom: 28, paddingBottom: 28, borderBottom: `1px solid ${border}` }}>
-                <div style={{ ...labelStyle, marginBottom: 16 }}>ACTIVITY</div>
+                <div style={{ ...labelStyle, marginBottom: 10 }}>ACTIVITY</div>
                 {applications.filter(a => a.applicant_id === authUser?.id).length === 0
-                  ? <div style={{ fontSize: 12, color: textMuted }}>no activity yet.</div>
-                  : <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                      {applications.filter(a => a.applicant_id === authUser?.id).slice(0, 6).map(a => {
+                  ? <div style={{ fontSize: 11, color: textMuted }}>no activity yet.</div>
+                  : <div style={{ display: "flex", flexDirection: "column" }}>
+                      {applications.filter(a => a.applicant_id === authUser?.id).slice(0, 6).map((a, i, arr) => {
                         const p = projects.find(proj => proj.id === a.project_id);
                         return p ? (
-                          <div key={a.id} style={{ padding: "10px 14px", background: bg2, borderRadius: 8, border: `1px solid ${border}`, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
-                            <div><div style={{ fontSize: 12, color: text, marginBottom: 2 }}>Applied to {p.title}</div><div style={{ fontSize: 10, color: textMuted }}>{new Date(a.created_at).toLocaleDateString()}</div></div>
-                            <span style={{ fontSize: 10, color: normalizeApplicationStatus(a.status) === "accepted" ? text : textMuted, border: `1px solid ${border}`, borderRadius: 3, padding: "1px 6px", flexShrink: 0 }}>{normalizeApplicationStatus(a.status)}</span>
+                          <div key={a.id} style={{ padding: "7px 0", borderBottom: i < arr.length - 1 ? `1px solid ${border}` : "none", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
+                            <div style={{ fontSize: 11, color: textMuted }}>Applied to <span style={{ color: text }}>{p.title}</span> · {new Date(a.created_at).toLocaleDateString()}</div>
+                            <span style={{ fontSize: 10, color: normalizeApplicationStatus(a.status) === "accepted" ? "#22c55e" : textMuted, flexShrink: 0 }}>{normalizeApplicationStatus(a.status)}</span>
                           </div>
                         ) : null;
                       })}
@@ -7732,23 +7719,14 @@ function CoLab() {
 
               {/* Posts */}
               <div style={{ marginBottom: 28, paddingBottom: 28, borderBottom: `1px solid ${border}` }}>
-                <div style={{ ...labelStyle, marginBottom: 16 }}>POSTS</div>
+                <div style={{ ...labelStyle, marginBottom: 10 }}>POSTS</div>
                 {posts.filter(p => p.user_id === authUser?.id).length === 0
-                  ? <div style={{ fontSize: 12, color: textMuted }}>no posts yet. <button className="hb" onClick={() => setAppScreen("network")} style={{ background: "none", border: "none", color: text, cursor: "pointer", fontFamily: "inherit", fontSize: 12, textDecoration: "underline" }}>share something →</button></div>
-                  : <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                      {posts.filter(p => p.user_id === authUser?.id).slice(0, 5).map(post => (
-                        <div key={post.id} style={{ padding: "12px 14px", background: bg2, borderRadius: 8, border: `1px solid ${border}` }}>
-                          <div style={{ fontSize: 13, color: text, lineHeight: 1.6, marginBottom: 6 }}>{post.content}</div>
-                          {post.media_url && post.media_url.match(/\.(jpg|jpeg|png|gif|webp)$/i) && (
-                            <img src={post.media_url} alt="" style={{ maxWidth: "100%", maxHeight: 160, objectFit: "cover", borderRadius: 6, marginBottom: 6 }} />
-                          )}
-                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                            <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-                              <span style={{ fontSize: 11, color: textMuted }}>{post.like_count || 0} likes</span>
-                              {post.project_title && <span style={{ fontSize: 10, color: textMuted, border: `1px solid ${border}`, borderRadius: 3, padding: "1px 6px" }}>↗ {post.project_title}</span>}
-                            </div>
-                            <span style={{ fontSize: 10, color: textMuted }}>{new Date(post.created_at).toLocaleDateString()}</span>
-                          </div>
+                  ? <div style={{ fontSize: 11, color: textMuted }}>no posts yet. <button className="hb" onClick={() => setAppScreen("network")} style={{ background: "none", border: "none", color: text, cursor: "pointer", fontFamily: "inherit", fontSize: 11, textDecoration: "underline" }}>share something →</button></div>
+                  : <div style={{ display: "flex", flexDirection: "column" }}>
+                      {posts.filter(p => p.user_id === authUser?.id).slice(0, 5).map((post, i, arr) => (
+                        <div key={post.id} style={{ padding: "7px 0", borderBottom: i < arr.length - 1 ? `1px solid ${border}` : "none", display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 16 }}>
+                          <div style={{ fontSize: 11, color: text, lineHeight: 1.5, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, minWidth: 0 }}>{post.content}</div>
+                          <span style={{ fontSize: 10, color: textMuted, flexShrink: 0 }}>{post.like_count || 0} likes · {new Date(post.created_at).toLocaleDateString()}</span>
                         </div>
                       ))}
                     </div>
