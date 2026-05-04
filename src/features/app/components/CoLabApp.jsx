@@ -1457,10 +1457,10 @@ function CoLab() {
   const feedComposerRef = useRef(null);
   const composerWrapRef = useRef(null);
 
-  const bg = dark ? "#0a0a0a" : "#ffffff";
-  const bg2 = dark ? "#111111" : "#f5f5f5";
-  const bg3 = dark ? "#1a1a1a" : "#ebebeb";
-  const border = dark ? "#1e1e1e" : "#e0e0e0";
+  const bg = dark ? "#0a0a0a" : "#f4f4f6";
+  const bg2 = dark ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.62)";
+  const bg3 = dark ? "rgba(255,255,255,0.08)" : "rgba(255,255,255,0.88)";
+  const border = dark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.07)";
   const text = dark ? "#ffffff" : "#000000";
   const textMuted = dark ? "#555555" : "#aaaaaa";
   const textSub = dark ? "#2a2a2a" : "#d0d0d0";
@@ -1899,8 +1899,15 @@ function CoLab() {
   const CSS = `
     @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&display=swap');
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    html, body, #root { width: 100%; min-height: 100vh; margin: 0; padding: 0; overflow-x: hidden; background-color: ${dark ? "#0a0a0a" : "#ffffff"}; transition: background-color 0.3s ease, color 0.3s ease; }
-    body { background: ${dark ? "#0a0a0a" : "#ffffff"}; }
+    html, body, #root { width: 100%; min-height: 100vh; margin: 0; padding: 0; overflow-x: hidden; background-color: ${dark ? "#0a0a0a" : "#f4f4f6"}; transition: background-color 0.3s ease, color 0.3s ease; }
+    body { background: ${dark
+      ? "radial-gradient(ellipse 70% 60% at 15% 10%, rgba(80,70,120,0.13) 0%, transparent 65%), radial-gradient(ellipse 55% 65% at 85% 85%, rgba(50,80,120,0.10) 0%, transparent 65%), radial-gradient(ellipse 50% 40% at 60% 20%, rgba(60,100,100,0.07) 0%, transparent 60%), #0a0a0a"
+      : "radial-gradient(ellipse 70% 60% at 15% 10%, rgba(180,190,230,0.28) 0%, transparent 65%), radial-gradient(ellipse 55% 65% at 85% 85%, rgba(190,180,240,0.22) 0%, transparent 65%), radial-gradient(ellipse 50% 40% at 60% 20%, rgba(160,210,220,0.18) 0%, transparent 60%), #f4f4f6"
+    }; }
+    .glass { backdrop-filter: blur(20px) saturate(160%); -webkit-backdrop-filter: blur(20px) saturate(160%); }
+    .glass-card { backdrop-filter: blur(16px) saturate(140%); -webkit-backdrop-filter: blur(16px) saturate(140%); box-shadow: inset 0 1px 0 rgba(255,255,255,${dark ? "0.07" : "0.9"}), 0 4px 24px rgba(0,0,0,${dark ? "0.28" : "0.06"}); }
+    .glass-nav { backdrop-filter: blur(24px) saturate(180%); -webkit-backdrop-filter: blur(24px) saturate(180%); background: ${dark ? "rgba(10,10,10,0.72)" : "rgba(244,244,246,0.72)"} !important; }
+    .p-card, .proj-card, .disc-card, .notif-card, .profile-modal-card { backdrop-filter: blur(16px) saturate(140%); -webkit-backdrop-filter: blur(16px) saturate(140%); box-shadow: inset 0 1px 0 rgba(255,255,255,${dark ? "0.06" : "0.85"}), 0 2px 12px rgba(0,0,0,${dark ? "0.22" : "0.05"}) !important; }
     input, select, textarea { outline: none; font-family: inherit; }
     ::-webkit-scrollbar { width: 3px; } ::-webkit-scrollbar-thumb { background: #2a2a2a; }
     @keyframes fu { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
@@ -1987,7 +1994,7 @@ function CoLab() {
 
   // Force body background + mobile browser chrome color on mode switch
   useEffect(() => {
-    const color = dark ? "#0a0a0a" : "#ffffff";
+    const color = dark ? "#0a0a0a" : "#f4f4f6";
     document.body.style.backgroundColor = color;
     document.body.style.transition = "background-color 0.3s ease";
     document.documentElement.style.backgroundColor = color;
@@ -4437,7 +4444,7 @@ function CoLab() {
       <style>{CSS}</style>
 
       {/* NAV */}
-      <nav className="app-nav" style={{ position: "sticky", top: 0, zIndex: 50, width: "100%", background: dark ? "rgba(10,10,10,0.97)" : "rgba(255,255,255,0.97)", backdropFilter: "blur(12px)", borderBottom: `1px solid ${border}`, padding: "0 12px", display: "flex", alignItems: "center", gap: 8, height: 50 }}>
+      <nav className="app-nav glass-nav" style={{ position: "sticky", top: 0, zIndex: 50, width: "100%", borderBottom: `1px solid ${border}`, padding: "0 12px", display: "flex", alignItems: "center", gap: 8, height: 50 }}>
         <button onClick={() => { setAppScreen("explore"); setActiveProject(null); setViewingProfile(null); setViewFullProfile(null); }} style={{ background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: 14, fontWeight: 500, color: text, letterSpacing: "-0.5px", flexShrink: 0 }}>[CoLab]</button>
 
         {/* Global search — full bar on desktop, expandable on mobile */}
@@ -5973,7 +5980,7 @@ function CoLab() {
             {showCommunityDrawer && <div onClick={() => setShowCommunityDrawer(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.35)", zIndex: 220 }} />}
 
             {/* Left sidebar */}
-            <div className={`communities-sidebar ${showCommunityDrawer ? "open" : ""}`} style={{ width: 240, borderRight: `1px solid ${border}`, display: "flex", flexDirection: "column", flexShrink: 0, overflowY: "auto" }}>
+            <div className={`communities-sidebar glass ${showCommunityDrawer ? "open" : ""}`} style={{ width: 240, borderRight: `1px solid ${border}`, display: "flex", flexDirection: "column", flexShrink: 0, overflowY: "auto" }}>
               <div style={{ padding: "24px 16px 12px" }}>
                 <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px", marginBottom: 12 }}>COMMUNITIES</div>
                 <input

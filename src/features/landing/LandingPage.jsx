@@ -1,11 +1,11 @@
 import { useState, useEffect } from "react";
 
 export default function LandingPage({ dark, setDark, onLogin, onSignup, supabase }) {
-  const bg = dark ? "#0a0a0a" : "#ffffff";
-  const bg2 = dark ? "#111111" : "#f5f5f5";
+  const bg = dark ? "#0a0a0a" : "#f4f4f6";
+  const bg2 = dark ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.62)";
   const text = dark ? "#ffffff" : "#000000";
   const textMuted = dark ? "#666666" : "#999999";
-  const border = dark ? "#1f1f1f" : "#e5e5e5";
+  const border = dark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.07)";
   const btnP = {
     background: text,
     color: bg,
@@ -31,8 +31,13 @@ export default function LandingPage({ dark, setDark, onLogin, onSignup, supabase
   const CSS = `
     @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&display=swap');
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    html, body, #root { width: 100%; min-height: 100vh; margin: 0; padding: 0; overflow-x: hidden; background-color: ${dark ? "#0a0a0a" : "#ffffff"}; transition: background-color 0.3s ease, color 0.3s ease; }
-    body { background: ${dark ? "#0a0a0a" : "#ffffff"}; }
+    html, body, #root { width: 100%; min-height: 100vh; margin: 0; padding: 0; overflow-x: hidden; background-color: ${dark ? "#0a0a0a" : "#f4f4f6"}; transition: background-color 0.3s ease, color 0.3s ease; }
+    body { background: ${dark
+      ? "radial-gradient(ellipse 70% 60% at 15% 10%, rgba(80,70,120,0.13) 0%, transparent 65%), radial-gradient(ellipse 55% 65% at 85% 85%, rgba(50,80,120,0.10) 0%, transparent 65%), #0a0a0a"
+      : "radial-gradient(ellipse 70% 60% at 15% 10%, rgba(180,190,230,0.28) 0%, transparent 65%), radial-gradient(ellipse 55% 65% at 85% 85%, rgba(190,180,240,0.22) 0%, transparent 65%), #f4f4f6"
+    }; }
+    .glass-nav { backdrop-filter: blur(24px) saturate(180%); -webkit-backdrop-filter: blur(24px) saturate(180%); background: ${dark ? "rgba(10,10,10,0.72)" : "rgba(244,244,246,0.72)"} !important; }
+    .glass-card { backdrop-filter: blur(16px) saturate(140%); -webkit-backdrop-filter: blur(16px) saturate(140%); box-shadow: inset 0 1px 0 rgba(255,255,255,${dark ? "0.07" : "0.9"}), 0 4px 24px rgba(0,0,0,${dark ? "0.28" : "0.06"}); }
     input, select, textarea { outline: none; font-family: inherit; }
     ::-webkit-scrollbar { width: 3px; } ::-webkit-scrollbar-thumb { background: #2a2a2a; }
     @keyframes fu { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
@@ -121,13 +126,12 @@ export default function LandingPage({ dark, setDark, onLogin, onSignup, supabase
 
       {/* Nav */}
       <nav
+        className="glass-nav"
         style={{
           width: "100%",
           borderBottom: `1px solid ${border}`,
           position: "sticky",
           top: 0,
-          background: bg,
-          backdropFilter: "blur(12px)",
           zIndex: 50,
         }}
       >
@@ -262,6 +266,7 @@ export default function LandingPage({ dark, setDark, onLogin, onSignup, supabase
               {heroPreviewCards.map((card, index) => (
                 <div
                   key={card.title}
+                  className="glass-card"
                   style={{
                     position: "relative",
                     marginLeft: index === 1 ? 28 : index === 2 ? 8 : 0,
@@ -270,7 +275,6 @@ export default function LandingPage({ dark, setDark, onLogin, onSignup, supabase
                     border: `1px solid ${border}`,
                     borderRadius: 18,
                     padding: "18px 18px 16px",
-                    boxShadow: dark ? "0 18px 40px rgba(0,0,0,0.28)" : "0 18px 40px rgba(0,0,0,0.08)",
                   }}
                 >
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
@@ -354,7 +358,7 @@ export default function LandingPage({ dark, setDark, onLogin, onSignup, supabase
           ].map(([n, t, d], i) => (
             <div
               key={i}
-              className="how-card card-h"
+              className="how-card card-h glass-card"
               style={{
                 padding: "32px 36px",
                 background: bg2,
