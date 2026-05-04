@@ -6432,7 +6432,7 @@ function CoLab() {
           </div>
 
           <div className="pad" style={{ padding: "0 32px 48px", maxWidth: 1080, margin: "0 auto" }}>
-          <div style={{ display: "flex", gap: 24, marginBottom: 36 }}>
+          <div style={{ display: "flex", gap: 24, marginBottom: 36, justifyContent: "center" }}>
             <span style={{ fontSize: 13, color: textMuted }}><span style={{ color: text, fontWeight: 500 }}>{workspaceProjectHubItems.length}</span> active workspaces</span>
             <span style={{ fontSize: 13, color: textMuted }}><span style={{ color: text, fontWeight: 500 }}>{workspaceOpenApplications.length}</span> open applications</span>
             <span style={{ fontSize: 13, color: textMuted }}><span style={{ color: text, fontWeight: 500 }}>{workspaceCollaborations.length}</span> active collaborations</span>
