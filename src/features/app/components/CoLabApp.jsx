@@ -6426,7 +6426,7 @@ function CoLab() {
 
       {/* WORKSPACE */}
       {!viewFullProfile && appScreen === "workspace" && !activeProject && (
-        <div className="pad fu" style={{ width: "100%", padding: "28px 32px" }}>
+        <div className="pad fu" style={{ width: "100%", padding: "28px 32px", maxWidth: 1080, margin: "0 auto" }}>
           {showFirstTimeGuide && renderFirstTimeGuide()}
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 32, flexWrap: "wrap", gap: 14 }}>
             <div>
