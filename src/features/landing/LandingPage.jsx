@@ -186,7 +186,7 @@ export default function LandingPage({ dark, setDark, onLogin, onSignup, supabase
 
       {/* ── STATS ── */}
       <div className="pad" style={{ padding: "88px 48px", borderBottom: `1px solid ${border}`, maxWidth: 1280, margin: "0 auto" }}>
-        <div className="lp-stats-row" style={{ display: "flex", gap: 80, alignItems: "flex-start" }}>
+        <div className="lp-stats-row" style={{ display: "flex", gap: 80, alignItems: "flex-start", justifyContent: "center" }}>
           {[
             [displayStats.builders || "—", "builders on CoLab"],
             [displayStats.projects || "—", "active projects"],
