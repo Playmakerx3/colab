@@ -3594,8 +3594,6 @@ function CoLab() {
       <div className="pad fu" style={{ width: "100%", padding: "28px 32px" }}>
         <div style={{ marginBottom: 28 }}>
           <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px", marginBottom: 10 }}>NETWORK</div>
-          <h2 style={{ fontSize: "clamp(24px, 4vw, 36px)", fontWeight: 400, letterSpacing: "-1.5px", color: text, marginBottom: 8 }}>Your network.</h2>
-          <p style={{ fontSize: 13, color: textMuted }}>Your collaborators, connections, and people worth meeting.</p>
         </div>
 
         {/* Tabs: discover | graph */}
