@@ -6424,13 +6424,14 @@ function CoLab() {
 
       {/* WORKSPACE */}
       {!viewFullProfile && appScreen === "workspace" && !activeProject && (
-        <div className="pad fu" style={{ width: "100%", padding: "28px 32px", maxWidth: 1080, margin: "0 auto" }}>
+        <div className="fu" style={{ width: "100%" }}>
           {showFirstTimeGuide && renderFirstTimeGuide()}
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 28 }}>
+          <div className="pad" style={{ padding: "28px 32px 0", display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 28 }}>
             <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px" }}>{profile?.name ? `${profile.name.split(" ")[0].toUpperCase()}'S WORKSPACE` : "WORKSPACE"}</div>
             <button className="hb" onClick={openCreateProjectFlow} style={btnP}>+ new project</button>
           </div>
 
+          <div className="pad" style={{ padding: "0 32px 48px", maxWidth: 1080, margin: "0 auto" }}>
           <div style={{ display: "flex", gap: 24, marginBottom: 36 }}>
             <span style={{ fontSize: 13, color: textMuted }}><span style={{ color: text, fontWeight: 500 }}>{workspaceProjectHubItems.length}</span> active workspaces</span>
             <span style={{ fontSize: 13, color: textMuted }}><span style={{ color: text, fontWeight: 500 }}>{workspaceOpenApplications.length}</span> open applications</span>
@@ -6523,6 +6524,7 @@ function CoLab() {
                 </div>
               )}
             </div>
+          </div>
           </div>
         </div>
       )}
