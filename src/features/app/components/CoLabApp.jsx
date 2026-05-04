@@ -1447,7 +1447,14 @@ function CoLab() {
   const [coverUploading, setCoverUploading] = useState(false);
   const [skillsExpanded, setSkillsExpanded] = useState(false);
   const [profileSkillsOpen, setProfileSkillsOpen] = useState(false);
+  const [profileTrophyOpen, setProfileTrophyOpen] = useState(false);
+  const [profilePortfolioOpen, setProfilePortfolioOpen] = useState(false);
+  const [profileActivityOpen, setProfileActivityOpen] = useState(false);
+  const [profilePostsOpen, setProfilePostsOpen] = useState(false);
   const [viewedSkillsOpen, setViewedSkillsOpen] = useState(false);
+  const [viewedTrophyOpen, setViewedTrophyOpen] = useState(false);
+  const [viewedPortfolioOpen, setViewedPortfolioOpen] = useState(false);
+  const [viewedActivityOpen, setViewedActivityOpen] = useState(false);
   const [showFeedbackModal, setShowFeedbackModal] = useState(false);
   const [feedbackType, setFeedbackType] = useState("Bug report");
   const [feedbackMessage, setFeedbackMessage] = useState("");
@@ -7535,41 +7542,53 @@ function CoLab() {
             if (trophies.length === 0) return null;
             return (
               <div style={{ marginBottom: 28, paddingBottom: 28, borderBottom: `1px solid ${border}` }}>
-                <div style={{ ...labelStyle, marginBottom: 12 }}>TROPHY CASE</div>
-                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                  {trophies.map((t, i) => (
-                    <div key={i} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, padding: "10px 14px", border: `1px solid ${border}`, borderRadius: 8, background: bg2, minWidth: 100 }}>
-                      <div style={{ fontSize: 22, lineHeight: 1 }}>★</div>
-                      <div style={{ fontSize: 10, color: text, fontWeight: 500, textAlign: "center", lineHeight: 1.3 }}>MVP</div>
-                      <div style={{ fontSize: 9, color: textMuted, textAlign: "center", lineHeight: 1.3, maxWidth: 90 }}>{t.project_title}</div>
-                    </div>
-                  ))}
-                </div>
+                <button className="hb" onClick={() => setViewedTrophyOpen(o => !o)} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 6, marginBottom: viewedTrophyOpen ? 12 : 0 }}>
+                  <span style={{ ...labelStyle, marginBottom: 0 }}>TROPHY CASE</span>
+                  <span style={{ fontSize: 9, color: textMuted, display: "inline-block", transform: viewedTrophyOpen ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.15s" }}>▾</span>
+                </button>
+                {viewedTrophyOpen && (
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    {trophies.map((t, i) => (
+                      <div key={i} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, padding: "10px 14px", border: `1px solid ${border}`, borderRadius: 8, background: bg2, minWidth: 100 }}>
+                        <div style={{ fontSize: 22, lineHeight: 1 }}>★</div>
+                        <div style={{ fontSize: 10, color: text, fontWeight: 500, textAlign: "center", lineHeight: 1.3 }}>MVP</div>
+                        <div style={{ fontSize: 9, color: textMuted, textAlign: "center", lineHeight: 1.3, maxWidth: 90 }}>{t.project_title}</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             );
           })()}
 
           {/* Portfolio */}
           <div style={{ marginBottom: 28, paddingBottom: 28, borderBottom: `1px solid ${border}` }}>
-            <div style={{ ...labelStyle, marginBottom: 12 }}>PORTFOLIO</div>
-            <FullProfilePortfolio userId={viewFullProfile.id} bg2={bg2} border={border} text={text} textMuted={textMuted} />
+            <button className="hb" onClick={() => setViewedPortfolioOpen(o => !o)} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 6, marginBottom: viewedPortfolioOpen ? 12 : 0 }}>
+              <span style={{ ...labelStyle, marginBottom: 0 }}>PORTFOLIO</span>
+              <span style={{ fontSize: 9, color: textMuted, display: "inline-block", transform: viewedPortfolioOpen ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.15s" }}>▾</span>
+            </button>
+            {viewedPortfolioOpen && <FullProfilePortfolio userId={viewFullProfile.id} bg2={bg2} border={border} text={text} textMuted={textMuted} />}
           </div>
 
           {/* Activity — applications they've sent */}
           <div style={{ marginBottom: 28, paddingBottom: 28, borderBottom: `1px solid ${border}` }}>
-            <div style={{ ...labelStyle, marginBottom: 12 }}>ACTIVITY</div>
-            {applications.filter(a => a.applicant_id === viewFullProfile.id && normalizeApplicationStatus(a.status) === "accepted").length === 0
-              ? <div style={{ fontSize: 12, color: textMuted }}>no public activity.</div>
-              : applications.filter(a => a.applicant_id === viewFullProfile.id && normalizeApplicationStatus(a.status) === "accepted").slice(0, 5).map(a => {
-                  const p = projects.find(proj => proj.id === a.project_id);
-                  return p ? (
-                    <div key={a.id} style={{ padding: "10px 14px", background: bg2, borderRadius: 8, border: `1px solid ${border}`, marginBottom: 8, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                      <div><div style={{ fontSize: 12, color: text, marginBottom: 2 }}>Collaborating on {p.title}</div><div style={{ fontSize: 10, color: textMuted }}>{new Date(a.created_at).toLocaleDateString()}</div></div>
-                      <span style={{ fontSize: 10, color: text, border: `1px solid ${border}`, borderRadius: 3, padding: "1px 6px" }}>collaborator</span>
-                    </div>
-                  ) : null;
-                })
-            }
+            <button className="hb" onClick={() => setViewedActivityOpen(o => !o)} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 6, marginBottom: viewedActivityOpen ? 12 : 0 }}>
+              <span style={{ ...labelStyle, marginBottom: 0 }}>ACTIVITY</span>
+              <span style={{ fontSize: 9, color: textMuted, display: "inline-block", transform: viewedActivityOpen ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.15s" }}>▾</span>
+            </button>
+            {viewedActivityOpen && (
+              applications.filter(a => a.applicant_id === viewFullProfile.id && normalizeApplicationStatus(a.status) === "accepted").length === 0
+                ? <div style={{ fontSize: 12, color: textMuted }}>no public activity.</div>
+                : applications.filter(a => a.applicant_id === viewFullProfile.id && normalizeApplicationStatus(a.status) === "accepted").slice(0, 5).map(a => {
+                    const p = projects.find(proj => proj.id === a.project_id);
+                    return p ? (
+                      <div key={a.id} style={{ padding: "10px 14px", background: bg2, borderRadius: 8, border: `1px solid ${border}`, marginBottom: 8, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                        <div><div style={{ fontSize: 12, color: text, marginBottom: 2 }}>Collaborating on {p.title}</div><div style={{ fontSize: 10, color: textMuted }}>{new Date(a.created_at).toLocaleDateString()}</div></div>
+                        <span style={{ fontSize: 10, color: text, border: `1px solid ${border}`, borderRadius: 3, padding: "1px 6px" }}>collaborator</span>
+                      </div>
+                    ) : null;
+                  })
+            )}
           </div>
 
           {/* DM button at bottom for quick re-access on mobile */}
@@ -7668,87 +7687,104 @@ function CoLab() {
                 if (trophies.length === 0) return null;
                 return (
                   <div style={{ marginBottom: 28, paddingBottom: 28, borderBottom: `1px solid ${border}` }}>
-                    <div style={{ ...labelStyle, marginBottom: 12 }}>TROPHY CASE</div>
-                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                      {trophies.map((t, i) => (
-                        <div key={i} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, padding: "10px 14px", border: `1px solid ${border}`, borderRadius: 8, background: bg2, minWidth: 100 }}>
-                          <div style={{ fontSize: 22, lineHeight: 1, color: text }}>★</div>
-                          <div style={{ fontSize: 10, color: text, fontWeight: 500, textAlign: "center", lineHeight: 1.3 }}>MVP</div>
-                          <div style={{ fontSize: 9, color: textMuted, textAlign: "center", lineHeight: 1.3, maxWidth: 90 }}>{t.project_title}</div>
-                        </div>
-                      ))}
-                    </div>
+                    <button className="hb" onClick={() => setProfileTrophyOpen(o => !o)} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 6, marginBottom: profileTrophyOpen ? 12 : 0 }}>
+                      <span style={{ ...labelStyle, marginBottom: 0 }}>TROPHY CASE</span>
+                      <span style={{ fontSize: 9, color: textMuted, display: "inline-block", transform: profileTrophyOpen ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.15s" }}>▾</span>
+                    </button>
+                    {profileTrophyOpen && (
+                      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                        {trophies.map((t, i) => (
+                          <div key={i} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, padding: "10px 14px", border: `1px solid ${border}`, borderRadius: 8, background: bg2, minWidth: 100 }}>
+                            <div style={{ fontSize: 22, lineHeight: 1, color: text }}>★</div>
+                            <div style={{ fontSize: 10, color: text, fontWeight: 500, textAlign: "center", lineHeight: 1.3 }}>MVP</div>
+                            <div style={{ fontSize: 9, color: textMuted, textAlign: "center", lineHeight: 1.3, maxWidth: 90 }}>{t.project_title}</div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 );
               })()}
 
               {/* Portfolio */}
               <div style={{ marginBottom: 28, paddingBottom: 28, borderBottom: `1px solid ${border}` }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-                  <div style={{ ...labelStyle, marginBottom: 0 }}>PORTFOLIO</div>
-                  <button className="hb" onClick={() => setShowAddPortfolio(true)} style={{ background: "none", border: "none", color: text, cursor: "pointer", fontFamily: "inherit", fontSize: 11, textDecoration: "underline" }}>+ add work</button>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: profilePortfolioOpen ? 16 : 0 }}>
+                  <button className="hb" onClick={() => setProfilePortfolioOpen(o => !o)} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 6 }}>
+                    <span style={{ ...labelStyle, marginBottom: 0 }}>PORTFOLIO</span>
+                    <span style={{ fontSize: 9, color: textMuted, display: "inline-block", transform: profilePortfolioOpen ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.15s" }}>▾</span>
+                  </button>
+                  {profilePortfolioOpen && <button className="hb" onClick={() => setShowAddPortfolio(true)} style={{ background: "none", border: "none", color: text, cursor: "pointer", fontFamily: "inherit", fontSize: 11, textDecoration: "underline" }}>+ add work</button>}
                 </div>
-                {portfolioItems.length === 0
-                  ? <div style={{ fontSize: 13, color: textMuted, lineHeight: 1.75 }}>your portfolio lives here.<br />add portfolio work so collaborators can scan your best output quickly.</div>
-                  : <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
-                      {portfolioItems.map((item, i) => (
-                        <div key={item.id} style={{ background: bg2, borderRadius: i === 0 && portfolioItems.length === 1 ? 8 : i === 0 ? "8px 8px 0 0" : i === portfolioItems.length - 1 ? "0 0 8px 8px" : 0, border: `1px solid ${border}`, borderBottom: i < portfolioItems.length - 1 ? "none" : `1px solid ${border}`, padding: "16px 18px", display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
-                          <div style={{ minWidth: 0, flex: 1 }}>
-                            <div style={{ fontSize: 14, color: text, marginBottom: 5, letterSpacing: "-0.3px" }}>{item.title}</div>
-                            {item.description && <div style={{ fontSize: 12, color: textMuted, lineHeight: 1.65, marginBottom: 6 }}>{item.description}</div>}
-                            {item.url && getMediaType(item.url) === "image" && <img src={item.url} alt={item.title} style={{ maxWidth: "100%", maxHeight: 200, borderRadius: 8, border: `1px solid ${border}`, marginTop: 4 }} />}
-                            {item.url && getMediaType(item.url) === "youtube" && (
-                              <div style={{ borderRadius: 8, overflow: "hidden", border: `1px solid ${border}`, marginTop: 6 }}>
-                                <iframe title={item.title} src={`https://www.youtube.com/embed/${getYouTubeId(item.url) || ""}`} style={{ width: "100%", height: 220, border: "none" }} allowFullScreen />
-                              </div>
-                            )}
-                            {item.url && getMediaType(item.url) === "link" && (
-                              <a href={item.url} target="_blank" rel="noreferrer" style={{ display: "block", textDecoration: "none", border: `1px solid ${border}`, borderRadius: 8, padding: "10px 12px", marginTop: 6 }}>
-                                <div style={{ fontSize: 10, color: textMuted, marginBottom: 3 }}>{toHost(item.url)}</div>
-                                <div style={{ fontSize: 11, color: text, textDecoration: "underline", wordBreak: "break-all" }}>{item.url.includes("user-uploads") ? "view file" : item.url}</div>
-                              </a>
-                            )}
+                {profilePortfolioOpen && (
+                  portfolioItems.length === 0
+                    ? <div style={{ fontSize: 13, color: textMuted, lineHeight: 1.75 }}>your portfolio lives here.<br />add portfolio work so collaborators can scan your best output quickly.</div>
+                    : <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
+                        {portfolioItems.map((item, i) => (
+                          <div key={item.id} style={{ background: bg2, borderRadius: i === 0 && portfolioItems.length === 1 ? 8 : i === 0 ? "8px 8px 0 0" : i === portfolioItems.length - 1 ? "0 0 8px 8px" : 0, border: `1px solid ${border}`, borderBottom: i < portfolioItems.length - 1 ? "none" : `1px solid ${border}`, padding: "16px 18px", display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
+                            <div style={{ minWidth: 0, flex: 1 }}>
+                              <div style={{ fontSize: 14, color: text, marginBottom: 5, letterSpacing: "-0.3px" }}>{item.title}</div>
+                              {item.description && <div style={{ fontSize: 12, color: textMuted, lineHeight: 1.65, marginBottom: 6 }}>{item.description}</div>}
+                              {item.url && getMediaType(item.url) === "image" && <img src={item.url} alt={item.title} style={{ maxWidth: "100%", maxHeight: 200, borderRadius: 8, border: `1px solid ${border}`, marginTop: 4 }} />}
+                              {item.url && getMediaType(item.url) === "youtube" && (
+                                <div style={{ borderRadius: 8, overflow: "hidden", border: `1px solid ${border}`, marginTop: 6 }}>
+                                  <iframe title={item.title} src={`https://www.youtube.com/embed/${getYouTubeId(item.url) || ""}`} style={{ width: "100%", height: 220, border: "none" }} allowFullScreen />
+                                </div>
+                              )}
+                              {item.url && getMediaType(item.url) === "link" && (
+                                <a href={item.url} target="_blank" rel="noreferrer" style={{ display: "block", textDecoration: "none", border: `1px solid ${border}`, borderRadius: 8, padding: "10px 12px", marginTop: 6 }}>
+                                  <div style={{ fontSize: 10, color: textMuted, marginBottom: 3 }}>{toHost(item.url)}</div>
+                                  <div style={{ fontSize: 11, color: text, textDecoration: "underline", wordBreak: "break-all" }}>{item.url.includes("user-uploads") ? "view file" : item.url}</div>
+                                </a>
+                              )}
+                            </div>
+                            <button className="hb" onClick={() => handleDeletePortfolioItem(item.id)} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontSize: 12, fontFamily: "inherit", flexShrink: 0 }}>×</button>
                           </div>
-                          <button className="hb" onClick={() => handleDeletePortfolioItem(item.id)} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontSize: 12, fontFamily: "inherit", flexShrink: 0 }}>×</button>
-                        </div>
-                      ))}
-                    </div>
-                }
+                        ))}
+                      </div>
+                )}
               </div>
 
               {/* Activity */}
               <div style={{ marginBottom: 28, paddingBottom: 28, borderBottom: `1px solid ${border}` }}>
-                <div style={{ ...labelStyle, marginBottom: 10 }}>ACTIVITY</div>
-                {applications.filter(a => a.applicant_id === authUser?.id).length === 0
-                  ? <div style={{ fontSize: 11, color: textMuted }}>no activity yet.</div>
-                  : <div style={{ display: "flex", flexDirection: "column" }}>
-                      {applications.filter(a => a.applicant_id === authUser?.id).slice(0, 6).map((a, i, arr) => {
-                        const p = projects.find(proj => proj.id === a.project_id);
-                        return p ? (
-                          <div key={a.id} style={{ padding: "7px 0", borderBottom: i < arr.length - 1 ? `1px solid ${border}` : "none", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
-                            <div style={{ fontSize: 11, color: textMuted }}>Applied to <span style={{ color: text }}>{p.title}</span> · {new Date(a.created_at).toLocaleDateString()}</div>
-                            <span style={{ fontSize: 10, color: normalizeApplicationStatus(a.status) === "accepted" ? "#22c55e" : textMuted, flexShrink: 0 }}>{normalizeApplicationStatus(a.status)}</span>
-                          </div>
-                        ) : null;
-                      })}
-                    </div>
-                }
+                <button className="hb" onClick={() => setProfileActivityOpen(o => !o)} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 6, marginBottom: profileActivityOpen ? 10 : 0 }}>
+                  <span style={{ ...labelStyle, marginBottom: 0 }}>ACTIVITY</span>
+                  <span style={{ fontSize: 9, color: textMuted, display: "inline-block", transform: profileActivityOpen ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.15s" }}>▾</span>
+                </button>
+                {profileActivityOpen && (
+                  applications.filter(a => a.applicant_id === authUser?.id).length === 0
+                    ? <div style={{ fontSize: 11, color: textMuted }}>no activity yet.</div>
+                    : <div style={{ display: "flex", flexDirection: "column" }}>
+                        {applications.filter(a => a.applicant_id === authUser?.id).slice(0, 6).map((a, i, arr) => {
+                          const p = projects.find(proj => proj.id === a.project_id);
+                          return p ? (
+                            <div key={a.id} style={{ padding: "7px 0", borderBottom: i < arr.length - 1 ? `1px solid ${border}` : "none", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
+                              <div style={{ fontSize: 11, color: textMuted }}>Applied to <span style={{ color: text }}>{p.title}</span> · {new Date(a.created_at).toLocaleDateString()}</div>
+                              <span style={{ fontSize: 10, color: normalizeApplicationStatus(a.status) === "accepted" ? "#22c55e" : textMuted, flexShrink: 0 }}>{normalizeApplicationStatus(a.status)}</span>
+                            </div>
+                          ) : null;
+                        })}
+                      </div>
+                )}
               </div>
 
               {/* Posts */}
               <div style={{ marginBottom: 28, paddingBottom: 28, borderBottom: `1px solid ${border}` }}>
-                <div style={{ ...labelStyle, marginBottom: 10 }}>POSTS</div>
-                {posts.filter(p => p.user_id === authUser?.id).length === 0
-                  ? <div style={{ fontSize: 11, color: textMuted }}>no posts yet. <button className="hb" onClick={() => setAppScreen("network")} style={{ background: "none", border: "none", color: text, cursor: "pointer", fontFamily: "inherit", fontSize: 11, textDecoration: "underline" }}>share something →</button></div>
-                  : <div style={{ display: "flex", flexDirection: "column" }}>
-                      {posts.filter(p => p.user_id === authUser?.id).slice(0, 5).map((post, i, arr) => (
-                        <div key={post.id} style={{ padding: "7px 0", borderBottom: i < arr.length - 1 ? `1px solid ${border}` : "none", display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 16 }}>
-                          <div style={{ fontSize: 11, color: text, lineHeight: 1.5, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, minWidth: 0 }}>{post.content}</div>
-                          <span style={{ fontSize: 10, color: textMuted, flexShrink: 0 }}>{post.like_count || 0} likes · {new Date(post.created_at).toLocaleDateString()}</span>
-                        </div>
-                      ))}
-                    </div>
-                }
+                <button className="hb" onClick={() => setProfilePostsOpen(o => !o)} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 6, marginBottom: profilePostsOpen ? 10 : 0 }}>
+                  <span style={{ ...labelStyle, marginBottom: 0 }}>POSTS</span>
+                  <span style={{ fontSize: 9, color: textMuted, display: "inline-block", transform: profilePostsOpen ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.15s" }}>▾</span>
+                </button>
+                {profilePostsOpen && (
+                  posts.filter(p => p.user_id === authUser?.id).length === 0
+                    ? <div style={{ fontSize: 11, color: textMuted }}>no posts yet. <button className="hb" onClick={() => setAppScreen("network")} style={{ background: "none", border: "none", color: text, cursor: "pointer", fontFamily: "inherit", fontSize: 11, textDecoration: "underline" }}>share something →</button></div>
+                    : <div style={{ display: "flex", flexDirection: "column" }}>
+                        {posts.filter(p => p.user_id === authUser?.id).slice(0, 5).map((post, i, arr) => (
+                          <div key={post.id} style={{ padding: "7px 0", borderBottom: i < arr.length - 1 ? `1px solid ${border}` : "none", display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 16 }}>
+                            <div style={{ fontSize: 11, color: text, lineHeight: 1.5, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, minWidth: 0 }}>{post.content}</div>
+                            <span style={{ fontSize: 10, color: textMuted, flexShrink: 0 }}>{post.like_count || 0} likes · {new Date(post.created_at).toLocaleDateString()}</span>
+                          </div>
+                        ))}
+                      </div>
+                )}
               </div>
 
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
