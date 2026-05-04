@@ -3599,14 +3599,14 @@ function CoLab() {
         </div>
 
         {/* Tabs: discover | graph */}
-        <div style={{ marginBottom: 28, display: "flex", gap: 6, flexWrap: "wrap" }}>
+        <div style={{ borderBottom: `1px solid ${border}`, marginBottom: 28, display: "flex" }}>
           {[
             { id: "graph", label: "discover" },
             { id: "discover", label: "people" },
             { id: "match", label: "match" },
             { id: "skills", label: "skills" },
           ].map(({ id, label }) => (
-            <button key={id} onClick={() => setNetworkTab(id)} style={{ background: networkTab === id ? text : "none", color: networkTab === id ? bg : textMuted, border: `1px solid ${networkTab === id ? text : border}`, borderRadius: 999, padding: "5px 16px", fontSize: 11, cursor: "pointer", fontFamily: "inherit", transition: "all 0.15s", display: "inline-flex", gap: 6, alignItems: "center", whiteSpace: "nowrap" }}>
+            <button key={id} onClick={() => setNetworkTab(id)} style={{ background: "none", border: "none", borderBottom: networkTab === id ? `2px solid ${text}` : "2px solid transparent", color: networkTab === id ? text : textMuted, padding: "8px 0", fontSize: 12, cursor: "pointer", fontFamily: "inherit", marginRight: 24, transition: "all 0.15s", display: "inline-flex", gap: 6, alignItems: "center", whiteSpace: "nowrap" }}>
               {label}
             </button>
           ))}
@@ -4940,15 +4940,18 @@ function CoLab() {
 
           {/* Top-level explore tabs: feed | projects */}
           <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px", marginBottom: 16 }}>{exploreTab === "projects" ? "OPEN PROJECTS" : "BUILDER FEED"}</div>
-          <div style={{ display: "flex", gap: 6, marginBottom: 28, flexWrap: "wrap" }}>
+          <div style={{ borderBottom: `1px solid ${border}`, display: "flex", marginBottom: 28 }}>
             {[["feed", "feed"], ["projects", "projects"]].map(([id, label]) => (
               <button key={id} onClick={() => setExploreTab(id)} style={{
-                background: exploreTab === id ? text : "none",
-                color: exploreTab === id ? bg : textMuted,
-                border: `1px solid ${exploreTab === id ? text : border}`,
-                borderRadius: 999, padding: "5px 16px",
-                fontSize: 11, cursor: "pointer", fontFamily: "inherit",
+                background: "none",
+                color: exploreTab === id ? text : textMuted,
+                border: "none",
+                borderBottom: exploreTab === id ? `2px solid ${text}` : "2px solid transparent",
+                padding: "8px 0",
+                marginRight: 24,
+                fontSize: 12, cursor: "pointer", fontFamily: "inherit",
                 transition: "all 0.15s", whiteSpace: "nowrap",
+                fontWeight: exploreTab === id ? 500 : 400,
               }}>
                 {label}
               </button>
@@ -4963,11 +4966,11 @@ function CoLab() {
               <div style={{ flex: 1, minWidth: 0 }}>
 
                 {/* Sub-tabs */}
-                <div style={{ display: "flex", gap: 6, marginBottom: 16 }}>
+                <div style={{ display: "flex", borderBottom: `1px solid ${border}`, marginBottom: 16 }}>
                   {["for-you","all"].map(id => (
-                    <button key={id} onClick={() => setProjectsSubTab(id)} style={{ background: projectsSubTab === id ? text : "none", color: projectsSubTab === id ? bg : textMuted, border: `1px solid ${projectsSubTab === id ? text : border}`, borderRadius: 999, padding: "5px 16px", fontSize: 11, cursor: "pointer", fontFamily: "inherit", transition: "all 0.15s", display: "inline-flex", gap: 6, alignItems: "center" }}>
+                    <button key={id} onClick={() => setProjectsSubTab(id)} style={{ background: "none", border: "none", borderBottom: projectsSubTab === id ? `2px solid ${text}` : "2px solid transparent", color: projectsSubTab === id ? text : textMuted, padding: "8px 16px 8px 0", fontSize: 11, cursor: "pointer", fontFamily: "inherit", marginRight: 8, transition: "all 0.15s", display: "inline-flex", gap: 6, alignItems: "center" }}>
                       {id === "for-you" ? "for you" : "all"}
-                      {id === "for-you" && forYou.length > 0 && <span style={{ fontSize: 9, background: projectsSubTab === id ? "rgba(0,0,0,0.2)" : bg3, borderRadius: 10, padding: "1px 5px", color: projectsSubTab === id ? bg : textMuted }}>{forYou.length}</span>}
+                      {id === "for-you" && forYou.length > 0 && <span style={{ fontSize: 9, background: bg3, borderRadius: 10, padding: "1px 5px", color: textMuted }}>{forYou.length}</span>}
                     </button>
                   ))}
                 </div>
