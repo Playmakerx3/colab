@@ -1446,6 +1446,8 @@ function CoLab() {
   const [newTaskPriority, setNewTaskPriority] = useState("medium");
   const [coverUploading, setCoverUploading] = useState(false);
   const [skillsExpanded, setSkillsExpanded] = useState(false);
+  const [profileSkillsOpen, setProfileSkillsOpen] = useState(false);
+  const [viewedSkillsOpen, setViewedSkillsOpen] = useState(false);
   const [showFeedbackModal, setShowFeedbackModal] = useState(false);
   const [feedbackType, setFeedbackType] = useState("Bug report");
   const [feedbackMessage, setFeedbackMessage] = useState("");
@@ -2893,6 +2895,7 @@ function CoLab() {
     const sharedSkills = (profile?.skills || []).filter(s => (u.skills || []).includes(s));
     const uInitials = initials(u.name, "?");
     const [userPortfolio, setUserPortfolio] = useState([]);
+    const [modalSkillsOpen, setModalSkillsOpen] = useState(false);
     useEffect(() => {
       supabase.from("portfolio_items").select("*").eq("user_id", u.id).then(({ data }) => setUserPortfolio(data || []));
     }, [u.id]);
@@ -2913,11 +2916,18 @@ function CoLab() {
           </div>
           <p style={{ fontSize: 13, color: textMuted, lineHeight: 1.75, marginBottom: 20 }}>{u.bio}</p>
           <div style={{ marginBottom: 20 }}>
-            <div style={{ ...labelStyle, marginBottom: 8 }}>SKILLS</div>
-            <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
-              {(u.skills || []).map(s => <span key={s} style={{ fontSize: 11, padding: "3px 10px", border: `1px solid ${sharedSkills.includes(s) ? (dark ? "#ffffff40" : "#00000030") : border}`, borderRadius: 3, color: sharedSkills.includes(s) ? text : textMuted, fontWeight: sharedSkills.includes(s) ? 500 : 400 }}>{s}</span>)}
-            </div>
-            {sharedSkills.length > 0 && <div style={{ fontSize: 11, color: textMuted, marginTop: 8 }}>{sharedSkills.length} shared skill{sharedSkills.length !== 1 ? "s" : ""} with you</div>}
+            <button className="hb" onClick={e => { e.stopPropagation(); setModalSkillsOpen(o => !o); }} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 6, marginBottom: modalSkillsOpen ? 10 : 0 }}>
+              <span style={{ ...labelStyle, marginBottom: 0 }}>SKILLS</span>
+              <span style={{ fontSize: 9, color: textMuted, transition: "transform 0.15s", display: "inline-block", transform: modalSkillsOpen ? "rotate(180deg)" : "rotate(0deg)" }}>▾</span>
+            </button>
+            {modalSkillsOpen && (
+              <div>
+                <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
+                  {(u.skills || []).map(s => <span key={s} style={{ fontSize: 11, padding: "3px 10px", border: `1px solid ${sharedSkills.includes(s) ? (dark ? "#ffffff40" : "#00000030") : border}`, borderRadius: 3, color: sharedSkills.includes(s) ? text : textMuted, fontWeight: sharedSkills.includes(s) ? 500 : 400 }}>{s}</span>)}
+                </div>
+                {sharedSkills.length > 0 && <div style={{ fontSize: 11, color: textMuted, marginTop: 8 }}>{sharedSkills.length} shared skill{sharedSkills.length !== 1 ? "s" : ""} with you</div>}
+              </div>
+            )}
           </div>
           {userProjects.length > 0 && (
             <div style={{ marginBottom: 20 }}>
@@ -7496,23 +7506,27 @@ function CoLab() {
           {viewFullProfile.bio && <p style={{ fontSize: 13, color: textMuted, lineHeight: 1.8, marginBottom: 24, maxWidth: 560 }}>{viewFullProfile.bio}</p>}
           {/* Skills */}
           <div style={{ marginBottom: 28, paddingBottom: 28, borderBottom: `1px solid ${border}` }}>
-            <div style={{ ...labelStyle, marginBottom: 8 }}>SKILLS</div>
-            {(viewFullProfile.skills || []).length === 0
-              ? <div style={{ fontSize: 12, color: textMuted }}>no skills listed.</div>
-              : <div>
-                  <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginBottom: 8 }}>
-                    {viewFullProfile.skills.map(s => {
-                      const shared = (profile?.skills || []).includes(s);
-                      return (
-                        <span key={s} style={{ fontSize: 11, padding: "3px 10px", border: `1px solid ${shared ? (dark ? "#ffffff40" : "#00000030") : border}`, borderRadius: 3, color: shared ? text : textMuted, fontWeight: shared ? 500 : 400 }}>{s}</span>
-                      );
-                    })}
+            <button className="hb" onClick={() => setViewedSkillsOpen(o => !o)} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 6, marginBottom: viewedSkillsOpen ? 10 : 0 }}>
+              <span style={{ ...labelStyle, marginBottom: 0 }}>SKILLS</span>
+              <span style={{ fontSize: 9, color: textMuted, transition: "transform 0.15s", display: "inline-block", transform: viewedSkillsOpen ? "rotate(180deg)" : "rotate(0deg)" }}>▾</span>
+            </button>
+            {viewedSkillsOpen && (
+              (viewFullProfile.skills || []).length === 0
+                ? <div style={{ fontSize: 12, color: textMuted }}>no skills listed.</div>
+                : <div>
+                    <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginBottom: 8 }}>
+                      {viewFullProfile.skills.map(s => {
+                        const shared = (profile?.skills || []).includes(s);
+                        return (
+                          <span key={s} style={{ fontSize: 11, padding: "3px 10px", border: `1px solid ${shared ? (dark ? "#ffffff40" : "#00000030") : border}`, borderRadius: 3, color: shared ? text : textMuted, fontWeight: shared ? 500 : 400 }}>{s}</span>
+                        );
+                      })}
+                    </div>
+                    {viewFullProfile.skills.filter(s => (profile?.skills || []).includes(s)).length > 0 &&
+                      <div style={{ fontSize: 10, color: textMuted }}>{viewFullProfile.skills.filter(s => (profile?.skills || []).includes(s)).length} shared skills with you</div>
+                    }
                   </div>
-                  {viewFullProfile.skills.filter(s => (profile?.skills || []).includes(s)).length > 0 &&
-                    <div style={{ fontSize: 10, color: textMuted }}>{viewFullProfile.skills.filter(s => (profile?.skills || []).includes(s)).length} shared skills with you</div>
-                  }
-                </div>
-            }
+            )}
           </div>
 
           {/* Trophy Case */}
@@ -7634,14 +7648,18 @@ function CoLab() {
                 </div>
               )}
               <div style={{ marginBottom: 28, paddingBottom: 28, borderBottom: `1px solid ${border}` }}>
-                <div style={{ ...labelStyle, marginBottom: 8 }}>SKILLS</div>
-                {(profile?.skills || []).length === 0
-                  ? <div style={{ fontSize: 12, color: textMuted }}>no skills. <button onClick={() => setEditProfile(true)} style={{ background: "none", border: "none", color: text, cursor: "pointer", fontFamily: "inherit", fontSize: 12, textDecoration: "underline" }}>add →</button></div>
-                  : <div>
-                      <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginBottom: 8 }}>{(profile?.skills || []).map(s => <span key={s} style={{ fontSize: 11, padding: "3px 10px", border: `1px solid ${border}`, borderRadius: 3, color: textMuted }}>{s}</span>)}</div>
-                      <div style={{ fontSize: 11, color: textMuted }}>{forYou.length} matching project{forYou.length !== 1 ? "s" : ""} <button className="hb" onClick={() => { setAppScreen("explore"); setExploreTab("projects"); setProjectsSubTab("for-you"); }} style={{ background: "none", border: "none", color: text, cursor: "pointer", fontFamily: "inherit", fontSize: 11, textDecoration: "underline", marginLeft: 4 }}>view →</button></div>
-                  </div>
-                }
+                <button className="hb" onClick={() => setProfileSkillsOpen(o => !o)} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 6, marginBottom: profileSkillsOpen ? 10 : 0 }}>
+                  <span style={{ ...labelStyle, marginBottom: 0 }}>SKILLS</span>
+                  <span style={{ fontSize: 9, color: textMuted, transition: "transform 0.15s", display: "inline-block", transform: profileSkillsOpen ? "rotate(180deg)" : "rotate(0deg)" }}>▾</span>
+                </button>
+                {profileSkillsOpen && (
+                  (profile?.skills || []).length === 0
+                    ? <div style={{ fontSize: 12, color: textMuted }}>no skills. <button onClick={() => setEditProfile(true)} style={{ background: "none", border: "none", color: text, cursor: "pointer", fontFamily: "inherit", fontSize: 12, textDecoration: "underline" }}>add →</button></div>
+                    : <div>
+                        <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginBottom: 8 }}>{(profile?.skills || []).map(s => <span key={s} style={{ fontSize: 11, padding: "3px 10px", border: `1px solid ${border}`, borderRadius: 3, color: textMuted }}>{s}</span>)}</div>
+                        <div style={{ fontSize: 11, color: textMuted }}>{forYou.length} matching project{forYou.length !== 1 ? "s" : ""} <button className="hb" onClick={() => { setAppScreen("explore"); setExploreTab("projects"); setProjectsSubTab("for-you"); }} style={{ background: "none", border: "none", color: text, cursor: "pointer", fontFamily: "inherit", fontSize: 11, textDecoration: "underline", marginLeft: 4 }}>view →</button></div>
+                      </div>
+                )}
               </div>
 
                             {/* Trophy Case */}
