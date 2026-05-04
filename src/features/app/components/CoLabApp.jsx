@@ -7625,7 +7625,7 @@ function CoLab() {
                         : <div style={{ fontSize: 11, color: textMuted, marginBottom: 10, cursor: "pointer", textDecoration: "underline" }} onClick={() => setEditProfile(true)}>set a username →</div>
                       }
                       {/* Stats row */}
-                      <div style={{ display: "flex", gap: 14, flexWrap: "wrap", fontSize: 11, color: textMuted }}>
+                      <div style={{ display: "flex", gap: 14, flexWrap: "wrap", fontSize: 11, color: textMuted, marginBottom: profile?.bio ? 10 : 0 }}>
                         <button className="hb" onClick={() => setShowProjectsFor(authUser?.id)} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontFamily: "inherit", fontSize: 11, padding: 0 }}>
                           <span style={{ color: text, fontWeight: 500 }}>{myProfileProjects.ownedProjects.length + myProfileProjects.collaboratedProjects.length}</span> projects
                         </button>
@@ -7639,6 +7639,7 @@ function CoLab() {
                           <span style={{ color: text, fontWeight: 500 }}>{following.length}</span> following
                         </button>
                       </div>
+                      {profile?.bio && <p style={{ fontSize: 13, color: textMuted, lineHeight: 1.8, margin: "0", maxWidth: 480 }}>{profile.bio}</p>}
                     </div>
                   </div>
                 </div>
@@ -7656,7 +7657,6 @@ function CoLab() {
                   </div>
                 </div>
               </div>
-              {profile?.bio && <p style={{ fontSize: 13, color: textMuted, lineHeight: 1.8, marginBottom: 24, maxWidth: 560 }}>{profile.bio}</p>}
               {hasNoProfileActivity && (
                 <div style={{ marginBottom: 28, padding: "16px 18px", border: `1px solid ${border}`, borderRadius: 10, background: bg2 }}>
                   <div style={{ fontSize: 13, color: text, marginBottom: 12 }}>You haven’t built anything yet — start your first project or share what you're working on</div>
