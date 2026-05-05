@@ -1481,6 +1481,39 @@ function CoLab() {
 
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(null), 3000); };
 
+  // ── TROPHY SYSTEM ──
+  const TROPHY_DEFS = [
+    {
+      id: "mvp", label: "MVP", desc: "Named project MVP", color: "#f59e0b",
+      pattern: [[0,1,1,1,1,1,1,0],[1,1,0,0,0,0,1,1],[1,1,0,0,0,0,1,1],[0,1,1,1,1,1,1,0],[0,0,1,1,1,1,0,0],[0,0,0,1,1,0,0,0],[0,0,1,1,1,1,0,0],[0,1,1,1,1,1,1,0]],
+    },
+    {
+      id: "builder", label: "Builder", desc: "Posted your first project", color: "#818cf8",
+      pattern: [[0,0,0,1,1,0,0,0],[0,0,1,1,1,1,0,0],[0,0,1,0,0,1,0,0],[0,1,1,1,1,1,1,0],[0,1,1,1,1,1,1,0],[0,0,1,0,0,1,0,0],[0,0,1,0,0,1,0,0],[0,1,1,1,1,1,1,0]],
+    },
+    {
+      id: "collab", label: "Collaborator", desc: "Accepted into your first project", color: "#34d399",
+      pattern: [[0,1,1,0,0,1,1,0],[1,1,1,0,0,1,1,1],[0,1,1,0,0,1,1,0],[0,0,0,0,0,0,0,0],[0,1,1,1,1,1,1,0],[1,1,1,1,1,1,1,1],[1,1,0,0,0,0,1,1],[0,0,0,0,0,0,0,0]],
+    },
+    {
+      id: "connector", label: "Connector", desc: "Reached 10 followers", color: "#60a5fa",
+      pattern: [[0,0,0,1,1,0,0,0],[0,0,1,1,1,1,0,0],[0,0,0,1,1,0,0,0],[0,1,0,1,1,0,1,0],[1,1,1,1,1,1,1,1],[0,0,1,0,0,1,0,0],[0,1,1,0,0,1,1,0],[1,1,0,0,0,0,1,1]],
+    },
+    {
+      id: "gogetter", label: "Go-Getter", desc: "Applied to 5+ projects", color: "#fb923c",
+      pattern: [[0,0,0,1,1,1,0,0],[0,0,1,1,1,0,0,0],[0,1,1,1,0,0,0,0],[1,1,1,1,1,1,0,0],[0,0,0,1,1,1,1,0],[0,0,0,0,0,1,1,1],[0,0,0,0,0,0,1,1],[0,0,0,0,0,0,0,1]],
+    },
+    {
+      id: "skilled", label: "Skilled", desc: "Listed 8+ skills", color: "#e879f9",
+      pattern: [[0,0,1,1,1,1,0,0],[0,1,1,1,1,1,1,0],[1,1,1,1,1,1,1,1],[1,1,1,1,1,1,1,1],[0,1,1,1,1,1,1,0],[0,0,1,1,1,1,0,0],[0,0,0,1,1,0,0,0],[0,0,0,0,0,0,0,0]],
+    },
+  ];
+  const renderPixelTrophy = (pattern, color, size = 4) => (
+    <div style={{ display: "grid", gridTemplateColumns: `repeat(8, ${size}px)`, gap: 0 }}>
+      {pattern.flat().map((v, i) => <div key={i} style={{ width: size, height: size, background: v ? color : "transparent" }} />)}
+    </div>
+  );
+
   // ── SKILL VALIDATION ──
   const BANNED_WORDS = ["fuck", "shit", "ass", "dick", "pussy", "bitch", "cunt", "cock", "whore", "slut", "nigga", "nigger", "faggot", "retard", "rape", "porn", "sex", "nude", "naked", "bastard", "damn", "hell", "crap", "piss", "jerk", "idiot", "stupid", "dumb", "loser"];
   const isSkillClean = (s) => {
@@ -7536,30 +7569,6 @@ function CoLab() {
             )}
           </div>
 
-          {/* Trophy Case */}
-          {(() => {
-            const trophies = mvpAwards.filter(m => m.mvp_user_id === viewFullProfile.id);
-            if (trophies.length === 0) return null;
-            return (
-              <div style={{ marginBottom: 28, paddingBottom: 28, borderBottom: `1px solid ${border}` }}>
-                <button className="hb" onClick={() => setViewedTrophyOpen(o => !o)} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 6, marginBottom: viewedTrophyOpen ? 12 : 0 }}>
-                  <span style={{ ...labelStyle, marginBottom: 0 }}>TROPHY CASE</span>
-                  <span style={{ fontSize: 9, color: textMuted, display: "inline-block", transform: viewedTrophyOpen ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.15s" }}>▾</span>
-                </button>
-                {viewedTrophyOpen && (
-                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                    {trophies.map((t, i) => (
-                      <div key={i} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, padding: "10px 14px", border: `1px solid ${border}`, borderRadius: 8, background: bg2, minWidth: 100 }}>
-                        <div style={{ fontSize: 22, lineHeight: 1 }}>★</div>
-                        <div style={{ fontSize: 10, color: text, fontWeight: 500, textAlign: "center", lineHeight: 1.3 }}>MVP</div>
-                        <div style={{ fontSize: 9, color: textMuted, textAlign: "center", lineHeight: 1.3, maxWidth: 90 }}>{t.project_title}</div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            );
-          })()}
 
           {/* Portfolio */}
           <div style={{ marginBottom: 28, paddingBottom: 28, borderBottom: `1px solid ${border}` }}>
@@ -7591,7 +7600,40 @@ function CoLab() {
             )}
           </div>
 
-          {/* DM button at bottom for quick re-access on mobile */}
+          {/* Trophy Case */}
+          {(() => {
+            const mvps = mvpAwards.filter(m => m.mvp_user_id === viewFullProfile.id);
+            const theirApps = applications.filter(a => a.applicant_id === viewFullProfile.id);
+            const theirProjects = projects.filter(p => p.owner_id === viewFullProfile.id);
+            const earned = [];
+            mvps.forEach(t => earned.push({ ...TROPHY_DEFS[0], sublabel: t.project_title }));
+            if (theirProjects.length > 0) earned.push({ ...TROPHY_DEFS[1], sublabel: "First project" });
+            if (theirApps.filter(a => normalizeApplicationStatus(a.status) === "accepted").length > 0) earned.push({ ...TROPHY_DEFS[2], sublabel: "First collab" });
+            if (theirApps.length >= 5) earned.push({ ...TROPHY_DEFS[4], sublabel: "5+ applications" });
+            if ((viewFullProfile.skills || []).length >= 8) earned.push({ ...TROPHY_DEFS[5], sublabel: `${(viewFullProfile.skills || []).length} skills` });
+            if (earned.length === 0) return null;
+            return (
+              <div style={{ marginBottom: 28, paddingBottom: 28, borderBottom: `1px solid ${border}` }}>
+                <button className="hb" onClick={() => setViewedTrophyOpen(o => !o)} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 6, marginBottom: viewedTrophyOpen ? 16 : 0 }}>
+                  <span style={{ ...labelStyle, marginBottom: 0 }}>TROPHY CASE</span>
+                  <span style={{ fontSize: 9, color: textMuted, display: "inline-block", transform: viewedTrophyOpen ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.15s" }}>▾</span>
+                </button>
+                {viewedTrophyOpen && (
+                  <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                    {earned.map((t, i) => (
+                      <div key={i} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6, padding: "12px 14px", border: `1px solid ${border}`, borderRadius: 8, background: bg2, minWidth: 80 }}>
+                        {renderPixelTrophy(t.pattern, t.color, 4)}
+                        <div style={{ fontSize: 9, color: text, fontWeight: 500, textAlign: "center", lineHeight: 1.3, letterSpacing: "0.5px" }}>{t.label}</div>
+                        <div style={{ fontSize: 8, color: textMuted, textAlign: "center", lineHeight: 1.4, maxWidth: 80 }}>{t.sublabel}</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+
+          {/* Report */}
           {viewFullProfile.id !== authUser?.id && (
             <div style={{ display: "flex", gap: 8 }}>
               <button onClick={() => openReportModal({ contentType: "user", contentId: viewFullProfile.id, label: viewFullProfile.name })} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontFamily: "inherit", fontSize: 11, textDecoration: "underline", padding: 0 }}>report</button>
@@ -7681,30 +7723,6 @@ function CoLab() {
                 )}
               </div>
 
-                            {/* Trophy Case */}
-              {(() => {
-                const trophies = mvpAwards.filter(m => m.mvp_user_id === authUser?.id);
-                if (trophies.length === 0) return null;
-                return (
-                  <div style={{ marginBottom: 28, paddingBottom: 28, borderBottom: `1px solid ${border}` }}>
-                    <button className="hb" onClick={() => setProfileTrophyOpen(o => !o)} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 6, marginBottom: profileTrophyOpen ? 12 : 0 }}>
-                      <span style={{ ...labelStyle, marginBottom: 0 }}>TROPHY CASE</span>
-                      <span style={{ fontSize: 9, color: textMuted, display: "inline-block", transform: profileTrophyOpen ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.15s" }}>▾</span>
-                    </button>
-                    {profileTrophyOpen && (
-                      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                        {trophies.map((t, i) => (
-                          <div key={i} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, padding: "10px 14px", border: `1px solid ${border}`, borderRadius: 8, background: bg2, minWidth: 100 }}>
-                            <div style={{ fontSize: 22, lineHeight: 1, color: text }}>★</div>
-                            <div style={{ fontSize: 10, color: text, fontWeight: 500, textAlign: "center", lineHeight: 1.3 }}>MVP</div>
-                            <div style={{ fontSize: 9, color: textMuted, textAlign: "center", lineHeight: 1.3, maxWidth: 90 }}>{t.project_title}</div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                );
-              })()}
 
               {/* Portfolio */}
               <div style={{ marginBottom: 28, paddingBottom: 28, borderBottom: `1px solid ${border}` }}>
@@ -7786,6 +7804,40 @@ function CoLab() {
                       </div>
                 )}
               </div>
+
+              {/* Trophy Case */}
+              {(() => {
+                const mvps = mvpAwards.filter(m => m.mvp_user_id === authUser?.id);
+                const myApps = applications.filter(a => a.applicant_id === authUser?.id);
+                const myProjects = projects.filter(p => p.owner_id === authUser?.id);
+                const earned = [];
+                mvps.forEach(t => earned.push({ ...TROPHY_DEFS[0], sublabel: t.project_title }));
+                if (myProjects.length > 0) earned.push({ ...TROPHY_DEFS[1], sublabel: "First project" });
+                if (myApps.filter(a => normalizeApplicationStatus(a.status) === "accepted").length > 0) earned.push({ ...TROPHY_DEFS[2], sublabel: "First collab" });
+                if (followers.length >= 10) earned.push({ ...TROPHY_DEFS[3], sublabel: `${followers.length} followers` });
+                if (myApps.length >= 5) earned.push({ ...TROPHY_DEFS[4], sublabel: "5+ applications" });
+                if ((profile?.skills || []).length >= 8) earned.push({ ...TROPHY_DEFS[5], sublabel: `${(profile?.skills || []).length} skills` });
+                if (earned.length === 0) return null;
+                return (
+                  <div style={{ marginBottom: 28, paddingBottom: 28, borderBottom: `1px solid ${border}` }}>
+                    <button className="hb" onClick={() => setProfileTrophyOpen(o => !o)} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 6, marginBottom: profileTrophyOpen ? 16 : 0 }}>
+                      <span style={{ ...labelStyle, marginBottom: 0 }}>TROPHY CASE</span>
+                      <span style={{ fontSize: 9, color: textMuted, display: "inline-block", transform: profileTrophyOpen ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.15s" }}>▾</span>
+                    </button>
+                    {profileTrophyOpen && (
+                      <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                        {earned.map((t, i) => (
+                          <div key={i} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6, padding: "12px 14px", border: `1px solid ${border}`, borderRadius: 8, background: bg2, minWidth: 80 }}>
+                            {renderPixelTrophy(t.pattern, t.color, 4)}
+                            <div style={{ fontSize: 9, color: text, fontWeight: 500, textAlign: "center", lineHeight: 1.3, letterSpacing: "0.5px" }}>{t.label}</div>
+                            <div style={{ fontSize: 8, color: textMuted, textAlign: "center", lineHeight: 1.4, maxWidth: 80 }}>{t.sublabel}</div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
 
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                 <button className="hb" onClick={() => setEditProfile(true)} style={btnG}>edit profile</button>
