@@ -1448,13 +1448,13 @@ function CoLab() {
   const [skillsExpanded, setSkillsExpanded] = useState(false);
   const [profileSkillsOpen, setProfileSkillsOpen] = useState(false);
   const [profileTrophyOpen, setProfileTrophyOpen] = useState(false);
-  const [profilePortfolioOpen, setProfilePortfolioOpen] = useState(false);
-  const [profileActivityOpen, setProfileActivityOpen] = useState(false);
+  const [profilePortfolioOpen, setProfilePortfolioOpen] = useState(true);
+  const [profileActivityOpen, setProfileActivityOpen] = useState(true);
   const [profilePostsOpen, setProfilePostsOpen] = useState(false);
   const [viewedSkillsOpen, setViewedSkillsOpen] = useState(false);
   const [viewedTrophyOpen, setViewedTrophyOpen] = useState(false);
-  const [viewedPortfolioOpen, setViewedPortfolioOpen] = useState(false);
-  const [viewedActivityOpen, setViewedActivityOpen] = useState(false);
+  const [viewedPortfolioOpen, setViewedPortfolioOpen] = useState(true);
+  const [viewedActivityOpen, setViewedActivityOpen] = useState(true);
   const [showFeedbackModal, setShowFeedbackModal] = useState(false);
   const [feedbackType, setFeedbackType] = useState("Bug report");
   const [feedbackMessage, setFeedbackMessage] = useState("");
@@ -7523,13 +7523,21 @@ function CoLab() {
                 </div>
               </div>
             </div>
-            {viewFullProfile.banner_pixels && (
-              <div className="profile-banner-shell" style={{ flex: 1, minWidth: 0, border: `1px solid ${border}`, borderRadius: 10, overflow: "hidden", background: dark ? "#000" : "#fff", minHeight: 120 }}>
+            <div className="profile-banner-shell" style={{ flex: 1, minWidth: 0, border: `1px solid ${border}`, borderRadius: 10, overflow: "hidden", minHeight: 120 }}>
+              {viewFullProfile.banner_pixels ? (
                 <div className="profile-banner-canvas">
                   <PixelBannerDisplay pixels={(() => { try { return normalizeBannerPixels(JSON.parse(viewFullProfile.banner_pixels)); } catch { return []; } })()} dark={dark} height={120} />
                 </div>
-              </div>
-            )}
+              ) : (
+                <div style={{ height: 120, background: (() => {
+                  const hash = (viewFullProfile.name || "").split("").reduce((a, c) => a + c.charCodeAt(0), 0);
+                  const hue = hash % 360;
+                  return dark
+                    ? `linear-gradient(135deg, hsl(${hue},25%,10%) 0%, hsl(${(hue+40)%360},20%,14%) 100%)`
+                    : `linear-gradient(135deg, hsl(${hue},30%,92%) 0%, hsl(${(hue+40)%360},25%,88%) 100%)`;
+                })() }} />
+              )}
+            </div>
           </div>
           {viewFullProfile.bio && <p style={{ fontSize: 13, color: textMuted, lineHeight: 1.8, marginBottom: 12, maxWidth: 560 }}>{viewFullProfile.bio}</p>}
           {(() => {
@@ -7683,15 +7691,16 @@ function CoLab() {
                 </div>
                 {/* Right: pixel banner */}
                 <div className="profile-banner-shell" style={{ flex: 1, minWidth: 0 }}>
-                  <div className="profile-banner-card" style={{ position: "relative", border: `1px solid ${border}`, borderRadius: 10, overflow: "hidden", background: dark ? "#000" : "#fff", minHeight: 120, cursor: "pointer" }} onClick={() => setShowBannerEditor(true)}>
+                  <div className="profile-banner-card" style={{ position: "relative", border: `1px solid ${border}`, borderRadius: 10, overflow: "hidden", minHeight: 120, cursor: "pointer" }} onClick={() => setShowBannerEditor(true)}>
                     {bannerPixels.some(v => v) ? (
                       <div className="profile-banner-canvas"><PixelBannerDisplay pixels={bannerPixels} dark={dark} height={120} /></div>
                     ) : (
-                      <div className="profile-banner-canvas" style={{ height: 120, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                        <span style={{ fontSize: 11, color: textMuted }}>+ design your banner</span>
+                      <div style={{ height: 120, background: dark ? "linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)" : "linear-gradient(135deg, #e8eaf6 0%, #e3f2fd 50%, #e8f5e9 100%)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 6 }}>
+                        <span style={{ fontSize: 10, color: dark ? "rgba(255,255,255,0.35)" : "rgba(0,0,0,0.25)", letterSpacing: "1px" }}>YOUR BANNER</span>
+                        <span style={{ fontSize: 10, color: dark ? "rgba(255,255,255,0.2)" : "rgba(0,0,0,0.18)" }}>click to design in 8-bit →</span>
                       </div>
                     )}
-                    <div style={{ position: "absolute", bottom: 6, right: 8, fontSize: 9, color: textMuted, opacity: 0.5 }}>edit</div>
+                    <div style={{ position: "absolute", bottom: 6, right: 8, fontSize: 9, color: dark ? "rgba(255,255,255,0.3)" : "rgba(0,0,0,0.25)", letterSpacing: "0.5px" }}>edit</div>
                   </div>
                 </div>
               </div>
