@@ -1495,18 +1495,6 @@ function CoLab() {
       id: "collab", label: "Collaborator", desc: "Accepted into your first project", color: "#34d399",
       pattern: [[0,1,1,0,0,1,1,0],[1,1,1,0,0,1,1,1],[0,1,1,0,0,1,1,0],[0,0,0,0,0,0,0,0],[0,1,1,1,1,1,1,0],[1,1,1,1,1,1,1,1],[1,1,0,0,0,0,1,1],[0,0,0,0,0,0,0,0]],
     },
-    {
-      id: "connector", label: "Connector", desc: "Reached 10 followers", color: "#60a5fa",
-      pattern: [[0,0,0,1,1,0,0,0],[0,0,1,1,1,1,0,0],[0,0,0,1,1,0,0,0],[0,1,0,1,1,0,1,0],[1,1,1,1,1,1,1,1],[0,0,1,0,0,1,0,0],[0,1,1,0,0,1,1,0],[1,1,0,0,0,0,1,1]],
-    },
-    {
-      id: "gogetter", label: "Go-Getter", desc: "Applied to 5+ projects", color: "#fb923c",
-      pattern: [[0,0,0,1,1,1,0,0],[0,0,1,1,1,0,0,0],[0,1,1,1,0,0,0,0],[1,1,1,1,1,1,0,0],[0,0,0,1,1,1,1,0],[0,0,0,0,0,1,1,1],[0,0,0,0,0,0,1,1],[0,0,0,0,0,0,0,1]],
-    },
-    {
-      id: "skilled", label: "Skilled", desc: "Listed 8+ skills", color: "#e879f9",
-      pattern: [[0,0,1,1,1,1,0,0],[0,1,1,1,1,1,1,0],[1,1,1,1,1,1,1,1],[1,1,1,1,1,1,1,1],[0,1,1,1,1,1,1,0],[0,0,1,1,1,1,0,0],[0,0,0,1,1,0,0,0],[0,0,0,0,0,0,0,0]],
-    },
   ];
   const renderPixelTrophy = (pattern, color, size = 4) => (
     <div style={{ display: "grid", gridTemplateColumns: `repeat(8, ${size}px)`, gap: 0 }}>
@@ -7609,8 +7597,6 @@ function CoLab() {
             mvps.forEach(t => earned.push({ ...TROPHY_DEFS[0], sublabel: t.project_title }));
             if (theirProjects.length > 0) earned.push({ ...TROPHY_DEFS[1], sublabel: "First project" });
             if (theirApps.filter(a => normalizeApplicationStatus(a.status) === "accepted").length > 0) earned.push({ ...TROPHY_DEFS[2], sublabel: "First collab" });
-            if (theirApps.length >= 5) earned.push({ ...TROPHY_DEFS[4], sublabel: "5+ applications" });
-            if ((viewFullProfile.skills || []).length >= 8) earned.push({ ...TROPHY_DEFS[5], sublabel: `${(viewFullProfile.skills || []).length} skills` });
             if (earned.length === 0) return null;
             return (
               <div style={{ marginBottom: 28, paddingBottom: 28, borderBottom: `1px solid ${border}` }}>
@@ -7814,9 +7800,6 @@ function CoLab() {
                 mvps.forEach(t => earned.push({ ...TROPHY_DEFS[0], sublabel: t.project_title }));
                 if (myProjects.length > 0) earned.push({ ...TROPHY_DEFS[1], sublabel: "First project" });
                 if (myApps.filter(a => normalizeApplicationStatus(a.status) === "accepted").length > 0) earned.push({ ...TROPHY_DEFS[2], sublabel: "First collab" });
-                if (followers.length >= 10) earned.push({ ...TROPHY_DEFS[3], sublabel: `${followers.length} followers` });
-                if (myApps.length >= 5) earned.push({ ...TROPHY_DEFS[4], sublabel: "5+ applications" });
-                if ((profile?.skills || []).length >= 8) earned.push({ ...TROPHY_DEFS[5], sublabel: `${(profile?.skills || []).length} skills` });
                 if (earned.length === 0) return null;
                 return (
                   <div style={{ marginBottom: 28, paddingBottom: 28, borderBottom: `1px solid ${border}` }}>
