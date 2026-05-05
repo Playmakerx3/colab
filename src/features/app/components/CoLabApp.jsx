@@ -7545,7 +7545,7 @@ function CoLab() {
               <div style={{ display: "flex", gap: 14, flexWrap: "wrap", alignItems: "flex-start", marginBottom: 24 }}>
                 {earned.map((t, i) => (
                   <div key={i} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
-                    {renderPixelTrophy(t.pattern, t.color, 3)}
+                    {renderPixelTrophy(t.pattern, t.color, 2)}
                     <div style={{ fontSize: 8, color: textMuted, textAlign: "center", letterSpacing: "0.4px" }}>{t.label}</div>
                   </div>
                 ))}
@@ -7671,7 +7671,7 @@ function CoLab() {
                           <div style={{ display: "flex", gap: 14, flexWrap: "wrap", alignItems: "flex-start" }}>
                             {earned.map((t, i) => (
                               <div key={i} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
-                                {renderPixelTrophy(t.pattern, t.color, 3)}
+                                {renderPixelTrophy(t.pattern, t.color, 2)}
                                 <div style={{ fontSize: 8, color: textMuted, textAlign: "center", letterSpacing: "0.4px" }}>{t.label}</div>
                               </div>
                             ))}
