@@ -7631,77 +7631,75 @@ function CoLab() {
         <div className="pad fu" style={{ width: "100%", padding: "28px 32px 48px" }}>
           {!editProfile ? (
             <div>
-              {/* Identity + Banner */}
-              <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px", marginBottom: 24 }}>PROFILE</div>
-              <div className="profile-identity-banner" style={{ display: "flex", gap: 28, alignItems: "flex-start", marginBottom: 28 }}>
-                {/* Left: identity */}
-                <div style={{ flexShrink: 0 }}>
-                  <div className="profile-identity-row" style={{ display: "flex", gap: 18, alignItems: "flex-start", marginBottom: 0 }}>
-                    <div style={{ position: "relative", flexShrink: 0 }}>
-                      <Avatar initials={myInitials} src={profile?.avatar_url} size={68} dark={dark} />
-                      <span style={{ position: "absolute", bottom: 3, right: 3, width: 10, height: 10, borderRadius: "50%", background: getCapacityStatus(authUser?.id) === "On Project" ? "#f97316" : "#22c55e", border: `2px solid ${bg}` }} />
+              {/* Banner + Identity */}
+              <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px", marginBottom: 16 }}>PROFILE</div>
+              <div style={{ marginBottom: 20 }}>
+                {/* Full-width banner with identity overlay */}
+                <div className="profile-banner-card" style={{ position: "relative", border: `1px solid ${border}`, borderRadius: 10, overflow: "hidden", cursor: "pointer" }} onClick={() => setShowBannerEditor(true)}>
+                  {bannerPixels.some(v => v) ? (
+                    <div className="profile-banner-canvas"><PixelBannerDisplay pixels={bannerPixels} dark={dark} height={160} /></div>
+                  ) : (
+                    <div style={{ height: 160, background: dark ? "linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)" : "linear-gradient(135deg, #e8eaf6 0%, #e3f2fd 50%, #e8f5e9 100%)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 6 }}>
+                      <span style={{ fontSize: 10, color: dark ? "rgba(255,255,255,0.35)" : "rgba(0,0,0,0.25)", letterSpacing: "1px" }}>YOUR BANNER</span>
+                      <span style={{ fontSize: 10, color: dark ? "rgba(255,255,255,0.2)" : "rgba(0,0,0,0.18)" }}>click to design in 8-bit →</span>
                     </div>
-                    <div>
-                      <div style={{ fontSize: 26, fontWeight: 400, color: text, letterSpacing: "-1.5px", lineHeight: 1.1, marginBottom: 4 }}>{profile?.name || "Anonymous"}</div>
-                      <div style={{ fontSize: 12, color: textMuted, marginBottom: 2 }}>
-                        {profile?.role}{profile?.location ? ` · ${profile.location}` : ""}
+                  )}
+                  {/* Gradient scrim + name overlay at bottom-left */}
+                  <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, background: "linear-gradient(to bottom, transparent 0%, rgba(0,0,0,0.62) 100%)", padding: "28px 16px 14px", display: "flex", alignItems: "flex-end", gap: 12, pointerEvents: "none" }}>
+                    <div style={{ position: "relative", flexShrink: 0, pointerEvents: "auto" }}>
+                      <Avatar initials={myInitials} src={profile?.avatar_url} size={52} dark={dark} />
+                      <span style={{ position: "absolute", bottom: 2, right: 2, width: 9, height: 9, borderRadius: "50%", background: getCapacityStatus(authUser?.id) === "On Project" ? "#f97316" : "#22c55e", border: "2px solid rgba(0,0,0,0.5)" }} />
+                    </div>
+                    <div style={{ pointerEvents: "auto" }}>
+                      <div style={{ fontSize: 22, fontWeight: 400, color: "#fff", letterSpacing: "-1px", lineHeight: 1.1, marginBottom: 3, textShadow: "0 1px 4px rgba(0,0,0,0.4)" }}>{profile?.name || "Anonymous"}</div>
+                      <div style={{ fontSize: 11, color: "rgba(255,255,255,0.7)", lineHeight: 1.4 }}>
+                        {[profile?.role, profile?.location].filter(Boolean).join(" · ")}
+                        {profile?.username
+                          ? <span style={{ marginLeft: profile?.role || profile?.location ? " · ".length > 0 ? 0 : 0 : 0 }}>{(profile?.role || profile?.location) ? " · " : ""}<span style={{ opacity: 0.85 }}>@{profile.username}</span></span>
+                          : <span onClick={(e) => { e.stopPropagation(); setEditProfile(true); }} style={{ cursor: "pointer", textDecoration: "underline", color: "rgba(255,255,255,0.6)", marginLeft: (profile?.role || profile?.location) ? 4 : 0 }}>set a username →</span>
+                        }
                       </div>
-                      {profile?.username
-                        ? <div style={{ fontSize: 11, color: textMuted, marginBottom: 10 }}>@{profile.username}</div>
-                        : <div style={{ fontSize: 11, color: textMuted, marginBottom: 10, cursor: "pointer", textDecoration: "underline" }} onClick={() => setEditProfile(true)}>set a username →</div>
-                      }
-                      {/* Stats row */}
-                      <div style={{ display: "flex", gap: 14, flexWrap: "wrap", fontSize: 11, color: textMuted, marginBottom: profile?.bio ? 10 : 0 }}>
-                        <button className="hb" onClick={() => setShowProjectsFor(authUser?.id)} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontFamily: "inherit", fontSize: 11, padding: 0 }}>
-                          <span style={{ color: text, fontWeight: 500 }}>{myProfileProjects.ownedProjects.length + myProfileProjects.collaboratedProjects.length}</span> projects
-                        </button>
-                        <button className="hb" onClick={() => setShowCollaboratorsList(true)} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontFamily: "inherit", fontSize: 11, padding: 0 }}>
-                          <span style={{ color: text, fontWeight: 500 }}>{myCollaborators.length}</span> collaborators
-                        </button>
-                        <button className="hb" onClick={() => setShowFollowList("followers")} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontFamily: "inherit", fontSize: 11, padding: 0 }}>
-                          <span style={{ color: text, fontWeight: 500 }}>{followers.length}</span> followers
-                        </button>
-                        <button className="hb" onClick={() => setShowFollowList("following")} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontFamily: "inherit", fontSize: 11, padding: 0 }}>
-                          <span style={{ color: text, fontWeight: 500 }}>{following.length}</span> following
-                        </button>
-                      </div>
-                      {profile?.bio && <p style={{ fontSize: 13, color: textMuted, lineHeight: 1.8, margin: "0 0 12px", maxWidth: 480 }}>{profile.bio}</p>}
-                      {(() => {
-                        const mvps = mvpAwards.filter(m => m.mvp_user_id === authUser?.id);
-                        const myApps = applications.filter(a => a.applicant_id === authUser?.id);
-                        const myProjects = projects.filter(p => p.owner_id === authUser?.id);
-                        const earned = [];
-                        mvps.forEach(t => earned.push({ ...TROPHY_DEFS[0], sublabel: t.project_title }));
-                        if (myProjects.length > 0) earned.push({ ...TROPHY_DEFS[1], sublabel: "First project" });
-                        if (myApps.filter(a => normalizeApplicationStatus(a.status) === "accepted").length > 0) earned.push({ ...TROPHY_DEFS[2], sublabel: "First collab" });
-                        if (earned.length === 0) return null;
-                        return (
-                          <div style={{ display: "flex", gap: 14, flexWrap: "wrap", alignItems: "flex-start" }}>
-                            {earned.map((t, i) => (
-                              <div key={i} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
-                                {renderPixelTrophy(t.pattern, t.color, 2)}
-                                <div style={{ fontSize: 8, color: textMuted, textAlign: "center", letterSpacing: "0.4px" }}>{t.label}</div>
-                              </div>
-                            ))}
-                          </div>
-                        );
-                      })()}
                     </div>
                   </div>
+                  <div style={{ position: "absolute", top: 8, right: 10, fontSize: 9, color: "rgba(255,255,255,0.35)", letterSpacing: "0.5px" }}>edit</div>
                 </div>
-                {/* Right: pixel banner */}
-                <div className="profile-banner-shell" style={{ flex: 1, minWidth: 0 }}>
-                  <div className="profile-banner-card" style={{ position: "relative", border: `1px solid ${border}`, borderRadius: 10, overflow: "hidden", minHeight: 120, cursor: "pointer" }} onClick={() => setShowBannerEditor(true)}>
-                    {bannerPixels.some(v => v) ? (
-                      <div className="profile-banner-canvas"><PixelBannerDisplay pixels={bannerPixels} dark={dark} height={120} /></div>
-                    ) : (
-                      <div style={{ height: 120, background: dark ? "linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)" : "linear-gradient(135deg, #e8eaf6 0%, #e3f2fd 50%, #e8f5e9 100%)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 6 }}>
-                        <span style={{ fontSize: 10, color: dark ? "rgba(255,255,255,0.35)" : "rgba(0,0,0,0.25)", letterSpacing: "1px" }}>YOUR BANNER</span>
-                        <span style={{ fontSize: 10, color: dark ? "rgba(255,255,255,0.2)" : "rgba(0,0,0,0.18)" }}>click to design in 8-bit →</span>
-                      </div>
-                    )}
-                    <div style={{ position: "absolute", bottom: 6, right: 8, fontSize: 9, color: dark ? "rgba(255,255,255,0.3)" : "rgba(0,0,0,0.25)", letterSpacing: "0.5px" }}>edit</div>
+                {/* Stats + bio + trophies below banner */}
+                <div style={{ padding: "14px 4px 0" }}>
+                  <div style={{ display: "flex", gap: 14, flexWrap: "wrap", fontSize: 11, color: textMuted, marginBottom: profile?.bio ? 10 : 8 }}>
+                    <button className="hb" onClick={() => setShowProjectsFor(authUser?.id)} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontFamily: "inherit", fontSize: 11, padding: 0 }}>
+                      <span style={{ color: text, fontWeight: 500 }}>{myProfileProjects.ownedProjects.length + myProfileProjects.collaboratedProjects.length}</span> projects
+                    </button>
+                    <button className="hb" onClick={() => setShowCollaboratorsList(true)} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontFamily: "inherit", fontSize: 11, padding: 0 }}>
+                      <span style={{ color: text, fontWeight: 500 }}>{myCollaborators.length}</span> collaborators
+                    </button>
+                    <button className="hb" onClick={() => setShowFollowList("followers")} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontFamily: "inherit", fontSize: 11, padding: 0 }}>
+                      <span style={{ color: text, fontWeight: 500 }}>{followers.length}</span> followers
+                    </button>
+                    <button className="hb" onClick={() => setShowFollowList("following")} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontFamily: "inherit", fontSize: 11, padding: 0 }}>
+                      <span style={{ color: text, fontWeight: 500 }}>{following.length}</span> following
+                    </button>
                   </div>
+                  {profile?.bio && <p style={{ fontSize: 13, color: textMuted, lineHeight: 1.8, margin: "0 0 10px", maxWidth: 560 }}>{profile.bio}</p>}
+                  {(() => {
+                    const mvps = mvpAwards.filter(m => m.mvp_user_id === authUser?.id);
+                    const myApps = applications.filter(a => a.applicant_id === authUser?.id);
+                    const myProjects = projects.filter(p => p.owner_id === authUser?.id);
+                    const earned = [];
+                    mvps.forEach(t => earned.push({ ...TROPHY_DEFS[0], sublabel: t.project_title }));
+                    if (myProjects.length > 0) earned.push({ ...TROPHY_DEFS[1], sublabel: "First project" });
+                    if (myApps.filter(a => normalizeApplicationStatus(a.status) === "accepted").length > 0) earned.push({ ...TROPHY_DEFS[2], sublabel: "First collab" });
+                    if (earned.length === 0) return null;
+                    return (
+                      <div style={{ display: "flex", gap: 14, flexWrap: "wrap", alignItems: "flex-start" }}>
+                        {earned.map((t, i) => (
+                          <div key={i} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
+                            {renderPixelTrophy(t.pattern, t.color, 2)}
+                            <div style={{ fontSize: 8, color: textMuted, textAlign: "center", letterSpacing: "0.4px" }}>{t.label}</div>
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })()}
                 </div>
               </div>
               {hasNoProfileActivity && (
