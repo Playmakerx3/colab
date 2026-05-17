@@ -66,6 +66,17 @@ export default function NetworkGraph3D({ users, applications, projects = [], aut
   const [filterCluster, setFilterCluster] = useState(null); // skill cluster filter
   const [searchQuery, setSearchQuery] = useState("");
   const [panelCollapsed, setPanelCollapsed] = useState(false);
+  const [mode2D, setMode2D] = useState(false);
+  const mode2DRef = useRef(false);
+
+  useEffect(() => {
+    mode2DRef.current = mode2D;
+    if (mode2D) {
+      viewRef.current.rotX = 0;
+      viewRef.current.rotY = 0;
+      velocityRef.current = { vrX: 0, vrY: 0 };
+    }
+  }, [mode2D]);
 
   useEffect(() => { const t = setTimeout(() => setHintsVisible(false), 4000); return () => clearTimeout(t); }, []);
 
@@ -221,38 +232,46 @@ export default function NetworkGraph3D({ users, applications, projects = [], aut
       const w = canvas.width, h = canvas.height;
       const cx = w / 2, cy = h / 2;
 
-      // ── Auto-rotate when idle
+      // ── Auto-rotate when idle (3D only)
+      const is2D = mode2DRef.current;
       const idleMs = Date.now() - lastInteractRef.current;
-      if (!interactRef.current.mode && idleMs > IDLE_MS) {
+      if (!is2D && !interactRef.current.mode && idleMs > IDLE_MS) {
         velocityRef.current.vrY = 0.0006;
       }
 
-      // ── Spin inertia
-      if (!interactRef.current.mode) {
+      // ── Spin inertia (3D only)
+      if (!is2D && !interactRef.current.mode) {
         const vel = velocityRef.current;
         if (Math.abs(vel.vrX) > 0.00008) { vel.vrX *= 0.91; viewRef.current.rotX += vel.vrX; }
         if (Math.abs(vel.vrY) > 0.00008) { vel.vrY *= 0.91; viewRef.current.rotY += vel.vrY; }
       }
 
       const { panX, panY, zoom, rotX, rotY } = viewRef.current;
-      const cosX = Math.cos(rotX), sinX = Math.sin(rotX);
-      const cosY = Math.cos(rotY), sinY = Math.sin(rotY);
 
-      const project = (worldX, worldY) => {
-        const x1 = worldX * cosY;
-        const y1 = worldY;
-        const z1 = -worldX * sinY;
-        const x2 = x1;
-        const y2 = y1 * cosX - z1 * sinX;
-        const z2 = y1 * sinX + z1 * cosX;
-        const pd = Math.max(0.2, FOV / (FOV + z2));
-        return {
-          sx: cx + panX + x2 * pd * zoom,
-          sy: cy + panY + y2 * pd * zoom,
-          z: z2,
-          pd,
-        };
-      };
+      const project = is2D
+        ? (worldX, worldY) => ({
+            sx: cx + panX + worldX * zoom,
+            sy: cy + panY + worldY * zoom,
+            z: 0,
+            pd: 1,
+          })
+        : (worldX, worldY) => {
+            const cosX = Math.cos(rotX), sinX = Math.sin(rotX);
+            const cosY = Math.cos(rotY), sinY = Math.sin(rotY);
+            const x1 = worldX * cosY;
+            const y1 = worldY;
+            const z1 = -worldX * sinY;
+            const x2 = x1;
+            const y2 = y1 * cosX - z1 * sinX;
+            const z2 = y1 * sinX + z1 * cosX;
+            const pd = Math.max(0.2, FOV / (FOV + z2));
+            return {
+              sx: cx + panX + x2 * pd * zoom,
+              sy: cy + panY + y2 * pd * zoom,
+              z: z2,
+              pd,
+            };
+          };
 
       // ── Physics
       ns.forEach(n => {
@@ -436,7 +455,7 @@ export default function NetworkGraph3D({ users, applications, projects = [], aut
 
     lastSampleRef.current = { rotX: viewRef.current.rotX, rotY: viewRef.current.rotY, t: performance.now() };
 
-    if (e.button === 2) {
+    if (e.button === 2 || mode2DRef.current) {
       interactRef.current = { mode: "pan", startX: e.clientX, startY: e.clientY, originView: { ...viewRef.current }, panMoved: false };
       canvas.style.cursor = "grabbing";
     } else {
@@ -529,7 +548,8 @@ export default function NetworkGraph3D({ users, applications, projects = [], aut
     lastInteractRef.current = Date.now();
     velocityRef.current = { vrX: 0, vrY: 0 };
     if (e.touches.length === 1) {
-      interactRef.current = { mode: "rotate", startX: e.touches[0].clientX, startY: e.touches[0].clientY, originView: { ...viewRef.current }, panMoved: false };
+      const touchMode = mode2DRef.current ? "pan" : "rotate";
+      interactRef.current = { mode: touchMode, startX: e.touches[0].clientX, startY: e.touches[0].clientY, originView: { ...viewRef.current }, panMoved: false };
       lastSampleRef.current = { rotX: viewRef.current.rotX, rotY: viewRef.current.rotY, t: performance.now() };
     } else if (e.touches.length === 2) {
       interactRef.current.mode = null;
@@ -695,8 +715,13 @@ export default function NetworkGraph3D({ users, applications, projects = [], aut
           <button onClick={resetView} style={{ ...btnStyle, fontSize: 10 }} title="Reset">⊙</button>
         </div>
 
+        <button
+          onClick={() => setMode2D(v => !v)}
+          style={{ background: "none", border: `1px solid ${panelBorder}`, borderRadius: 4, padding: "3px 6px", fontSize: 9, color: mutedColor, cursor: "pointer", fontFamily: "monospace", textAlign: "center" }}
+        >{mode2D ? "switch to 3D" : "switch to 2D"}</button>
+
         <div style={{ fontSize: 8, color: dark ? "rgba(255,255,255,0.2)" : "rgba(0,0,0,0.22)", fontFamily: "monospace", lineHeight: 1.6, opacity: hintsVisible ? 1 : 0, transition: "opacity 1s ease" }}>
-          drag to rotate · scroll to zoom
+          {mode2D ? "drag to pan · scroll to zoom" : "drag to rotate · scroll to zoom"}
         </div>
         </>}
       </div>
