@@ -4776,7 +4776,7 @@ function CoLab() {
         </div>
       )}
       {showBannerEditor && <BannerEditor pixels={bannerPixels} onSave={saveBanner} onClose={() => setShowBannerEditor(false)} dark={dark} bg={bg} border={border} text={text} textMuted={textMuted} />}
-      <a href="https://docs.google.com/spreadsheets/d/1HNi4oWbk1S5Z97U0zIJPBGs4x9DUUPSfSdK50bUFdts/edit?usp=sharing" target="_blank" rel="noopener noreferrer" style={{ position: "fixed", right: 24, bottom: 24, zIndex: 210, background: bg2, color: text, border: `1px solid ${border}`, borderRadius: 999, padding: "8px 12px", fontSize: 11, cursor: "pointer", fontFamily: "inherit", boxShadow: dark ? "0 12px 28px rgba(0,0,0,0.35)" : "0 12px 28px rgba(0,0,0,0.12)", textDecoration: "none", display: "inline-block" }}>
+      <a href="https://docs.google.com/forms/d/e/1FAIpQLSduERVI-TuKaK4ttlHJvGZEsHGbkxEdfkoTTV14AEtM67oDnw/viewform?usp=sharing&ouid=110577672304241696326" target="_blank" rel="noopener noreferrer" style={{ position: "fixed", right: 24, bottom: 24, zIndex: 210, background: bg2, color: text, border: `1px solid ${border}`, borderRadius: 999, padding: "8px 12px", fontSize: 11, cursor: "pointer", fontFamily: "inherit", boxShadow: dark ? "0 12px 28px rgba(0,0,0,0.35)" : "0 12px 28px rgba(0,0,0,0.12)", textDecoration: "none", display: "inline-block" }}>
         feedback ↗
       </a>
 
