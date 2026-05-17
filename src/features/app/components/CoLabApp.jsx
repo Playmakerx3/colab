@@ -5208,7 +5208,7 @@ function CoLab() {
               _communityId: cp.community_id,
               _originalId: cp.id,
             }));
-            const baseList = [...filteredPosts.map(p => ({ ...p, _type: "post" })), ...followedProjectEvents, ...hotCommunityFeedItems];
+            const baseList = [...filteredPosts.map(p => ({ ...p, _type: "post" })), ...hotCommunityFeedItems];
             const followFilteredList = followingOnly
               ? baseList.filter(item => {
                   const aid = item.user_id || item.project?.owner_id;
