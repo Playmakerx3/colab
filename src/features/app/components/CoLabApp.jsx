@@ -4949,9 +4949,9 @@ function CoLab() {
           {showFirstTimeGuide && renderFirstTimeGuide()}
 
           {/* Top-level explore tabs: feed | projects */}
-          <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px", marginBottom: 16 }}>{exploreTab === "top" ? "TOP CONTRIBUTORS" : "BUILDER FEED"}</div>
+          <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px", marginBottom: 16 }}>{exploreTab === "projects" ? "OPEN PROJECTS" : "BUILDER FEED"}</div>
           <div style={{ display: "flex", flexDirection: "column", gap: 2, marginBottom: 28 }}>
-            {[["feed", "feed"], ["top", "top contributors"]].map(([id, label]) => (
+            {[["feed", "feed"], ["projects", "projects"]].map(([id, label]) => (
               <div key={id} onClick={() => setExploreTab(id)} style={{
                 color: exploreTab === id ? text : textMuted,
                 padding: "3px 0",
@@ -4965,58 +4965,145 @@ function CoLab() {
             ))}
           </div>
 
-          {/* TOP CONTRIBUTORS TAB */}
-          {exploreTab === "top" && (() => {
-            const topUsers = users
-              .filter(u => u.id !== authUser?.id && u.name?.trim())
-              .map(u => {
-                const projectCount = projects.filter(p => p.owner_id === u.id).length;
-                const collabCount = shippedCollabCount[u.id] || 0;
-                const ratingData = userRatings[u.id];
-                const avgRating = ratingData?.count > 0 ? ratingData.sum / ratingData.count : 0;
-                const postCount = posts.filter(p => p.user_id === u.id).length;
-                const score = projectCount * 3 + collabCount * 2 + avgRating * 1.5 + postCount * 0.5;
-                return { ...u, projectCount, collabCount, avgRating, postCount, score };
-              })
-              .sort((a, b) => b.score - a.score)
-              .slice(0, 30);
-            return (
-              <div style={{ maxWidth: 900, margin: "0 auto" }}>
-                {topUsers.length === 0
-                  ? <div style={{ padding: "48px 0", color: textMuted, fontSize: 13, textAlign: "center" }}>No contributors yet.</div>
-                  : <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 14 }}>
-                      {topUsers.map((u, rank) => {
-                        const roleTags = [u.role, ...(u.skills || [])].filter(Boolean).slice(0, 3);
-                        const safeBio = u.bio ? u.bio.slice(0, 80) : "";
-                        return (
-                          <div key={u.id} onClick={() => setViewFullProfile(u)} style={{ background: bg2, border: `1px solid ${border}`, borderRadius: 12, padding: "16px", cursor: "pointer", transition: "border 0.2s", position: "relative" }}
-                            onMouseEnter={e => e.currentTarget.style.borderColor = text} onMouseLeave={e => e.currentTarget.style.borderColor = border}>
-                            <div style={{ position: "absolute", top: 12, right: 14, fontSize: 10, color: textMuted, letterSpacing: "1px" }}>#{rank + 1}</div>
-                            <div style={{ display: "flex", gap: 10, alignItems: "flex-start", marginBottom: 10 }}>
-                              <Avatar initials={initials(u.name)} src={u.avatar_url} size={40} dark={dark} />
-                              <div style={{ flex: 1, minWidth: 0 }}>
-                                <div style={{ fontSize: 13, fontWeight: 500, color: text, lineHeight: 1.2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", paddingRight: 24 }}>{u.name}</div>
-                                <div style={{ fontSize: 11, color: textMuted, marginTop: 2 }}>{u.role || "Builder"}</div>
-                                {u.location && <div style={{ fontSize: 10, color: textMuted, marginTop: 1 }}>{u.location}</div>}
-                              </div>
+          {/* PROJECTS TAB */}
+          {exploreTab === "projects" && (
+            <div className="projects-layout" style={{ maxWidth: 1020, margin: "0 auto", display: "flex", gap: 48, alignItems: "flex-start" }}>
+
+              {/* Left: main project list */}
+              <div style={{ flex: 1, minWidth: 0 }}>
+
+                {/* Sub-tabs */}
+                <div style={{ display: "flex", borderBottom: `1px solid ${border}`, marginBottom: 16 }}>
+                  {["for-you","all"].map(id => (
+                    <button key={id} onClick={() => setProjectsSubTab(id)} style={{ background: "none", border: "none", borderBottom: projectsSubTab === id ? `1px solid ${text}` : "1px solid transparent", color: projectsSubTab === id ? text : textMuted, padding: "8px 16px 8px 0", fontSize: 11, cursor: "pointer", fontFamily: "inherit", marginRight: 8, transition: "all 0.15s", display: "inline-flex", gap: 6, alignItems: "center" }}>
+                      {id === "for-you" ? "for you" : "all"}
+                      {id === "for-you" && forYou.length > 0 && <span style={{ fontSize: 9, background: bg3, borderRadius: 10, padding: "1px 5px", color: textMuted }}>{forYou.length}</span>}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Region filter */}
+                <div style={{ display: "flex", gap: 5, flexWrap: "wrap", alignItems: "center", marginBottom: 16 }}>
+                  {["local","city","national","international"].map(r => { const sel = regionFilter === r; return <button key={r} className="hb" onClick={() => setRegionFilter(sel ? null : r)} style={{ padding: "3px 10px", borderRadius: 3, fontSize: 10, cursor: "pointer", fontFamily: "inherit", background: sel ? text : "none", color: sel ? bg : textMuted, border: `1px solid ${sel ? text : border}`, transition: "all 0.15s" }}>{r}</button>; })}
+                </div>
+
+                {/* Filters — all sub-tab only */}
+                {projectsSubTab === "all" && (
+                  <div style={{ marginBottom: 20, display: "flex", flexDirection: "column", gap: 10 }}>
+                    <input placeholder="search projects..." value={search} onChange={e => setSearch(e.target.value)} style={inputStyle} />
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                      <select value={industryFilter || ""} onChange={e => setIndustryFilter(e.target.value || null)} style={{ ...inputStyle, maxWidth: 220, fontSize: 11, padding: "7px 10px" }}>
+                        <option value="">all industries</option>
+                        {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                      </select>
+                      <input placeholder="filter by location" value={locationFilter} onChange={e => setLocationFilter(e.target.value)} style={{ ...inputStyle, flex: 1, minWidth: 150, fontSize: 11, padding: "7px 10px" }} />
+                    </div>
+                    <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
+                      {["Design","Engineering","Marketing","Music","Video","Finance","AI/ML","Writing","Product"].map(s => { const sel = filterSkill === s; return <button key={s} className="hb" onClick={() => setFilterSkill(sel ? null : s)} style={{ padding: "3px 10px", borderRadius: 3, fontSize: 10, cursor: "pointer", fontFamily: "inherit", background: sel ? text : "none", color: sel ? bg : textMuted, border: `1px solid ${sel ? text : border}`, transition: "all 0.15s" }}>{s}</button>; })}
+                      {(filterSkill || industryFilter || locationFilter || search || regionFilter) && <button className="hb" onClick={clearExploreFilters} style={{ padding: "3px 10px", borderRadius: 3, fontSize: 10, cursor: "pointer", fontFamily: "inherit", background: "none", color: textMuted, border: `1px solid ${border}` }}>clear</button>}
+                    </div>
+                    {exploreFiltersClearedNotice && <div style={{ fontSize: 11, color: textMuted }}>Showing trending — filters cleared</div>}
+                  </div>
+                )}
+
+                {/* Project list */}
+                {loading ? <Spinner dark={dark} /> : (
+                  <>
+                    {projectsSubTab === "for-you" && ((profile?.skills || []).length === 0
+                      ? <div style={{ padding: "36px 0", color: textMuted, fontSize: 13 }}>Add skills to your profile to see matched projects. <button onClick={() => setAppScreen("profile")} style={{ background: "none", border: "none", color: text, cursor: "pointer", fontFamily: "inherit", fontSize: 13, textDecoration: "underline" }}>update profile →</button></div>
+                      : forYou.length === 0
+                        ? <div style={{ padding: "36px 0", color: textMuted, fontSize: 13 }}>No matches yet. <button className="hb" onClick={() => setProjectsSubTab("all")} style={{ background: "none", border: "none", color: text, cursor: "pointer", fontFamily: "inherit", fontSize: 13, textDecoration: "underline" }}>browse all →</button></div>
+                        : <div><div style={{ padding: "14px 0 2px", fontSize: 11, color: textMuted }}>{forYou.length} project{forYou.length !== 1 ? "s" : ""} matching your skills</div>{forYou.map(p => <PRow key={p.id} p={p} />)}</div>
+                    )}
+                    {projectsSubTab === "all" && (
+                      allP.length === 0
+                        ? <div style={{ padding: "24px 0" }}>
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8, gap: 8 }}>
+                              <div style={{ fontSize: 11, color: textMuted, letterSpacing: "1px" }}>Trending right now</div>
+                              <button className="hb" onClick={clearExploreFilters} style={{ background: "none", border: "none", color: text, cursor: "pointer", fontFamily: "inherit", fontSize: 11, textDecoration: "underline", padding: 0 }}>clear filters</button>
                             </div>
-                            {safeBio && <p style={{ fontSize: 11, color: textMuted, lineHeight: 1.6, marginBottom: 10 }}>{safeBio}{u.bio?.length > 80 ? "..." : ""}</p>}
-                            <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginBottom: 10 }}>
-                              {roleTags.map(s => <span key={s} style={{ fontSize: 10, padding: "2px 7px", borderRadius: 3, border: `1px solid ${border}`, color: textMuted }}>{s}</span>)}
+                            {trendingFallbackProjects.length > 0 ? trendingFallbackProjects.map(p => <PRow key={p.id} p={p} />) : <div style={{ fontSize: 12, color: textMuted }}>No projects found. <button onClick={openCreateProjectFlow} style={{ background: "none", border: "none", color: text, cursor: "pointer", fontFamily: "inherit", fontSize: 12, textDecoration: "underline", padding: 0 }}>create one →</button></div>}
+                          </div>
+                        : allP.map(p => <PRow key={p.id} p={p} />)
+                    )}
+                  </>
+                )}
+              </div>{/* end left column */}
+
+              {/* Right: sidebar */}
+              <div className="projects-right-sidebar" style={{ width: 260, flexShrink: 0, position: "sticky", top: 24, display: "flex", flexDirection: "column", gap: 28 }}>
+
+                {/* CTA */}
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  <button className="hb" onClick={openCreateProjectFlow} style={{ ...btnP, width: "100%", textAlign: "center" }}>+ post a project</button>
+                </div>
+
+                {/* Stats */}
+                <div style={{ border: `1px solid ${border}`, borderRadius: 10, overflow: "hidden" }}>
+                  {[["open now", projects.filter(p => (p.collaborators||0) < (p.max_collaborators||2)).length], ["total projects", projects.length], ["builders", users.length]].map(([l, v], i, arr) => (
+                    <div key={l} style={{ padding: "12px 16px", background: bg2, borderBottom: i < arr.length - 1 ? `1px solid ${border}` : "none", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <div style={{ fontSize: 11, color: textMuted }}>{l}</div>
+                      <div style={{ fontSize: 18, color: text, letterSpacing: "-0.5px" }}>{v}</div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Trending */}
+                {trendingProjects.length > 0 && (
+                  <div>
+                    <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px", marginBottom: 12 }}>TRENDING</div>
+                    <div style={{ border: `1px solid ${border}`, borderRadius: 10, overflow: "hidden" }}>
+                      {trendingProjects.map((p, i, arr) => (
+                        <div key={p.id} onClick={() => { setActiveProject(p); loadProjectData(p.id); }} style={{ padding: "10px 14px", background: bg2, borderBottom: i < arr.length - 1 ? `1px solid ${border}` : "none", cursor: "pointer", transition: "opacity 0.15s" }}
+                          onMouseEnter={e => e.currentTarget.style.opacity = "0.7"} onMouseLeave={e => e.currentTarget.style.opacity = "1"}>
+                          <div style={{ fontSize: 12, fontWeight: 500, color: text, marginBottom: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.title}</div>
+                          <div style={{ fontSize: 10, color: textMuted }}>{p.category} · {applications.filter(a => a.project_id === p.id).length} applicants</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Top Collaborators */}
+                {(() => {
+                  const topCollabs = users
+                    .filter(u => u.id !== authUser?.id && userRatings[u.id]?.count > 0)
+                    .map(u => ({
+                      ...u,
+                      avgRating: userRatings[u.id].sum / userRatings[u.id].count,
+                      reviewCount: userRatings[u.id].count,
+                      shipped: shippedCollabCount[u.id] || 0,
+                      score: (userRatings[u.id].sum / userRatings[u.id].count) * 0.6 + (shippedCollabCount[u.id] || 0) * 0.4,
+                    }))
+                    .sort((a, b) => b.score - a.score)
+                    .slice(0, 5);
+                  if (topCollabs.length === 0) return null;
+                  return (
+                    <div>
+                      <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px", marginBottom: 12 }}>TOP COLLABORATORS</div>
+                      <div style={{ border: `1px solid ${border}`, borderRadius: 10, overflow: "hidden" }}>
+                        {topCollabs.map((u, i, arr) => (
+                          <div key={u.id} onClick={() => setViewingProfile(u)} style={{ padding: "10px 14px", background: bg2, borderBottom: i < arr.length - 1 ? `1px solid ${border}` : "none", cursor: "pointer", display: "flex", gap: 10, alignItems: "center", transition: "opacity 0.15s" }}
+                            onMouseEnter={e => e.currentTarget.style.opacity = "0.7"} onMouseLeave={e => e.currentTarget.style.opacity = "1"}>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ fontSize: 12, fontWeight: 500, color: text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{u.name}</div>
+                              <div style={{ fontSize: 10, color: textMuted }}>{u.shipped} shipped · {u.reviewCount} review{u.reviewCount !== 1 ? "s" : ""}</div>
                             </div>
-                            <div style={{ display: "flex", gap: 12, fontSize: 10, color: textMuted }}>
-                              {u.projectCount > 0 && <span>{u.projectCount} project{u.projectCount !== 1 ? "s" : ""}</span>}
-                              {u.collabCount > 0 && <span>{u.collabCount} shipped</span>}
-                              {u.postCount > 0 && <span>{u.postCount} post{u.postCount !== 1 ? "s" : ""}</span>}
+                            <div style={{ flexShrink: 0, display: "flex", gap: 1, alignItems: "center" }}>
+                              {[1,2,3,4,5].map(n => (
+                                <span key={n} style={{ fontSize: 11, color: n <= Math.round(u.avgRating) ? text : textMuted, opacity: n <= Math.round(u.avgRating) ? 1 : 0.3 }}>+</span>
+                              ))}
                             </div>
                           </div>
-                        );
-                      })}
+                        ))}
+                      </div>
                     </div>
-                }
-              </div>
-            );
-          })()}
+                  );
+                })()}
+
+              </div>{/* end sidebar */}
+            </div>
+          )}
 
           {/* FEED TAB */}
           {exploreTab === "feed" && (() => {
