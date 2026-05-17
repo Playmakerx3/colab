@@ -5469,7 +5469,7 @@ function CoLab() {
                       const matchSkills = (proj.skills || []).filter(s => mySkillSet.has(s));
                       const accentColor = categoryAccent[proj.category] || "#6b7280";
                       return (
-                        <div key={item.id} style={{ padding: "18px 0 18px 12px", borderBottom: `1px solid ${border}`, borderLeft: `3px solid ${accentColor}`, position: "relative", marginLeft: -12 }}>
+                        <div key={item.id} style={{ padding: "18px 0", borderBottom: `1px solid ${border}`, position: "relative" }}>
                           {/* Reason label */}
                           {reason && <div style={{ fontSize: 9, color: textMuted, letterSpacing: "0.5px", marginBottom: 8, textTransform: "uppercase" }}>{reason}</div>}
                           <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
