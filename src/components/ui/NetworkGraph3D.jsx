@@ -539,6 +539,7 @@ export default function NetworkGraph3D({ users, applications, projects = [], aut
 
   const handleWheel = useCallback((e) => {
     e.preventDefault();
+    if (mode2DRef.current) return;
     lastInteractRef.current = Date.now();
     velocityRef.current = { vrX: 0, vrY: 0 };
     const canvas = canvasRef.current;
@@ -724,7 +725,7 @@ export default function NetworkGraph3D({ users, applications, projects = [], aut
         >{mode2D ? "switch to 3D" : "switch to 2D"}</button>
 
         <div style={{ fontSize: 8, color: dark ? "rgba(255,255,255,0.2)" : "rgba(0,0,0,0.22)", fontFamily: "monospace", lineHeight: 1.6, opacity: hintsVisible ? 1 : 0, transition: "opacity 1s ease" }}>
-          {mode2D ? "click nodes · scroll to zoom" : "drag to rotate · scroll to zoom"}
+          {mode2D ? "click nodes to explore" : "drag to rotate · scroll to zoom"}
         </div>
         </>}
       </div>
