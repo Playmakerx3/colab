@@ -13,7 +13,7 @@ const SKILL_CLUSTERS = {
     color: "#34d399",
     skills: ["Product","Marketing","Sales","Growth","SEO","Social Media","Finance","Fundraising","Business Development","Strategy","Operations","Project Management","Legal","Accounting","HR/Recruiting","Customer Success"],
   },
-  Making: {
+  Building: {
     color: "#fb923c",
     skills: ["Architecture","3D/CAD","Industrial Design","Hardware","Electrical Engineering","Mechanical Engineering","Woodworking","Fashion"],
   },

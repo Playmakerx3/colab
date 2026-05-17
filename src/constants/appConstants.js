@@ -9,7 +9,7 @@ export const SKILLS = [
   "Product", "Marketing", "Sales", "Growth", "SEO", "Social Media", "Branding",
   "Finance", "Fundraising", "Business Development", "Strategy", "Operations",
   "Project Management", "Legal", "Accounting", "HR/Recruiting", "Customer Success",
-  // Physical & Making
+  // Building
   "Architecture", "3D/CAD", "Industrial Design", "Hardware", "Electrical Engineering",
   "Mechanical Engineering", "Woodworking", "Fashion",
   // Research & Impact
@@ -17,7 +17,7 @@ export const SKILLS = [
 ];
 
 export const CATEGORIES = [
-  "Tech / Software", "Creative / Art", "Music", "Film / Video", "Physical / Hardware",
+  "Tech / Software", "Creative Arts", "Music", "Film / Video", "Building / Hardware",
   "Business / Startup", "Social Impact", "Research", "Other",
 ];
 

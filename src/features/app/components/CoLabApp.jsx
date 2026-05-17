@@ -108,8 +108,8 @@ const isFreshTimestamp = (timestamp, windowMs = 120000) => {
   return Date.now() - new Date(timestamp).getTime() < windowMs;
 };
 
-const normalizeCommunitySlug = (slug = "") => (slug === "making" ? "makers" : slug);
-const getCommunityDisplayName = (name = "") => (String(name).toLowerCase() === "making" ? "Makers" : name);
+const normalizeCommunitySlug = (slug = "") => (slug === "making" ? "builders" : slug);
+const getCommunityDisplayName = (name = "") => (String(name).toLowerCase() === "making" ? "Builders" : name);
 
 
 const normalizeApplicationStatus = (status) => {
@@ -3893,7 +3893,7 @@ function CoLab() {
                             <button onClick={() => setViewingProfile(u)} style={{ background: "none", border: "none", cursor: "pointer", padding: 0, textAlign: "left", display: "block", width: "100%" }}>
                               <div style={{ fontSize: 14, color: text, letterSpacing: "-0.3px", marginBottom: 2, fontFamily: "inherit" }}>{u.name}</div>
                               <div style={{ fontSize: 11, color: textMuted, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                                {u.role}{u.location ? ` · ${u.location}` : ""}
+                                {u.role}{u.location ? `, ${u.location}` : ""}
                               </div>
                             </button>
                           </div>
@@ -5484,10 +5484,10 @@ function CoLab() {
 
                     const categoryAccent = {
                       "Tech / Software": "#3b82f6",
-                      "Creative / Art": "#8b5cf6",
+                      "Creative Arts": "#8b5cf6",
                       "Music": "#ec4899",
                       "Film / Video": "#f97316",
-                      "Physical / Hardware": "#10b981",
+                      "Building / Hardware": "#10b981",
                       "Business / Startup": "#f59e0b",
                       "Social Impact": "#06b6d4",
                       "Research": "#6366f1",
