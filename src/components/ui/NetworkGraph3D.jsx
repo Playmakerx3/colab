@@ -455,9 +455,12 @@ export default function NetworkGraph3D({ users, applications, projects = [], aut
 
     lastSampleRef.current = { rotX: viewRef.current.rotX, rotY: viewRef.current.rotY, t: performance.now() };
 
-    if (e.button === 2 || mode2DRef.current) {
+    if (e.button === 2) {
       interactRef.current = { mode: "pan", startX: e.clientX, startY: e.clientY, originView: { ...viewRef.current }, panMoved: false };
       canvas.style.cursor = "grabbing";
+    } else if (mode2DRef.current) {
+      const hit = getHit(sx, sy);
+      interactRef.current = { mode: hit ? "click" : null, startX: e.clientX, startY: e.clientY, originView: null, panMoved: false };
     } else {
       const hit = getHit(sx, sy);
       if (hit) {
@@ -548,7 +551,7 @@ export default function NetworkGraph3D({ users, applications, projects = [], aut
     lastInteractRef.current = Date.now();
     velocityRef.current = { vrX: 0, vrY: 0 };
     if (e.touches.length === 1) {
-      const touchMode = mode2DRef.current ? "pan" : "rotate";
+      const touchMode = mode2DRef.current ? null : "rotate";
       interactRef.current = { mode: touchMode, startX: e.touches[0].clientX, startY: e.touches[0].clientY, originView: { ...viewRef.current }, panMoved: false };
       lastSampleRef.current = { rotX: viewRef.current.rotX, rotY: viewRef.current.rotY, t: performance.now() };
     } else if (e.touches.length === 2) {
@@ -721,7 +724,7 @@ export default function NetworkGraph3D({ users, applications, projects = [], aut
         >{mode2D ? "switch to 3D" : "switch to 2D"}</button>
 
         <div style={{ fontSize: 8, color: dark ? "rgba(255,255,255,0.2)" : "rgba(0,0,0,0.22)", fontFamily: "monospace", lineHeight: 1.6, opacity: hintsVisible ? 1 : 0, transition: "opacity 1s ease" }}>
-          {mode2D ? "drag to pan · scroll to zoom" : "drag to rotate · scroll to zoom"}
+          {mode2D ? "click nodes · scroll to zoom" : "drag to rotate · scroll to zoom"}
         </div>
         </>}
       </div>
