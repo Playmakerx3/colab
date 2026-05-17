@@ -316,7 +316,7 @@ export default function NetworkGraph3D({ users, applications, projects = [], aut
           const fontSize = Math.max(8, Math.round(Math.min(w, h) * 0.014 * pd * zoom));
           ctx.font = `${fontSize}px -apple-system, monospace`;
           ctx.textAlign = "center";
-          ctx.fillStyle = dark ? `rgba(${hexToRgb(color)},0.08)` : `rgba(${hexToRgb(color)},0.18)`;
+          ctx.fillStyle = dark ? `rgba(${hexToRgb(color)},0.12)` : `rgba(${hexToRgb(color)},0.55)`;
           ctx.fillText(name.toUpperCase(), sx, sy);
         });
       }
