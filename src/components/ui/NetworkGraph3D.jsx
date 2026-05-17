@@ -40,7 +40,7 @@ function hexToRgb(hex) {
   return `${parseInt(hex.slice(1,3),16)},${parseInt(hex.slice(3,5),16)},${parseInt(hex.slice(5,7),16)}`;
 }
 
-const MIN_ZOOM = 0.6;
+const MIN_ZOOM = 1;
 const MAX_ZOOM = 6;
 const FOV = 900;
 const IDLE_MS = 2500; // ms before auto-rotate kicks in
