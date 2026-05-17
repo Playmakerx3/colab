@@ -4776,40 +4776,9 @@ function CoLab() {
         </div>
       )}
       {showBannerEditor && <BannerEditor pixels={bannerPixels} onSave={saveBanner} onClose={() => setShowBannerEditor(false)} dark={dark} bg={bg} border={border} text={text} textMuted={textMuted} />}
-      <button onClick={() => setShowFeedbackModal(true)} style={{ position: "fixed", right: 24, bottom: 24, zIndex: 210, background: bg2, color: text, border: `1px solid ${border}`, borderRadius: 999, padding: "8px 12px", fontSize: 11, cursor: "pointer", fontFamily: "inherit", boxShadow: dark ? "0 12px 28px rgba(0,0,0,0.35)" : "0 12px 28px rgba(0,0,0,0.12)" }}>
+      <a href="https://docs.google.com/spreadsheets/d/1HNi4oWbk1S5Z97U0zIJPBGs4x9DUUPSfSdK50bUFdts/edit?usp=sharing" target="_blank" rel="noopener noreferrer" style={{ position: "fixed", right: 24, bottom: 24, zIndex: 210, background: bg2, color: text, border: `1px solid ${border}`, borderRadius: 999, padding: "8px 12px", fontSize: 11, cursor: "pointer", fontFamily: "inherit", boxShadow: dark ? "0 12px 28px rgba(0,0,0,0.35)" : "0 12px 28px rgba(0,0,0,0.12)", textDecoration: "none", display: "inline-block" }}>
         feedback ↗
-      </button>
-      {showFeedbackModal && (
-        <div onClick={() => !feedbackSubmitting && setShowFeedbackModal(false)} style={{ position: "fixed", inset: 0, background: dark ? "rgba(0,0,0,0.88)" : "rgba(220,220,220,0.82)", backdropFilter: "blur(10px)", zIndex: 260, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
-          <div onClick={(e) => e.stopPropagation()} style={{ background: bg, border: `1px solid ${border}`, borderRadius: 16, padding: 24, width: "100%", maxWidth: 460 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }}>
-              <div>
-                <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px", marginBottom: 6 }}>BETA FEEDBACK</div>
-                <div style={{ fontSize: 18, color: text, letterSpacing: "-0.5px" }}>Send feedback</div>
-              </div>
-              <button onClick={() => setShowFeedbackModal(false)} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontFamily: "inherit", fontSize: 16 }}>×</button>
-            </div>
-            <div style={{ marginBottom: 14 }}>
-              <label style={labelStyle}>Type</label>
-              <select value={feedbackType} onChange={(e) => setFeedbackType(e.target.value)} style={inputStyle}>
-                <option>Bug report</option>
-                <option>Feature request</option>
-                <option>General feedback</option>
-              </select>
-            </div>
-            <div style={{ marginBottom: 18 }}>
-              <label style={labelStyle}>Description</label>
-              <textarea value={feedbackMessage} onChange={(e) => setFeedbackMessage(e.target.value)} rows={6} placeholder="What happened, what you expected, or what you want to see." style={{ ...inputStyle, resize: "vertical", lineHeight: 1.6 }} />
-            </div>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
-              <div style={{ fontSize: 11, color: textMuted }}>Stored in the `feedback` table with your user id.</div>
-              <button onClick={submitFeedback} disabled={feedbackSubmitting || !feedbackMessage.trim()} style={{ ...btnP, opacity: feedbackSubmitting || !feedbackMessage.trim() ? 0.6 : 1, cursor: feedbackSubmitting || !feedbackMessage.trim() ? "default" : "pointer" }}>
-                {feedbackSubmitting ? "sending..." : "submit"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      </a>
 
       {/* MATCH MODAL */}
       {discoverMatch && (
