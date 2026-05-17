@@ -2,23 +2,23 @@ import React, { useRef, useMemo, useEffect, useState, useCallback } from "react"
 
 const SKILL_CLUSTERS = {
   Creative: {
-    color: "#a78bfa",
+    color: "#c026d3",
     skills: ["Design","Illustration","Motion Design","Animation","Photography","Video","Music","Podcast","Writing","Copywriting","Content Strategy","Journalism","Branding"],
   },
   Tech: {
-    color: "#60a5fa",
+    color: "#2563eb",
     skills: ["Engineering","Frontend","Backend","Mobile Dev","DevOps","Security","AI/ML","Data","Blockchain","AR/VR","Game Dev","Robotics","Data Analysis"],
   },
   Business: {
-    color: "#34d399",
+    color: "#16a34a",
     skills: ["Product","Marketing","Sales","Growth","SEO","Social Media","Finance","Fundraising","Business Development","Strategy","Operations","Project Management","Legal","Accounting","HR/Recruiting","Customer Success"],
   },
   Building: {
-    color: "#fb923c",
+    color: "#ea580c",
     skills: ["Architecture","3D/CAD","Industrial Design","Hardware","Electrical Engineering","Mechanical Engineering","Woodworking","Fashion"],
   },
   Research: {
-    color: "#f472b6",
+    color: "#dc2626",
     skills: ["Research","Healthcare","Education","Policy","Community"],
   },
 };
