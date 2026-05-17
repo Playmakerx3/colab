@@ -65,6 +65,7 @@ export default function NetworkGraph3D({ users, applications, projects = [], aut
   const [hintsVisible, setHintsVisible] = useState(true);
   const [filterCluster, setFilterCluster] = useState(null); // skill cluster filter
   const [searchQuery, setSearchQuery] = useState("");
+  const [panelCollapsed, setPanelCollapsed] = useState(false);
 
   useEffect(() => { const t = setTimeout(() => setHintsVisible(false), 4000); return () => clearTimeout(t); }, []);
 
@@ -633,10 +634,19 @@ export default function NetworkGraph3D({ users, applications, projects = [], aut
         background: panelBg,
         backdropFilter: "blur(10px)",
         border: `1px solid ${panelBorder}`,
-        borderRadius: 8, padding: "10px 12px",
+        borderRadius: 8, padding: panelCollapsed ? "6px 8px" : "10px 12px",
         display: "flex", flexDirection: "column", gap: 5,
-        minWidth: 148,
+        minWidth: panelCollapsed ? 0 : 148,
+        transition: "padding 0.15s",
       }}>
+        {/* Collapse toggle */}
+        <button
+          onClick={() => setPanelCollapsed(v => !v)}
+          style={{ alignSelf: "flex-end", background: "none", border: "none", cursor: "pointer", padding: 0, lineHeight: 1, color: dark ? "rgba(255,255,255,0.35)" : "rgba(0,0,0,0.3)", fontSize: 11, fontFamily: "monospace" }}
+          title={panelCollapsed ? "expand" : "collapse"}
+        >{panelCollapsed ? "▸" : "▾"}</button>
+
+        {!panelCollapsed && <>
         {/* Search */}
         <input
           value={searchQuery}
@@ -702,6 +712,7 @@ export default function NetworkGraph3D({ users, applications, projects = [], aut
         <div style={{ fontSize: 8, color: dark ? "rgba(255,255,255,0.2)" : "rgba(0,0,0,0.22)", fontFamily: "monospace", lineHeight: 1.6, opacity: hintsVisible ? 1 : 0, transition: "opacity 1s ease" }}>
           drag to rotate · scroll to zoom
         </div>
+        </>}
       </div>
 
       {/* Stats overlay — top right */}
