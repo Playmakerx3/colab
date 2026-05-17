@@ -306,20 +306,6 @@ export default function NetworkGraph3D({ users, applications, projects = [], aut
       ctx.fillStyle = dark ? "#0d0d0d" : "#ffffff";
       ctx.fillRect(0, 0, w, h);
 
-      // ── Subtle dot grid (projected for 3D depth feel)
-      const gridStep = 48;
-      const gridCols = Math.ceil(w / gridStep) + 2;
-      const gridRows = Math.ceil(h / gridStep) + 2;
-      ctx.fillStyle = dark ? "rgba(255,255,255,0.045)" : "rgba(0,0,0,0.12)";
-      for (let r = -1; r < gridRows; r++) {
-        for (let c = -1; c < gridCols; c++) {
-          const wx = (c * gridStep) - cx;
-          const wy = (r * gridStep) - cy;
-          const { sx, sy, pd } = project(wx, wy);
-          const dotR = Math.max(0.5, 1 * pd);
-          ctx.beginPath(); ctx.arc(sx, sy, dotR, 0, Math.PI * 2); ctx.fill();
-        }
-      }
 
       // ── Cluster zone labels (very faint, only when not filtered)
       if (!hasFilter && !hasSearch) {
