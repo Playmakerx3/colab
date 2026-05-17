@@ -7537,13 +7537,16 @@ function CoLab() {
             if (theirApps.filter(a => normalizeApplicationStatus(a.status) === "accepted").length > 0) earned.push({ ...TROPHY_DEFS[2], sublabel: "First collab" });
             if (earned.length === 0) return null;
             return (
-              <div style={{ display: "flex", gap: 14, flexWrap: "wrap", alignItems: "flex-start", marginBottom: 24 }}>
-                {earned.map((t, i) => (
-                  <div key={i} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
-                    {renderPixelTrophy(t.pattern, t.color, 2)}
-                    <div style={{ fontSize: 8, color: textMuted, textAlign: "center", letterSpacing: "0.4px" }}>{t.label}</div>
-                  </div>
-                ))}
+              <div style={{ marginBottom: 24 }}>
+                <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px", marginBottom: 10 }}>TROPHY CASE</div>
+                <div style={{ display: "flex", gap: 14, flexWrap: "wrap", alignItems: "flex-start" }}>
+                  {earned.map((t, i) => (
+                    <div key={i} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
+                      {renderPixelTrophy(t.pattern, t.color, 2)}
+                      <div style={{ fontSize: 8, color: textMuted, textAlign: "center", letterSpacing: "0.4px" }}>{t.label}</div>
+                    </div>
+                  ))}
+                </div>
               </div>
             );
           })()}
@@ -7677,13 +7680,16 @@ function CoLab() {
                     if (myApps.filter(a => normalizeApplicationStatus(a.status) === "accepted").length > 0) earned.push({ ...TROPHY_DEFS[2], sublabel: "First collab" });
                     if (earned.length === 0) return null;
                     return (
-                      <div style={{ display: "flex", gap: 14, flexWrap: "wrap", alignItems: "flex-start" }}>
-                        {earned.map((t, i) => (
-                          <div key={i} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
-                            {renderPixelTrophy(t.pattern, t.color, 2)}
-                            <div style={{ fontSize: 8, color: textMuted, textAlign: "center", letterSpacing: "0.4px" }}>{t.label}</div>
-                          </div>
-                        ))}
+                      <div>
+                        <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px", marginBottom: 10 }}>TROPHY CASE</div>
+                        <div style={{ display: "flex", gap: 14, flexWrap: "wrap", alignItems: "flex-start" }}>
+                          {earned.map((t, i) => (
+                            <div key={i} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
+                              {renderPixelTrophy(t.pattern, t.color, 2)}
+                              <div style={{ fontSize: 8, color: textMuted, textAlign: "center", letterSpacing: "0.4px" }}>{t.label}</div>
+                            </div>
+                          ))}
+                        </div>
                       </div>
                     );
                   })()}
