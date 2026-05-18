@@ -7694,7 +7694,10 @@ function CoLab() {
                     if (earned.length === 0) return null;
                     return (
                       <div>
-                        <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px", marginBottom: 10 }}>TROPHY CASE</div>
+                        <button className="hb" onClick={() => setProfileTrophyOpen(true)} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 6, marginBottom: 10 }}>
+                          <span style={{ fontSize: 10, color: textMuted, letterSpacing: "2px" }}>TROPHY CASE</span>
+                          <span style={{ fontSize: 9, color: textMuted }}>▾</span>
+                        </button>
                         <div style={{ display: "flex", gap: 14, flexWrap: "wrap", alignItems: "flex-start" }}>
                           {earned.map((t, i) => (
                             <div key={i} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
@@ -7703,6 +7706,28 @@ function CoLab() {
                             </div>
                           ))}
                         </div>
+                        {profileTrophyOpen && (
+                          <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", zIndex: 300, display: "flex", alignItems: "center", justifyContent: "center" }} onClick={() => setProfileTrophyOpen(false)}>
+                            <div style={{ background: bg, border: `1px solid ${border}`, borderRadius: 14, padding: "28px 28px 24px", maxWidth: 420, width: "90%", display: "flex", flexDirection: "column", gap: 20 }} onClick={e => e.stopPropagation()}>
+                              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                                <div style={{ fontSize: 10, color: textMuted, letterSpacing: "2px" }}>TROPHY CASE</div>
+                                <button onClick={() => setProfileTrophyOpen(false)} style={{ background: "none", border: "none", cursor: "pointer", color: textMuted, fontSize: 16, lineHeight: 1, padding: 0, fontFamily: "inherit" }}>×</button>
+                              </div>
+                              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
+                                {TROPHY_DEFS.map(t => {
+                                  const isEarned = earned.some(e => e.id === t.id);
+                                  return (
+                                    <div key={t.id} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6, filter: isEarned ? "none" : "blur(3px)", opacity: isEarned ? 1 : 0.4, transition: "all 0.2s" }}>
+                                      {renderPixelTrophy(t.pattern, t.color, 3)}
+                                      <div style={{ fontSize: 9, color: text, textAlign: "center", letterSpacing: "0.4px", fontWeight: isEarned ? 500 : 400 }}>{t.label}</div>
+                                      <div style={{ fontSize: 8, color: textMuted, textAlign: "center", lineHeight: 1.4 }}>{t.desc}</div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     );
                   })()}
