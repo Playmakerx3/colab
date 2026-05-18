@@ -814,7 +814,7 @@ function PostCard({ post, ctx }) {
           </div>
         </div>
       ) : (
-        <div style={{ fontSize: 14, color: text, lineHeight: 1.75, marginBottom: 14, paddingLeft: 52, whiteSpace: "pre-wrap", wordBreak: "break-word", fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" }}>
+        <div style={{ fontSize: 14, color: text, lineHeight: 1.75, marginBottom: 14, paddingLeft: 52, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
           {linkifyText(post.content, text, (username) => { const u = users.find(u => u.username === username); if (u) setViewingProfile(u); })}{post.edited_at && <span style={{ fontSize: 10, color: textMuted, marginLeft: 8 }}>(edited)</span>}
         </div>
       )}
@@ -954,7 +954,7 @@ function PostCard({ post, ctx }) {
                         <button onClick={() => cUser && setViewingProfile(cUser)} style={{ background: "none", border: "none", cursor: "pointer", padding: 0, fontSize: 11, fontWeight: 500, color: text, fontFamily: "inherit" }}>{c.user_name}</button>
                         {isMyComment && <button className="hb" onClick={() => handleDeleteComment(c.id)} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontSize: 10, fontFamily: "inherit", opacity: 0.6 }}>×</button>}
                       </div>
-                      <div style={{ fontSize: 13, color: textMuted, lineHeight: 1.6, fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" }}>{c.content}</div>
+                      <div style={{ fontSize: 13, color: textMuted, lineHeight: 1.6 }}>{c.content}</div>
                     </div>
                   </div>
                 );
@@ -1474,7 +1474,6 @@ function CoLab() {
   const textMuted = dark ? "#555555" : "#aaaaaa";
   const textSub = dark ? "#2a2a2a" : "#d0d0d0";
 
-  const contentFont = "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
   const inputStyle = { background: bg2, border: `1px solid ${border}`, borderRadius: 8, padding: "10px 14px", color: text, fontSize: 13, width: "100%", fontFamily: "inherit", outline: "none" };
   const labelStyle = { fontSize: 10, fontWeight: 500, color: textMuted, display: "block", marginBottom: 6, letterSpacing: "0.8px" };
   const btnP = { background: text, color: bg, border: "none", borderRadius: 8, padding: "10px 20px", fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" };
@@ -6125,7 +6124,7 @@ function CoLab() {
                           </div>
                         </div>
                       ) : activeThread.content ? (
-                        <div style={{ fontSize: 13, color: text, lineHeight: 1.75, whiteSpace: "pre-wrap", marginBottom: 24, padding: "16px", background: bg2, borderRadius: 8, border: `1px solid ${border}`, fontFamily: contentFont }}>
+                        <div style={{ fontSize: 13, color: text, lineHeight: 1.75, whiteSpace: "pre-wrap", marginBottom: 24, padding: "16px", background: bg2, borderRadius: 8, border: `1px solid ${border}` }}>
                           {activeThread.content}
                         </div>
                       ) : null}
@@ -6178,7 +6177,7 @@ function CoLab() {
                             <button className="hb" onClick={() => openReportModal({ contentType: "comment", contentId: c.id, label: "comment" })}
                               style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontSize: 10, fontFamily: "inherit", padding: 0, textDecoration: "underline", marginLeft: 2 }}>report</button>
                           </div>
-                          <div style={{ fontSize: 13, color: text, lineHeight: 1.65, fontFamily: contentFont }}>{c.content}</div>
+                          <div style={{ fontSize: 13, color: text, lineHeight: 1.65 }}>{c.content}</div>
                         </div>
                       </div>
                     ))}
@@ -7527,7 +7526,7 @@ function CoLab() {
               )}
             </div>
           </div>
-          {viewFullProfile.bio && <p style={{ fontSize: 13, color: textMuted, lineHeight: 1.8, marginBottom: 12, maxWidth: 560, fontFamily: contentFont }}>{viewFullProfile.bio}</p>}
+          {viewFullProfile.bio && <p style={{ fontSize: 13, color: textMuted, lineHeight: 1.8, marginBottom: 12, maxWidth: 560 }}>{viewFullProfile.bio}</p>}
           {(() => {
             const mvps = mvpAwards.filter(m => m.mvp_user_id === viewFullProfile.id);
             const theirApps = applications.filter(a => a.applicant_id === viewFullProfile.id);
@@ -7670,7 +7669,7 @@ function CoLab() {
                       <span style={{ color: text, fontWeight: 500 }}>{following.length}</span> following
                     </button>
                   </div>
-                  {profile?.bio && <p style={{ fontSize: 13, color: textMuted, lineHeight: 1.8, margin: "0 0 10px", maxWidth: 560, fontFamily: contentFont }}>{profile.bio}</p>}
+                  {profile?.bio && <p style={{ fontSize: 13, color: textMuted, lineHeight: 1.8, margin: "0 0 10px", maxWidth: 560 }}>{profile.bio}</p>}
                   {(() => {
                     const mvps = mvpAwards.filter(m => m.mvp_user_id === authUser?.id);
                     const myApps = applications.filter(a => a.applicant_id === authUser?.id);
