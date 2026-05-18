@@ -1484,21 +1484,34 @@ function CoLab() {
   // ── TROPHY SYSTEM ──
   const TROPHY_DEFS = [
     {
-      id: "mvp", label: "MVP", desc: "Named project MVP", color: "#f59e0b",
+      id: "mvp", label: "MVP", desc: "Named project MVP by your team", color: "#f59e0b",
       pattern: [[0,1,1,1,1,1,1,0],[1,1,0,0,0,0,1,1],[1,1,0,0,0,0,1,1],[0,1,1,1,1,1,1,0],[0,0,1,1,1,1,0,0],[0,0,0,1,1,0,0,0],[0,0,1,1,1,1,0,0],[0,1,1,1,1,1,1,0]],
     },
     {
-      id: "builder", label: "Builder", desc: "Posted your first project", color: "#818cf8",
+      id: "builder", label: "Builder", desc: "Posted your first project", color: "#7c3aed",
       pattern: [[0,0,0,1,1,0,0,0],[0,0,1,1,1,1,0,0],[0,0,1,0,0,1,0,0],[0,1,1,1,1,1,1,0],[0,1,1,1,1,1,1,0],[0,0,1,0,0,1,0,0],[0,0,1,0,0,1,0,0],[0,1,1,1,1,1,1,0]],
     },
     {
-      id: "collab", label: "Collaborator", desc: "Accepted into your first project", color: "#34d399",
+      id: "collab", label: "Collaborator", desc: "Accepted into your first project", color: "#059669",
       pattern: [[0,1,1,0,0,1,1,0],[1,1,1,0,0,1,1,1],[0,1,1,0,0,1,1,0],[0,0,0,0,0,0,0,0],[0,1,1,1,1,1,1,0],[1,1,1,1,1,1,1,1],[1,1,0,0,0,0,1,1],[0,0,0,0,0,0,0,0]],
     },
   ];
-  const renderPixelTrophy = (pattern, color, size = 4) => (
-    <div style={{ display: "grid", gridTemplateColumns: `repeat(8, ${size}px)`, gap: 0 }}>
-      {pattern.flat().map((v, i) => <div key={i} style={{ width: size, height: size, background: v ? color : "transparent" }} />)}
+  const [trophyTooltip, setTrophyTooltip] = useState(null);
+  const renderPixelTrophy = (pattern, color, size = 4, trophy = null) => (
+    <div
+      style={{ position: "relative", display: "inline-block" }}
+      onMouseEnter={trophy ? () => setTrophyTooltip(trophy.id) : undefined}
+      onMouseLeave={trophy ? () => setTrophyTooltip(null) : undefined}
+    >
+      <div style={{ display: "grid", gridTemplateColumns: `repeat(8, ${size}px)`, gap: 0 }}>
+        {pattern.flat().map((v, i) => <div key={i} style={{ width: size, height: size, background: v ? color : "transparent" }} />)}
+      </div>
+      {trophy && trophyTooltip === trophy.id && (
+        <div style={{ position: "absolute", bottom: "100%", left: "50%", transform: "translateX(-50%)", marginBottom: 6, background: dark ? "rgba(20,20,20,0.95)" : "rgba(255,255,255,0.97)", border: `1px solid ${border}`, borderRadius: 6, padding: "5px 9px", whiteSpace: "nowrap", fontSize: 10, color: text, pointerEvents: "none", zIndex: 100, boxShadow: "0 2px 8px rgba(0,0,0,0.15)" }}>
+          <div style={{ fontWeight: 500, marginBottom: 1 }}>{trophy.label}</div>
+          <div style={{ color: textMuted }}>{trophy.desc}</div>
+        </div>
+      )}
     </div>
   );
 
@@ -7542,7 +7555,7 @@ function CoLab() {
                 <div style={{ display: "flex", gap: 14, flexWrap: "wrap", alignItems: "flex-start" }}>
                   {earned.map((t, i) => (
                     <div key={i} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
-                      {renderPixelTrophy(t.pattern, t.color, 2)}
+                      {renderPixelTrophy(t.pattern, t.color, 2, t)}
                       <div style={{ fontSize: 8, color: textMuted, textAlign: "center", letterSpacing: "0.4px" }}>{t.label}</div>
                     </div>
                   ))}
@@ -7685,7 +7698,7 @@ function CoLab() {
                         <div style={{ display: "flex", gap: 14, flexWrap: "wrap", alignItems: "flex-start" }}>
                           {earned.map((t, i) => (
                             <div key={i} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
-                              {renderPixelTrophy(t.pattern, t.color, 2)}
+                              {renderPixelTrophy(t.pattern, t.color, 2, t)}
                               <div style={{ fontSize: 8, color: textMuted, textAlign: "center", letterSpacing: "0.4px" }}>{t.label}</div>
                             </div>
                           ))}
