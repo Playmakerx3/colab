@@ -30,7 +30,7 @@ import PixelBannerDisplay from "../../../components/ui/PixelBannerDisplay";
 import NetworkGraph3D from "../../../components/ui/NetworkGraph3D";
 import { useAuthBootstrap } from "../../../hooks/useAuthBootstrap";
 import { signIn, signOut, signUp, signInWithGoogle } from "../../../services/authService";
-import { useGoogleDrivePicker } from "../../../hooks/useGoogleDrivePicker";
+import { useGoogleDrivePicker, getDriveEmbedUrl, getDriveEditUrl } from "../../../hooks/useGoogleDrivePicker";
 import { useProfileState } from "../../profile/hooks/useProfileState";
 import { useAppDataBootstrap } from "../hooks/useAppDataBootstrap";
 import { fetchCommunityPosts, fetchThreadComments, fetchTopCommunityPosts, fetchAllCommunityTrending } from "../services/appDataBootstrapService";
@@ -3472,7 +3472,8 @@ function CoLab() {
     openDm,
   });
 
-  const { openPicker: openDrivePicker } = useGoogleDrivePicker();
+  const { openPicker: openDrivePicker, createSharedDoc, createSharedSheet } = useGoogleDrivePicker();
+  const [driveEmbedFile, setDriveEmbedFile] = useState(null); // { file_name, file_url, file_type }
 
   const handleCreatePost = async () => {
     if (!newPostContent.trim()) return;
@@ -7181,10 +7182,20 @@ function CoLab() {
                       setTimeout(() => { setFileUploadLoading(false); setFileUploadProgress(0); }, 240);
                     }} />
                   </label>
-                  {/* Google Drive link button */}
-                  <button
-                    className="hb"
-                    onClick={() => openDrivePicker(async (driveFile) => {
+                  {/* Google Drive buttons */}
+                  {(() => {
+                    const driveBtn = { display: "inline-flex", alignItems: "center", gap: 7, background: "none", border: `1px solid ${border}`, borderRadius: 8, padding: "8px 14px", fontSize: 12, color: text, cursor: "pointer", fontFamily: "inherit" };
+                    const DriveIcon = () => (
+                      <svg width="14" height="12" viewBox="0 0 87.3 78" fill="none">
+                        <path d="M6.6 66.85l3.85 6.65c.8 1.4 1.95 2.5 3.3 3.3l13.75-23.8H0c0 1.55.4 3.1 1.2 4.5z" fill="#0066DA"/>
+                        <path d="M43.65 25L29.9 1.2C28.55 2 27.4 3.1 26.6 4.5L1.2 49.5c-.8 1.4-1.2 2.95-1.2 4.5h27.5z" fill="#00AC47"/>
+                        <path d="M73.55 76.8c1.35-.8 2.5-1.9 3.3-3.3l1.6-2.75 7.65-13.25c.8-1.4 1.2-2.95 1.2-4.5H60.1l5.85 11.5z" fill="#EA4335"/>
+                        <path d="M43.65 25L57.4 1.2C56.05.4 54.5 0 52.9 0H34.4c-1.6 0-3.1.45-4.5 1.2z" fill="#00832D"/>
+                        <path d="M60.1 53H27.5L13.75 76.8c1.35.8 2.9 1.2 4.5 1.2h50.8c1.6 0 3.1-.45 4.5-1.2z" fill="#2684FC"/>
+                        <path d="M73.4 26.5l-12.8-22.2c-.8-1.4-1.95-2.5-3.3-3.3L43.65 25l16.45 28H87.3c0-1.55-.4-3.1-1.2-4.5z" fill="#FFBA00"/>
+                      </svg>
+                    );
+                    const saveDriveFile = async (driveFile) => {
                       const { data } = await supabase.from("project_files").insert({
                         project_id:    activeProject.id,
                         uploader_id:   authUser.id,
@@ -7196,21 +7207,36 @@ function CoLab() {
                       }).select().single();
                       if (data) {
                         setProjectFiles((prev) => [data, ...prev.filter((f) => f.id !== data.id)]);
-                        showToast("Drive file linked.");
+                        showToast(`"${driveFile.name}" linked to project.`);
+                        setDriveEmbedFile(data);
                       }
-                    })}
-                    style={{ display: "inline-flex", alignItems: "center", gap: 8, background: "none", border: `1px solid ${border}`, borderRadius: 8, padding: "8px 14px", fontSize: 12, color: text, cursor: "pointer", fontFamily: "inherit" }}
-                  >
-                    <svg width="14" height="14" viewBox="0 0 87.3 78" fill="none">
-                      <path d="M6.6 66.85l3.85 6.65c.8 1.4 1.95 2.5 3.3 3.3l13.75-23.8H0c0 1.55.4 3.1 1.2 4.5z" fill="#0066DA"/>
-                      <path d="M43.65 25L29.9 1.2C28.55 2 27.4 3.1 26.6 4.5L1.2 49.5c-.8 1.4-1.2 2.95-1.2 4.5h27.5z" fill="#00AC47"/>
-                      <path d="M73.55 76.8c1.35-.8 2.5-1.9 3.3-3.3l1.6-2.75 7.65-13.25c.8-1.4 1.2-2.95 1.2-4.5H60.1l5.85 11.5z" fill="#EA4335"/>
-                      <path d="M43.65 25L57.4 1.2C56.05.4 54.5 0 52.9 0H34.4c-1.6 0-3.1.45-4.5 1.2z" fill="#00832D"/>
-                      <path d="M60.1 53H27.5L13.75 76.8c1.35.8 2.9 1.2 4.5 1.2h50.8c1.6 0 3.1-.45 4.5-1.2z" fill="#2684FC"/>
-                      <path d="M73.4 26.5l-12.8-22.2c-.8-1.4-1.95-2.5-3.3-3.3L43.65 25l16.45 28H87.3c0-1.55-.4-3.1-1.2-4.5z" fill="#FFBA00"/>
-                    </svg>
-                    Link from Drive
-                  </button>
+                    };
+                    return (
+                      <>
+                        <button className="hb" onClick={() => openDrivePicker(saveDriveFile)} style={driveBtn}>
+                          <DriveIcon /> Link from Drive
+                        </button>
+                        <button className="hb" onClick={async () => {
+                          try {
+                            showToast("Creating shared Doc…");
+                            const doc = await createSharedDoc(`${activeProject.title || "Project"} — Doc`);
+                            await saveDriveFile(doc);
+                          } catch (e) { showToast("Could not create Doc. Make sure Drive access is granted."); }
+                        }} style={driveBtn}>
+                          <DriveIcon /> New shared Doc
+                        </button>
+                        <button className="hb" onClick={async () => {
+                          try {
+                            showToast("Creating shared Sheet…");
+                            const sheet = await createSharedSheet(`${activeProject.title || "Project"} — Sheet`);
+                            await saveDriveFile(sheet);
+                          } catch (e) { showToast("Could not create Sheet. Make sure Drive access is granted."); }
+                        }} style={driveBtn}>
+                          <DriveIcon /> New shared Sheet
+                        </button>
+                      </>
+                    );
+                  })()}
                   </div>
                   {fileUploadLoading && <div style={{ fontSize: 11, color: textMuted, marginTop: 10 }}>uploading... {fileUploadProgress}%</div>}
                 </div>
@@ -7235,8 +7261,11 @@ function CoLab() {
                             </div>
                             )}
                             <div style={{ flex: 1, minWidth: 0 }}>
-                              <div style={{ fontSize: 13, color: text, marginBottom: 2 }}>{file.file_name}</div>
-                              <div style={{ fontSize: 10, color: textMuted }}>{file.uploader_name || "Unknown"} · {new Date(file.created_at).toLocaleDateString()}{file.file_size > 0 ? ` · ${formatFileSize(file.file_size)}` : ""}{file.file_type === "drive-link" ? " · Google Drive" : ""}</div>
+                              <div
+                                style={{ fontSize: 13, color: text, marginBottom: 2, cursor: file.file_type === "drive-link" ? "pointer" : "default", textDecoration: file.file_type === "drive-link" ? "underline" : "none" }}
+                                onClick={() => file.file_type === "drive-link" && setDriveEmbedFile(file)}
+                              >{file.file_name}</div>
+                              <div style={{ fontSize: 10, color: textMuted }}>{file.uploader_name || "Unknown"} · {new Date(file.created_at).toLocaleDateString()}{file.file_size > 0 ? ` · ${formatFileSize(file.file_size)}` : ""}{file.file_type === "drive-link" ? " · Google Drive · click to view" : ""}</div>
                             </div>
                             <a href={file.file_url} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: text, textDecoration: "underline", flexShrink: 0 }}>
                               {file.file_type === "drive-link" ? "open ↗" : "download"}
@@ -8458,6 +8487,49 @@ function CoLab() {
                 </button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Google Drive Embed Panel ── */}
+      {driveEmbedFile && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 200, display: "flex" }}>
+          {/* backdrop */}
+          <div onClick={() => setDriveEmbedFile(null)} style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.55)", backdropFilter: "blur(4px)" }} />
+          {/* panel */}
+          <div style={{ position: "relative", marginLeft: "auto", width: "min(900px, 96vw)", height: "100%", background: bg, display: "flex", flexDirection: "column", boxShadow: "-8px 0 40px rgba(0,0,0,0.4)" }}>
+            {/* header */}
+            <div style={{ padding: "14px 20px", borderBottom: `1px solid ${border}`, display: "flex", alignItems: "center", gap: 12, flexShrink: 0 }}>
+              <svg width="16" height="14" viewBox="0 0 87.3 78" fill="none" style={{ flexShrink: 0 }}>
+                <path d="M6.6 66.85l3.85 6.65c.8 1.4 1.95 2.5 3.3 3.3l13.75-23.8H0c0 1.55.4 3.1 1.2 4.5z" fill="#0066DA"/>
+                <path d="M43.65 25L29.9 1.2C28.55 2 27.4 3.1 26.6 4.5L1.2 49.5c-.8 1.4-1.2 2.95-1.2 4.5h27.5z" fill="#00AC47"/>
+                <path d="M73.55 76.8c1.35-.8 2.5-1.9 3.3-3.3l1.6-2.75 7.65-13.25c.8-1.4 1.2-2.95 1.2-4.5H60.1l5.85 11.5z" fill="#EA4335"/>
+                <path d="M43.65 25L57.4 1.2C56.05.4 54.5 0 52.9 0H34.4c-1.6 0-3.1.45-4.5 1.2z" fill="#00832D"/>
+                <path d="M60.1 53H27.5L13.75 76.8c1.35.8 2.9 1.2 4.5 1.2h50.8c1.6 0 3.1-.45 4.5-1.2z" fill="#2684FC"/>
+                <path d="M73.4 26.5l-12.8-22.2c-.8-1.4-1.95-2.5-3.3-3.3L43.65 25l16.45 28H87.3c0-1.55-.4-3.1-1.2-4.5z" fill="#FFBA00"/>
+              </svg>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 13, fontWeight: 500, color: text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{driveEmbedFile.file_name}</div>
+                <div style={{ fontSize: 10, color: textMuted }}>Google Drive · preview below · edits happen in Drive</div>
+              </div>
+              <a
+                href={getDriveEditUrl(driveEmbedFile.file_url)}
+                target="_blank"
+                rel="noreferrer"
+                style={{ fontSize: 12, background: text, color: bg, border: "none", borderRadius: 7, padding: "7px 16px", cursor: "pointer", fontFamily: "inherit", textDecoration: "none", flexShrink: 0 }}
+              >
+                Open & edit in Drive ↗
+              </a>
+              <button onClick={() => setDriveEmbedFile(null)} style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontSize: 20, lineHeight: 1, flexShrink: 0, fontFamily: "inherit" }}>×</button>
+            </div>
+            {/* iframe */}
+            <iframe
+              key={driveEmbedFile.id}
+              src={getDriveEmbedUrl(driveEmbedFile.file_url)}
+              style={{ flex: 1, border: "none", width: "100%" }}
+              allow="autoplay"
+              title={driveEmbedFile.file_name}
+            />
           </div>
         </div>
       )}
