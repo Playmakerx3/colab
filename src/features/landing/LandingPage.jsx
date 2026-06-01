@@ -109,7 +109,7 @@ export default function LandingPage({ dark, setDark, onLogin, onSignup, supabase
               Log in
             </button>
             <button className="hb" onClick={onLogin} style={{ background: heroText, color: heroBg, border: "none", borderRadius: 8, padding: "8px 18px", fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}>
-              Get started
+              login
             </button>
           </div>
         </div>
