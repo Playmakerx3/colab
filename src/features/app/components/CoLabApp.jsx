@@ -29,7 +29,8 @@ import Spinner from "../../../components/ui/Spinner";
 import PixelBannerDisplay from "../../../components/ui/PixelBannerDisplay";
 import NetworkGraph3D from "../../../components/ui/NetworkGraph3D";
 import { useAuthBootstrap } from "../../../hooks/useAuthBootstrap";
-import { signIn, signOut, signUp } from "../../../services/authService";
+import { signIn, signOut, signUp, signInWithGoogle } from "../../../services/authService";
+import { useGoogleDrivePicker } from "../../../hooks/useGoogleDrivePicker";
 import { useProfileState } from "../../profile/hooks/useProfileState";
 import { useAppDataBootstrap } from "../hooks/useAppDataBootstrap";
 import { fetchCommunityPosts, fetchThreadComments, fetchTopCommunityPosts, fetchAllCommunityTrending } from "../services/appDataBootstrapService";
@@ -3471,6 +3472,8 @@ function CoLab() {
     openDm,
   });
 
+  const { openPicker: openDrivePicker } = useGoogleDrivePicker();
+
   const handleCreatePost = async () => {
     if (!newPostContent.trim()) return;
     const proj = myProjects.find(p => p.id === newPostProject);
@@ -4328,6 +4331,25 @@ function CoLab() {
               <button className="hb" onClick={authSubMode === "signup" ? handleSignUp : handleLogin}
                 style={{ ...authBtnP, marginBottom: 16, opacity: authSubMode === "signup" && !agreedToTerms ? 0.45 : 1 }}>
                 {authSubMode === "signup" ? "Create account →" : "Log in →"}
+              </button>
+              {/* ── Google OAuth ── */}
+              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
+                <div style={{ flex: 1, height: 1, background: "rgba(255,255,255,0.1)" }} />
+                <span style={{ fontSize: 10, color: "rgba(255,255,255,0.25)", letterSpacing: "1px" }}>OR</span>
+                <div style={{ flex: 1, height: 1, background: "rgba(255,255,255,0.1)" }} />
+              </div>
+              <button
+                className="hb"
+                onClick={() => signInWithGoogle()}
+                style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 10, width: "100%", background: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 8, padding: "12px", fontSize: 12, color: "#fff", cursor: "pointer", fontFamily: "inherit", marginBottom: 16 }}
+              >
+                <svg width="16" height="16" viewBox="0 0 48 48" fill="none">
+                  <path d="M47.5 24.55c0-1.62-.15-3.18-.42-4.68H24v9.02h13.2c-.57 2.96-2.3 5.47-4.9 7.15v5.92h7.93c4.64-4.27 7.27-10.56 7.27-17.41z" fill="#4285F4"/>
+                  <path d="M24 48c6.62 0 12.18-2.19 16.23-5.94l-7.93-5.92c-2.2 1.47-5 2.34-8.3 2.34-6.38 0-11.78-4.3-13.71-10.08H2.06v6.1A24 24 0 0 0 24 48z" fill="#34A853"/>
+                  <path d="M10.29 28.4A14.39 14.39 0 0 1 9.54 24c0-1.53.26-3.02.75-4.4v-6.1H2.06A24 24 0 0 0 0 24c0 3.88.93 7.56 2.06 10.5l8.23-6.1z" fill="#FBBC05"/>
+                  <path d="M24 9.52c3.59 0 6.82 1.24 9.36 3.66l7.02-7.02C36.18 2.19 30.62 0 24 0A24 24 0 0 0 2.06 13.5l8.23 6.1C12.22 13.82 17.62 9.52 24 9.52z" fill="#EA4335"/>
+                </svg>
+                Continue with Google
               </button>
               {authSubMode === "login" && (
                 <button onClick={() => { setAuthSubMode("forgot"); setAuthError(""); setResetSent(false); }} style={{ background: "none", border: "none", color: "rgba(255,255,255,0.35)", cursor: "pointer", fontFamily: "inherit", fontSize: 11, textDecoration: "underline", marginBottom: 16, padding: 0, display: "block" }}>
@@ -7123,7 +7145,8 @@ function CoLab() {
                   }}
                   style={{ marginBottom: 20, border: `1px dashed ${filesDragActive ? "#60a5fa" : border}`, borderRadius: 10, background: filesDragActive ? (dark ? "#131b27" : "#f6faff") : bg2, padding: "16px 14px", transition: "all 0.15s ease" }}
                 >
-                  <div style={{ marginBottom: 10, fontSize: 12, color: textMuted }}>Drag and drop a file here, or choose one manually.</div>
+                  <div style={{ marginBottom: 10, fontSize: 12, color: textMuted }}>Drag and drop a file here, or choose one below.</div>
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                   <label style={{ display: "inline-block", cursor: "pointer" }}>
                     <div style={{ ...btnP, display: "inline-flex", alignItems: "center", gap: 8, fontSize: 12 }}>↑ upload file</div>
                     <input type="file" style={{ display: "none" }} onChange={async (e) => {
@@ -7158,31 +7181,77 @@ function CoLab() {
                       setTimeout(() => { setFileUploadLoading(false); setFileUploadProgress(0); }, 240);
                     }} />
                   </label>
+                  {/* Google Drive link button */}
+                  <button
+                    className="hb"
+                    onClick={() => openDrivePicker(async (driveFile) => {
+                      const { data } = await supabase.from("project_files").insert({
+                        project_id:    activeProject.id,
+                        uploader_id:   authUser.id,
+                        uploader_name: profile?.name || "Unknown",
+                        file_name:     driveFile.name,
+                        file_url:      driveFile.url,
+                        file_size:     0,
+                        file_type:     "drive-link",
+                      }).select().single();
+                      if (data) {
+                        setProjectFiles((prev) => [data, ...prev.filter((f) => f.id !== data.id)]);
+                        showToast("Drive file linked.");
+                      }
+                    })}
+                    style={{ display: "inline-flex", alignItems: "center", gap: 8, background: "none", border: `1px solid ${border}`, borderRadius: 8, padding: "8px 14px", fontSize: 12, color: text, cursor: "pointer", fontFamily: "inherit" }}
+                  >
+                    <svg width="14" height="14" viewBox="0 0 87.3 78" fill="none">
+                      <path d="M6.6 66.85l3.85 6.65c.8 1.4 1.95 2.5 3.3 3.3l13.75-23.8H0c0 1.55.4 3.1 1.2 4.5z" fill="#0066DA"/>
+                      <path d="M43.65 25L29.9 1.2C28.55 2 27.4 3.1 26.6 4.5L1.2 49.5c-.8 1.4-1.2 2.95-1.2 4.5h27.5z" fill="#00AC47"/>
+                      <path d="M73.55 76.8c1.35-.8 2.5-1.9 3.3-3.3l1.6-2.75 7.65-13.25c.8-1.4 1.2-2.95 1.2-4.5H60.1l5.85 11.5z" fill="#EA4335"/>
+                      <path d="M43.65 25L57.4 1.2C56.05.4 54.5 0 52.9 0H34.4c-1.6 0-3.1.45-4.5 1.2z" fill="#00832D"/>
+                      <path d="M60.1 53H27.5L13.75 76.8c1.35.8 2.9 1.2 4.5 1.2h50.8c1.6 0 3.1-.45 4.5-1.2z" fill="#2684FC"/>
+                      <path d="M73.4 26.5l-12.8-22.2c-.8-1.4-1.95-2.5-3.3-3.3L43.65 25l16.45 28H87.3c0-1.55-.4-3.1-1.2-4.5z" fill="#FFBA00"/>
+                    </svg>
+                    Link from Drive
+                  </button>
+                  </div>
                   {fileUploadLoading && <div style={{ fontSize: 11, color: textMuted, marginTop: 10 }}>uploading... {fileUploadProgress}%</div>}
                 </div>
                 {projectFiles.length === 0
-                  ? <div style={{ fontSize: 13, color: textMuted }}>no files yet. upload something to share with the team.</div>
+                  ? <div style={{ fontSize: 13, color: textMuted }}>no files yet. upload or link something to share with the team.</div>
                   : <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
                       {projectFiles.map((file, i) => (
                         <div key={file.id} style={{ background: bg2, borderRadius: i === 0 && projectFiles.length === 1 ? 8 : i === 0 ? "8px 8px 0 0" : i === projectFiles.length - 1 ? "0 0 8px 8px" : 0, border: `1px solid ${border}`, borderBottom: i < projectFiles.length - 1 ? "none" : `1px solid ${border}`, padding: "14px 18px" }}>
                           <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
+                            {file.file_type === "drive-link" ? (
+                              <svg width="18" height="16" viewBox="0 0 87.3 78" fill="none" style={{ flexShrink: 0 }}>
+                                <path d="M6.6 66.85l3.85 6.65c.8 1.4 1.95 2.5 3.3 3.3l13.75-23.8H0c0 1.55.4 3.1 1.2 4.5z" fill="#0066DA"/>
+                                <path d="M43.65 25L29.9 1.2C28.55 2 27.4 3.1 26.6 4.5L1.2 49.5c-.8 1.4-1.2 2.95-1.2 4.5h27.5z" fill="#00AC47"/>
+                                <path d="M73.55 76.8c1.35-.8 2.5-1.9 3.3-3.3l1.6-2.75 7.65-13.25c.8-1.4 1.2-2.95 1.2-4.5H60.1l5.85 11.5z" fill="#EA4335"/>
+                                <path d="M43.65 25L57.4 1.2C56.05.4 54.5 0 52.9 0H34.4c-1.6 0-3.1.45-4.5 1.2z" fill="#00832D"/>
+                                <path d="M60.1 53H27.5L13.75 76.8c1.35.8 2.9 1.2 4.5 1.2h50.8c1.6 0 3.1-.45 4.5-1.2z" fill="#2684FC"/>
+                                <path d="M73.4 26.5l-12.8-22.2c-.8-1.4-1.95-2.5-3.3-3.3L43.65 25l16.45 28H87.3c0-1.55-.4-3.1-1.2-4.5z" fill="#FFBA00"/>
+                              </svg>
+                            ) : (
                             <div style={{ fontSize: 10, flexShrink: 0, fontFamily: "monospace", border: `1px solid ${border}`, borderRadius: 6, padding: "3px 6px", color: textMuted }}>
                               {fileTypeBadge(file.file_type, file.file_name)}
                             </div>
+                            )}
                             <div style={{ flex: 1, minWidth: 0 }}>
                               <div style={{ fontSize: 13, color: text, marginBottom: 2 }}>{file.file_name}</div>
-                              <div style={{ fontSize: 10, color: textMuted }}>{file.uploader_name || "Unknown"} · {new Date(file.created_at).toLocaleDateString()} · {formatFileSize(file.file_size)}</div>
+                              <div style={{ fontSize: 10, color: textMuted }}>{file.uploader_name || "Unknown"} · {new Date(file.created_at).toLocaleDateString()}{file.file_size > 0 ? ` · ${formatFileSize(file.file_size)}` : ""}{file.file_type === "drive-link" ? " · Google Drive" : ""}</div>
                             </div>
-                            <a href={file.file_url} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: text, textDecoration: "underline", flexShrink: 0 }}>download</a>
+                            <a href={file.file_url} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: text, textDecoration: "underline", flexShrink: 0 }}>
+                              {file.file_type === "drive-link" ? "open ↗" : "download"}
+                            </a>
                             {(file.uploader_id === authUser?.id || activeProject.owner_id === authUser?.id) && (
                               <button
                                 className="hb"
                                 onClick={async () => {
-                                  const path = `project-files/${activeProject.id}/${file.file_name}`;
-                                  await supabase.storage.from("user-uploads").remove([path]);
+                                  if (file.file_type !== "drive-link") {
+                                    const path = `project-files/${activeProject.id}/${file.file_name}`;
+                                    await supabase.storage.from("user-uploads").remove([path]);
+                                  }
                                   await supabase.from("project_files").delete().eq("id", file.id);
                                   setProjectFiles((prev) => prev.filter((f) => f.id !== file.id));
-                                  showToast("File deleted.");
+                                  showToast(file.file_type === "drive-link" ? "Drive link removed." : "File deleted.");
                                 }}
                                 style={{ background: "none", border: "none", color: textMuted, cursor: "pointer", fontSize: 12, fontFamily: "inherit", flexShrink: 0 }}
                               >

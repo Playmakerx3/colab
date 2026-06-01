@@ -7,3 +7,9 @@ export const signIn = ({ email, password }) => supabase.auth.signInWithPassword(
 export const resetPassword = ({ email, redirectTo }) => supabase.auth.resetPasswordForEmail(email, { redirectTo });
 
 export const signOut = () => supabase.auth.signOut();
+
+export const signInWithGoogle = () =>
+  supabase.auth.signInWithOAuth({
+    provider: "google",
+    options: { redirectTo: window.location.origin },
+  });
