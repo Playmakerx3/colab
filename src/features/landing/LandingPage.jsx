@@ -105,11 +105,8 @@ export default function LandingPage({ dark, setDark, onLogin, onSignup, supabase
             <button className="hb" onClick={() => setDark(!dark)} style={{ background: "none", border: `1px solid ${heroBorder}`, borderRadius: 8, padding: "5px 12px", fontSize: 11, color: heroMuted, cursor: "pointer", fontFamily: "inherit" }}>
               {dark ? "☀" : "☾"}
             </button>
-            <button className="hb" onClick={onLogin} style={{ background: "none", color: heroMuted, border: `1px solid ${heroBorder}`, borderRadius: 8, padding: "8px 18px", fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>
-              Log in
-            </button>
             <button className="hb" onClick={onLogin} style={{ background: heroText, color: heroBg, border: "none", borderRadius: 8, padding: "8px 18px", fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}>
-              login
+              Log in
             </button>
           </div>
         </div>
