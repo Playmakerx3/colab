@@ -20,6 +20,7 @@ export function useRealtimeSubscriptions({
   setFollowers,
   onIncomingPost,
   setMentionNotifications,
+  setDmNotifications,
 }) {
   const shouldAutoScroll = (endRef) => {
     const el = endRef?.current?.parentElement;
@@ -129,6 +130,24 @@ export function useRealtimeSubscriptions({
               t.id === payload.new.thread_id ? { ...t, unread: true } : t
             )
           );
+          // Push a notification into the notifications panel
+          if (setDmNotifications) {
+            const senderName = usersRef.current?.find(u => u.id === payload.new.sender_id)?.name || "Someone";
+            setDmNotifications((prev) => {
+              if (prev.find((x) => x.id === payload.new.id)) return prev;
+              return [...prev, {
+                id: payload.new.id,
+                type: "dm",
+                _source: "dm",
+                senderId: payload.new.sender_id,
+                senderName,
+                text: (payload.new.text || "").slice(0, 80),
+                threadId: payload.new.thread_id,
+                createdAt: payload.new.created_at,
+                read: false,
+              }];
+            });
+          }
         }
       })
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "applications" }, (payload) => {

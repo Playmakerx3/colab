@@ -1317,6 +1317,7 @@ function CoLab() {
   const [following, setFollowing] = useState([]);
   const [followers, setFollowers] = useState([]);
   const [notifications, setNotifications] = useState([]);
+  const [dmNotifications, setDmNotifications] = useState([]);
   const [dmThreads, setDmThreads] = useState([]);
   const [dmMessages, setDmMessages] = useState({});
   const [activeDmThread, setActiveDmThread] = useState(null);
@@ -1581,6 +1582,19 @@ function CoLab() {
   };
   const handleNotificationNavigation = async (n, key) => {
     if (!n) return;
+    if (n.type === "dm" || key === "messages") {
+      // Mark dm notification read
+      setDmNotifications((prev) => prev.map((x) => x.id === n.id ? { ...x, read: true } : x));
+      // Open the DM thread
+      const thread = dmThreads.find((t) => t.id === n.threadId);
+      if (thread) {
+        setActiveDmThread(thread);
+        setDmThreads((prev) => prev.map((t) => t.id === thread.id ? { ...t, unread: false } : t));
+      }
+      setAppScreen("msgs");
+      setShowNotifications(false);
+      return;
+    }
     if (n.type === "follow" || key === "follows") {
       const u = users.find((x) => x.id === (n.userId || n.entity_id || n.entityId));
       if (u) setViewingProfile(u);
@@ -1682,9 +1696,9 @@ function CoLab() {
   }, [communities, normalizedGlobalSearch]);
   const getMatchScore = (p) => (profile?.skills || []).filter(s => (p.skills || []).includes(s)).length;
   const unreadDms = dmThreads.filter(t => t.unread && t.id !== activeDmThread?.id).length;
-  const unreadNotifs = notifications.filter((n) => !n.read).length + mentionNotifications.length;
+  const unreadNotifs = notifications.filter((n) => !n.read).length + mentionNotifications.length + dmNotifications.filter(n => !n.read).length;
   const notificationGroups = useMemo(() => {
-    const grouped = { replies: [], invites: [], taskAssigned: [], follows: [], applications: [], mentions: [] };
+    const grouped = { messages: [], replies: [], invites: [], taskAssigned: [], follows: [], applications: [], mentions: [] };
     notifications.forEach((n) => {
       if (n.type === "invite") grouped.invites.push(n);
       else if (n.type === "task_assigned") grouped.taskAssigned.push(n);
@@ -1694,11 +1708,13 @@ function CoLab() {
       else grouped.replies.push(n);
     });
     mentionNotifications.forEach((n) => grouped.mentions.push({ ...n, _source: "mention_notifications" }));
+    dmNotifications.forEach((n) => grouped.messages.push({ ...n, _source: "dm" }));
     return grouped;
-  }, [notifications, mentionNotifications]);
+  }, [notifications, mentionNotifications, dmNotifications]);
   const markAllNotificationsRead = async () => {
     if (!authUser?.id) return;
     await supabase.from("notifications").update({ read: true }).eq("user_id", authUser.id);
+    setDmNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
     await loadAllData(authUser.id);
   };
   const acceptedProjectApplicants = useMemo(() => (
@@ -2127,6 +2143,7 @@ function CoLab() {
       markRecentActivity(incomingPost.id);
     },
     setMentionNotifications,
+    setDmNotifications,
   });
 
 
@@ -5771,6 +5788,7 @@ function CoLab() {
           ) : (
             <div style={{ border: `1px solid ${border}`, borderRadius: 10, overflow: "hidden" }}>
               {[
+                ["messages", "Messages", "✉"],
                 ["replies", "Replies", "·"],
                 ["invites", "Invites", "·"],
                 ["taskAssigned", "Task assigned", "·"],
@@ -5785,6 +5803,10 @@ function CoLab() {
                       key={`${key}-${n.id}-${idx}`}
                       className="hb"
                       onClick={async () => {
+                        if (n._source === "dm") {
+                          await handleNotificationNavigation(n, key);
+                          return;
+                        }
                         if (!n.read && n._source !== "mention_notifications") {
                           await supabase.from("notifications").update({ read: true }).eq("id", n.id);
                           setNotifications((prev) => prev.map((item) => (item.id === n.id ? { ...item, read: true } : item)));
@@ -5801,7 +5823,9 @@ function CoLab() {
                         <span style={{ color: textMuted }}>{icon}</span>
                         <div style={{ minWidth: 0 }}>
                           <div style={{ fontSize: 12, color: text }}>
-                            {n.type === "follow"
+                            {n.type === "dm"
+                              ? `${n.senderName || "Someone"}: ${n.text || "sent you a message"}`
+                              : n.type === "follow"
                               ? `${users.find((u) => u.id === (n.userId || n.entity_id || n.entityId))?.name || "Someone"} followed you`
                               : n.text || `${n.from_name || "Someone"} mentioned you`}
                           </div>
